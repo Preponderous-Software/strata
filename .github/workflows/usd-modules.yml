@@ -1,0 +1,170 @@
+name: USD modules
+
+# The optional OpenUSD modules (modules/usd, modules/save). They never build
+# OpenUSD in a normal run: the `openusd` job fetches a prebuilt install keyed by
+# modules/usd/openusd/openusd.lock + build-openusd.sh, first from the Actions
+# cache, then from this repository's release assets. Only when neither has the
+# key (a new pin) is OpenUSD built, once, and published as a release asset.
+
+on:
+  push:
+    branches: [main]
+    paths: ["modules/**", ".github/workflows/usd-modules.yml", "CMakeLists.txt", "cmake/**"]
+  pull_request:
+    branches: [main]
+    paths: ["modules/**", ".github/workflows/usd-modules.yml", "CMakeLists.txt", "cmake/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_PACKAGES: ca-certificates git curl python3 build-essential cmake zstd
+
+jobs:
+  openusd:
+    name: OpenUSD prebuilt (fetch, or build once)
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
+    timeout-minutes: 240
+    permissions:
+      contents: write  # publish a newly built prebuilt as a release asset
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+    steps:
+      - name: Install toolchain
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $IMAGE_PACKAGES
+          gcc --version | head -1
+          cmake --version | head -1
+
+      - uses: actions/checkout@v4
+
+      - name: Artifact key
+        id: key
+        run: echo "key=$(bash modules/usd/openusd/key.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore from the Actions cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: openusd-dist
+          key: ${{ steps.key.outputs.key }}
+
+      - name: Fetch the release asset
+        id: fetch
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          KEY: ${{ steps.key.outputs.key }}
+        run: |
+          mkdir -p openusd-dist
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${KEY}/${KEY}.tar.gz"
+          if curl -fsSL -o "openusd-dist/${KEY}.tar.gz" "$url"; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "Fetched $url"
+          else
+            rm -f "openusd-dist/${KEY}.tar.gz"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No release asset for ${KEY}; it will be built once."
+          fi
+
+      - name: Build OpenUSD (new pin only)
+        if: steps.cache.outputs.cache-hit != 'true' && steps.fetch.outputs.found != 'true'
+        run: bash modules/usd/openusd/build-openusd.sh openusd-dist "$(nproc)"
+
+      - name: Publish the prebuilt as a release asset
+        if: >-
+          steps.cache.outputs.cache-hit != 'true' && steps.fetch.outputs.found != 'true' &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          KEY: ${{ steps.key.outputs.key }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          if curl -fsS -o /dev/null -H "Authorization: Bearer $GH_TOKEN" "$api/releases/tags/${KEY}"; then
+            echo "Release ${KEY} already exists (another run published it)"; exit 0
+          fi
+          body=$(python3 -c 'import json,os; k=os.environ["KEY"]; print(json.dumps({"tag_name": k, "name": k, "target_commitish": os.environ["GITHUB_SHA"], "prerelease": True, "make_latest": "false", "body": "Prebuilt OpenUSD install for Strata CI (modules/usd/openusd/openusd.lock). Not an engine release. Licences are in share/licenses/."}))')
+          id=$(curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+                 "$api/releases" -d "$body" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/gzip" \
+            --data-binary @"openusd-dist/${KEY}.tar.gz" \
+            "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${id}/assets?name=${KEY}.tar.gz" > /dev/null
+          echo "Published ${KEY}"
+
+      - name: Check the prebuilt
+        env:
+          KEY: ${{ steps.key.outputs.key }}
+        run: |
+          ls -la openusd-dist
+          sha256sum "openusd-dist/${KEY}.tar.gz"
+          tar -tzf "openusd-dist/${KEY}.tar.gz" > contents.txt
+          for f in pxrConfig.cmake lib/libtbb.so lib/cmake/TBB/TBBConfig.cmake lib/libusd_usd.so; do
+            grep -qx "${KEY}/$f" contents.txt || { echo "::error::prebuilt lacks $f"; exit 1; }
+          done
+
+  modules:
+    name: USD + save modules (tests, crash suite, bench gate)
+    needs: openusd
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
+    timeout-minutes: 60
+    env:
+      KEY: ${{ needs.openusd.outputs.key }}
+    steps:
+      - name: Install toolchain
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $IMAGE_PACKAGES
+
+      - uses: actions/checkout@v4
+
+      - name: Restore the OpenUSD prebuilt
+        uses: actions/cache/restore@v4
+        with:
+          path: openusd-dist
+          key: ${{ env.KEY }}
+          fail-on-cache-miss: true
+
+      - name: Unpack OpenUSD
+        run: |
+          mkdir -p /opt/openusd
+          tar -C /opt/openusd -xzf "openusd-dist/${KEY}.tar.gz"
+          cat "/opt/openusd/${KEY}/openusd.lock"
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSTRATA_WARNINGS_AS_ERRORS=ON \
+            -DSTRATA_WITH_USD=ON -DSTRATA_WITH_SDL=OFF -DSTRATA_WITH_EGL=OFF -DSTRATA_BUILD_TOOLS=OFF \
+            -DCMAKE_PREFIX_PATH="/opt/openusd/${KEY}"
+
+      - name: Build
+        run: cmake --build build -j "$(nproc)" --target strata-usd-tests strata-save-tests strata-save-bench
+
+      - name: USD module tests
+        run: ctest --test-dir build -R '^strata-usd-tests$' --output-on-failure
+
+      - name: Save-core tests
+        run: ctest --test-dir build -R '^strata-save-tests$' --output-on-failure
+
+      - name: Crash suite (single-bit flips in 4 GB-capped children, 25 x kill -9)
+        run: ctest --test-dir build -R '^strata-save-crash-tests$' --output-on-failure
+
+      - name: Benchmark and regression gate (RFC 0019 §9)
+        run: |
+          bench=build/modules/save/strata-save-bench
+          "$bench" "$RUNNER_TEMP/bench1k" 1000 64 300 5 2>/dev/null | tee results.jsonl
+          "$bench" "$RUNNER_TEMP/bench10k" 10000 256 300 5 2>/dev/null | tee -a results.jsonl
+          python3 modules/save/bench/gate.py results.jsonl modules/save/bench/baseline.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: save-bench
+          path: results.jsonl
+          if-no-files-found: ignore
