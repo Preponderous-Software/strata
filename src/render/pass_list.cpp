@@ -17,7 +17,9 @@ const std::vector<PassInfo>& framePasses() {
     // transparent and labels, post (tonemap, fog), and UI.
     static const std::vector<PassInfo> passes = {
         {"shadow", {"instances", "camera", "lighting"}, {"shadow_map"}},
-        {"opaque", {"instances", "camera", "lighting", "point_lights", "shadow_map"}, {"color", "depth"}},
+        {"point_shadow", {"instances", "point_lights"}, {"point_shadow_maps"}},
+        {"opaque", {"instances", "camera", "lighting", "point_lights", "shadow_map", "point_shadow_maps"},
+         {"color", "depth"}},
         {"sky", {"camera", "lighting", "depth"}, {"color"}},
         {"readback", {"color"}, {"pixels"}},
     };

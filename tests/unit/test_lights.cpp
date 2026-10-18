@@ -1,5 +1,8 @@
+#include <cmath>
 #include <cstring>
 #include <limits>
+
+#include <glm/glm.hpp>
 
 #include "render/lights.hpp"
 #include "strata/strata.hpp"
@@ -72,8 +75,49 @@ TEST(point_light_validation_accepts_a_good_light_and_names_bad_fields) {
     l.intensity = -1.0f;
     CHECK(rejects(l));
     l = goodLight();
-    l.flags = 1u;  // no flags are defined in ABI 1.1
+    l.flags = 0x2u;  // only STRATA_POINT_LIGHT_CAST_SHADOWS is defined
     CHECK(rejects(l));
+    l.flags = STRATA_POINT_LIGHT_CAST_SHADOWS;
+    validatePointLight(l, 0);  // must not throw
+}
+
+TEST(at_most_four_point_lights_cast_shadows) {
+    StrataPointLight lights[8];
+    for (auto& l : lights) l = goodLight();
+    for (int i = 0; i < STRATA_MAX_SHADOWED_POINT_LIGHTS; ++i) lights[i * 2].flags = STRATA_POINT_LIGHT_CAST_SHADOWS;
+    validatePointLights(lights, 8);  // four casters: fine
+    lights[7].flags = STRATA_POINT_LIGHT_CAST_SHADOWS;
+    bool threw = false;
+    try {
+        validatePointLights(lights, 8);
+    } catch (const strata::Error& e) {
+        threw = std::strstr(e.what(), "cast shadows") != nullptr;
+    }
+    CHECK(threw);
+}
+
+TEST(cube_faces_follow_the_gl_face_order_and_cover_their_axis) {
+    const glm::vec3 light(3.0f, 2.0f, -1.0f);
+    const auto faces = cubeFaceViewProjections(light, 10.0f);
+    const glm::vec3 axes[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    for (int f = 0; f < 6; ++f) {
+        for (int a = 0; a < 6; ++a) {
+            const glm::vec4 clip = faces[static_cast<size_t>(f)] * glm::vec4(light + axes[a] * 4.0f, 1.0f);
+            const bool inside = clip.w > 0.0f && std::fabs(clip.x) <= clip.w && std::fabs(clip.y) <= clip.w &&
+                                std::fabs(clip.z) <= clip.w;
+            CHECK(inside == (f == a));
+            if (f == a) {
+                CHECK_NEAR(clip.x / clip.w, 0.0, 1e-5);  // the axis is the face's centre
+                CHECK_NEAR(clip.y / clip.w, 0.0, 1e-5);
+            }
+        }
+    }
+    // A point beyond the range falls past the far plane.
+    const glm::vec4 far = faces[0] * glm::vec4(light + glm::vec3(10.5f, 0, 0), 1.0f);
+    CHECK(far.z > far.w);
+    // +X face, GL convention: up is -Y, so a point above the axis lands at negative clip y.
+    const glm::vec4 above = faces[0] * glm::vec4(light + glm::vec3(4, 1, 0), 1.0f);
+    CHECK(above.y < 0.0f);
 }
 
 TEST(point_light_lists_are_checked_whole_and_capped) {

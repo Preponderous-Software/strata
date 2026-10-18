@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include <glm/gtc/matrix_transform.hpp>
+
 #include "core/error.hpp"
 
 namespace strata::render {
@@ -33,8 +35,9 @@ void validatePointLight(const StrataPointLight& l, size_t index) {
         fail(STRATA_ERROR_INVALID_ARGUMENT, "point light %lu: intensity must be finite and >= 0 (got %g)", i,
              static_cast<double>(l.intensity));
     }
-    if (l.flags != 0u) {
-        fail(STRATA_ERROR_INVALID_ARGUMENT, "point light %lu: unknown flags 0x%x", i, l.flags);
+    if ((l.flags & ~STRATA_POINT_LIGHT_CAST_SHADOWS) != 0u) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "point light %lu: unknown flags 0x%x", i,
+             l.flags & ~STRATA_POINT_LIGHT_CAST_SHADOWS);
     }
 }
 
@@ -43,7 +46,26 @@ void validatePointLights(const StrataPointLight* lights, size_t count) {
         fail(STRATA_ERROR_INVALID_ARGUMENT, "at most %d point lights (got %lu)", STRATA_MAX_POINT_LIGHTS,
              static_cast<unsigned long>(count));
     }
-    for (size_t i = 0; i < count; ++i) validatePointLight(lights[i], i);
+    size_t casters = 0;
+    for (size_t i = 0; i < count; ++i) {
+        validatePointLight(lights[i], i);
+        if (lights[i].flags & STRATA_POINT_LIGHT_CAST_SHADOWS) ++casters;
+    }
+    if (casters > STRATA_MAX_SHADOWED_POINT_LIGHTS) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "at most %d point lights may cast shadows (got %lu)",
+             STRATA_MAX_SHADOWED_POINT_LIGHTS, static_cast<unsigned long>(casters));
+    }
+}
+
+std::array<glm::mat4, 6> cubeFaceViewProjections(const glm::vec3& p, float range) {
+    // The GL cube map face conventions (direction, up), as every cube shadow
+    // map renderer uses them.
+    static const glm::vec3 kDirections[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    static const glm::vec3 kUps[6] = {{0, -1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}, {0, -1, 0}};
+    const glm::mat4 projection = glm::perspective(glm::radians(90.0f), 1.0f, kPointShadowNear, range);
+    std::array<glm::mat4, 6> faces{};
+    for (size_t i = 0; i < 6; ++i) faces[i] = projection * glm::lookAt(p, p + kDirections[i], kUps[i]);
+    return faces;
 }
 
 }  // namespace strata::render

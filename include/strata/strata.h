@@ -43,9 +43,10 @@
  * addition arrived in. Each addition below names that minor.
  *
  *   1.0  v0.1.0: primitives, legacy and sun lighting, cascaded shadows
- *   1.1  point lights (StrataPointLight, strata_set_point_lights) */
+ *   1.1  point lights (StrataPointLight, strata_set_point_lights)
+ *   1.2  shadowed point lights (STRATA_POINT_LIGHT_CAST_SHADOWS) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 1u
+#define STRATA_ABI_MINOR 2u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -176,6 +177,12 @@ typedef struct StrataLighting {
 /* ABI 1.1. The most point lights strata_set_point_lights accepts. */
 #define STRATA_MAX_POINT_LIGHTS 32
 
+/* ABI 1.2. StrataPointLight.flags. A shadow-casting light renders the scene
+ * into a cube shadow map (six 512 x 512 faces) every frame. At most
+ * STRATA_MAX_SHADOWED_POINT_LIGHTS lights in one call may set it. */
+#define STRATA_POINT_LIGHT_CAST_SHADOWS 0x1u
+#define STRATA_MAX_SHADOWED_POINT_LIGHTS 4
+
 /* ABI 1.1. A light that shines equally in every direction from a point. Point
  * lights shade STRATA_LIGHTING_SUN scenes, on top of the sun or moon and
  * before fog; STRATA_LIGHTING_LEGACY ignores them. With x = distance / range,
@@ -189,7 +196,7 @@ typedef struct StrataPointLight {
     float range;       /* > 0: the distance at which the light reaches zero */
     float color[3];    /* linear RGB, 0..1 each */
     float intensity;   /* >= 0; at the light itself, 1 is about as bright as the noon sun */
-    uint32_t flags;    /* must be 0 in ABI 1.1 */
+    uint32_t flags;    /* STRATA_POINT_LIGHT_* (1.2); any other bit is rejected */
 } StrataPointLight;
 
 /* ------------------------------------------------------------------- frames */
@@ -322,7 +329,9 @@ STRATA_API StrataStatus strata_set_lighting(StrataEngine* engine, const StrataLi
 /* ABI 1.1. Replaces the scene's point lights with a copy of `lights`; they
  * stay until the next call. count 0 (lights may then be NULL) removes them
  * all. At most STRATA_MAX_POINT_LIGHTS. Every light is checked first, and on
- * an invalid one nothing changes. May be called inside or outside a frame;
+ * an invalid one nothing changes. A 1.1 library rejects
+ * STRATA_POINT_LIGHT_CAST_SHADOWS as an unknown flag; check strata_abi_minor()
+ * >= 2 before setting it. May be called inside or outside a frame;
  * the lights in place at end_frame are the ones drawn. */
 STRATA_API StrataStatus strata_set_point_lights(StrataEngine* engine, const StrataPointLight* lights, int32_t count);
 

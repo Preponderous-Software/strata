@@ -83,6 +83,9 @@ Renderer::Renderer(rhi::GpuDevice& device, platform::Surface& surface) : device_
     shadowUniforms_ = device_.createBuffer(shadowUniformStride_ * kMaxCascades, nullptr, true, "strata.shadow-uniforms");
     pointLightUniforms_ =
         device_.createBuffer(sizeof(PointLightUniforms), nullptr, true, "strata.point-light-uniforms");
+    pointShadowUniformStride_ = ((sizeof(glm::mat4) + sizeof(glm::vec4) + alignment - 1) / alignment) * alignment;
+    pointShadowUniforms_ = device_.createBuffer(pointShadowUniformStride_ * 6 * STRATA_MAX_SHADOWED_POINT_LIGHTS,
+                                                nullptr, true, "strata.point-shadow-uniforms");
     instances_ = device_.createBuffer(1024 * kInstanceStride, nullptr, true, "strata.instances");
 
     // BN's constants until the host says otherwise.
@@ -116,6 +119,10 @@ Renderer::~Renderer() {
     device_.destroy(frameUniforms_);
     device_.destroy(shadowUniforms_);
     device_.destroy(pointLightUniforms_);
+    device_.destroy(pointShadowUniforms_);
+    for (auto target : pointShadowTargets_) device_.destroy(target);
+    device_.destroy(pointShadowMaps_);
+    device_.destroy(pointShadowPipeline_);
     for (auto target : shadowTargets_) device_.destroy(target);
     device_.destroy(shadowMaps_);
     device_.destroy(offscreenTarget_);
@@ -190,6 +197,17 @@ void Renderer::buildPipelines() {
     shadow.depthClamp = true;
     shadowPipeline_ = device_.createPipeline(shadow);
 
+    // Point shadows store distance / range from the fragment shader, which
+    // turns polygon offset off; the lookup biases by distance instead.
+    PipelineDesc pointShadow = shadow;
+    pointShadow.name = "point_shadow";
+    pointShadow.vertexSource = shaders::kPointShadowVertex;
+    pointShadow.fragmentSource = shaders::kPointShadowFragment;
+    pointShadow.depthBiasConstant = 0.0f;
+    pointShadow.depthBiasSlope = 0.0f;
+    pointShadow.depthClamp = false;
+    pointShadowPipeline_ = device_.createPipeline(pointShadow);
+
     PipelineDesc sky;
     sky.name = "sky";
     sky.vertexSource = shaders::kSkyVertex;
@@ -263,6 +281,65 @@ void Renderer::setLighting(const StrataLighting& lighting) {
 void Renderer::setPointLights(const StrataPointLight* lights, size_t count) {
     validatePointLights(lights, count);
     pointLights_.assign(lights, lights + count);
+    pointShadowSlot_.assign(count, -1);
+    pointShadowCount_ = 0;
+    for (size_t i = 0; i < count; ++i) {
+        if (pointLights_[i].flags & STRATA_POINT_LIGHT_CAST_SHADOWS) pointShadowSlot_[i] = pointShadowCount_++;
+    }
+}
+
+void Renderer::ensurePointShadowMaps(int cubes) {
+    if (pointShadowMaps_ && cubes <= pointShadowCubes_) return;
+    for (auto target : pointShadowTargets_) device_.destroy(target);
+    pointShadowTargets_.clear();
+    device_.destroy(pointShadowMaps_);
+    rhi::TextureDesc desc;
+    desc.width = kPointShadowMapSize;
+    desc.height = kPointShadowMapSize;
+    desc.layers = cubes;
+    desc.cube = true;
+    desc.format = rhi::TextureFormat::Depth32F;
+    desc.depthCompare = true;
+    desc.debugName = "strata.point-shadow-cubes";
+    pointShadowMaps_ = device_.createTexture(desc);
+    for (int i = 0; i < cubes * 6; ++i) {
+        rhi::TargetDesc target;
+        target.depth.texture = pointShadowMaps_;
+        target.depth.layer = i;
+        target.debugName = "strata.point-shadow-face";
+        pointShadowTargets_.push_back(device_.createTarget(target));
+    }
+    pointShadowCubes_ = cubes;
+}
+
+void Renderer::pointShadowPass() {
+    struct FaceUniforms {
+        glm::mat4 viewProjection;
+        glm::vec4 lightPositionRange;
+    };
+    for (size_t i = 0; i < pointLights_.size(); ++i) {
+        const int slot = pointShadowSlot_[i];
+        if (slot < 0) continue;
+        const StrataPointLight& l = pointLights_[i];
+        const glm::vec3 position(l.position[0], l.position[1], l.position[2]);
+        const auto faces = cubeFaceViewProjections(position, l.range);
+        for (size_t face = 0; face < 6; ++face) {
+            const size_t layer = static_cast<size_t>(slot) * 6 + face;
+            const FaceUniforms u{faces[face], glm::vec4(position, l.range)};
+            device_.updateBuffer(pointShadowUniforms_, layer * pointShadowUniformStride_, sizeof u, &u);
+            rhi::PassDesc pass;
+            pass.name = "point_shadow";
+            pass.target = pointShadowTargets_[layer];
+            pass.width = kPointShadowMapSize;
+            pass.height = kPointShadowMapSize;
+            pass.clearDepth = true;
+            device_.beginPass(pass);
+            device_.bindPipeline(pointShadowPipeline_);
+            device_.bindUniformBuffer(1, pointShadowUniforms_, layer * pointShadowUniformStride_, sizeof u);
+            drawPrimitives(true);
+            device_.endPass();
+        }
+    }
 }
 
 void Renderer::beginFrame(const StrataFrameDesc& desc) {
@@ -393,8 +470,10 @@ void Renderer::writePointLightUniforms() {
     for (size_t i = 0; i < pointLights_.size(); ++i) {
         const StrataPointLight& l = pointLights_[i];
         u.positionRange[i] = glm::vec4(l.position[0], l.position[1], l.position[2], l.range);
-        u.color[i] = glm::vec4(glm::vec3(l.color[0], l.color[1], l.color[2]) * l.intensity, 0.0f);
+        u.color[i] = glm::vec4(glm::vec3(l.color[0], l.color[1], l.color[2]) * l.intensity,
+                               static_cast<float>(pointShadowSlot_[i]));
     }
+    u.info.y = kPointShadowMapSize;
     device_.updateBuffer(pointLightUniforms_, 0, sizeof u, &u);
 }
 
@@ -451,6 +530,7 @@ void Renderer::opaquePass(int width, int height) {
     device_.bindUniformBuffer(0, frameUniforms_, 0, sizeof(FrameUniforms));
     if (lighting_.mode == STRATA_LIGHTING_SUN) {
         device_.bindTexture(1, shadowMaps_);
+        device_.bindTexture(2, pointShadowMaps_);
         device_.bindUniformBuffer(2, pointLightUniforms_, 0, sizeof(PointLightUniforms));
     }
     drawPrimitives(false);
@@ -527,11 +607,14 @@ void Renderer::endFrame() {
         // The sun shader always samples a shadow array; give it a tiny one.
         ensureShadowMaps(256, 1);
     }
+    // Likewise a cube array, even with no shadowed point lights.
+    if (sun) ensurePointShadowMaps(std::max(pointShadowCount_, 1));
     writeFrameUniforms(width, height, shadows ? &cascades : nullptr);
     if (sun) writePointLightUniforms();
 
     auto t = Clock::now();
     if (shadows) shadowPass(cascades);
+    if (sun && pointShadowCount_ > 0) pointShadowPass();
     stats_.cpu_ms_shadow = msSince(t);
 
     t = Clock::now();

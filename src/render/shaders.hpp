@@ -29,9 +29,9 @@ namespace strata::render::shaders {
 // renderer.cpp. Colour is premultiplied by intensity.
 #define STRATA_POINT_LIGHT_BLOCK                                                   \
     "layout(std140, binding = 2) uniform PointLights {\n"                          \
-    "    ivec4 uPointInfo;              // x light count\n"                         \
+    "    ivec4 uPointInfo;              // x light count, y cube shadow map size\n" \
     "    vec4 uPointPositionRange[32];  // xyz position, w range\n"                 \
-    "    vec4 uPointColor[32];          // rgb colour * intensity\n"                \
+    "    vec4 uPointColor[32];          // rgb colour * intensity, w shadow slot or -1\n" \
     "};\n"
 
 // Instanced primitives. The vertex maths is Beyond Nations'
@@ -82,7 +82,8 @@ inline const char* kSunFragment =
     "in vec4 vColor;\n"
     "in vec3 vWorld;\n"
     "in float vViewDepth;\n" STRATA_FRAME_BLOCK
-    "layout(binding = 1) uniform sampler2DArrayShadow uShadowMap;\n" STRATA_POINT_LIGHT_BLOCK
+    "layout(binding = 1) uniform sampler2DArrayShadow uShadowMap;\n"
+    "layout(binding = 2) uniform samplerCubeArrayShadow uPointShadowMaps;\n" STRATA_POINT_LIGHT_BLOCK
     "out vec4 fragColor;\n"
     "float sampleCascade(int cascade, vec3 world, vec3 normal) {\n"
     "    // Normal offset: push the lookup off the surface by a texel or so.\n"
@@ -116,6 +117,25 @@ inline const char* kSunFragment =
     "    }\n"
     "    return s;\n"
     "}\n"
+    "// Cube shadow map lookup (L4): the map stores distance / range. A normal\n"
+    "// offset that grows as the light grazes the surface, plus a distance bias,\n"
+    "// keep surfaces from shadowing themselves; nine taps soften the edge.\n"
+    "float pointShadow(int slot, vec3 world, vec3 normal, float ndl, vec3 light, float range) {\n"
+    "    float size = float(uPointInfo.y);\n"
+    "    float texel = 2.0 * length(world - light) / size;\n"
+    "    vec3 v = world + normal * (texel * (1.0 + 3.0 * (1.0 - ndl))) - light;\n"
+    "    float dist = length(v);\n"
+    "    vec3 n = v / max(dist, 1e-4);\n"
+    "    float ref = (dist - 1.5 * texel) / range;\n"
+    "    vec3 t = normalize(cross(n, abs(n.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));\n"
+    "    vec3 b = cross(n, t);\n"
+    "    float spread = 3.0 / size;\n"
+    "    float sum = 0.0;\n"
+    "    for (int x = -1; x <= 1; ++x)\n"
+    "        for (int y = -1; y <= 1; ++y)\n"
+    "            sum += texture(uPointShadowMaps, vec4(n + (t * float(x) + b * float(y)) * spread, float(slot)), ref);\n"
+    "    return sum / 9.0;\n"
+    "}\n"
     "// Point lights: the falloff of render/lights.cpp, Lambert diffuse.\n"
     "vec3 pointLights(vec3 world, vec3 normal) {\n"
     "    vec3 sum = vec3(0.0);\n"
@@ -127,6 +147,9 @@ inline const char* kSunFragment =
     "        float window = clamp(1.0 - r2 * r2, 0.0, 1.0);\n"
     "        float falloff = window * window / (1.0 + 16.0 * r2);\n"
     "        float ndl = max(dot(normal, toPoint / max(d, 1e-4)), 0.0);\n"
+    "        int slot = int(uPointColor[i].w);\n"
+    "        if (slot >= 0 && falloff * ndl > 0.0)\n"
+    "            ndl *= pointShadow(slot, world, normal, ndl, uPointPositionRange[i].xyz, uPointPositionRange[i].w);\n"
     "        sum += uPointColor[i].rgb * (falloff * ndl);\n"
     "    }\n"
     "    return sum;\n"
@@ -161,6 +184,30 @@ inline const char* kShadowFragment =
     "#version 450 core\n"
     "void main() {}\n";
 
+// Point shadow pass (L4): one cube face per draw. Depth is distance / range,
+// so lookups compare distances rather than projected depth.
+#define STRATA_POINT_SHADOW_BLOCK \
+    "layout(std140, binding = 1) uniform PointShadowPass { mat4 uFaceViewProjection; vec4 uLightPositionRange; };\n"
+
+inline const char* kPointShadowVertex =
+    "#version 450 core\n"
+    "layout(location = 0) in vec3 aPosition;\n"
+    "layout(location = 2) in vec3 iPosition;\n"
+    "layout(location = 3) in vec3 iScale;\n" STRATA_POINT_SHADOW_BLOCK
+    "out vec3 vWorld;\n"
+    "void main() {\n"
+    "    vec4 world = vec4(aPosition * iScale + iPosition, 1.0);\n"
+    "    vWorld = world.xyz;\n"
+    "    gl_Position = uFaceViewProjection * world;\n"
+    "}\n";
+
+inline const char* kPointShadowFragment =
+    "#version 450 core\n"
+    "in vec3 vWorld;\n" STRATA_POINT_SHADOW_BLOCK
+    "void main() {\n"
+    "    gl_FragDepth = length(vWorld - uLightPositionRange.xyz) / uLightPositionRange.w;\n"
+    "}\n";
+
 // Sky: a fullscreen triangle at the far plane, coloured by view direction.
 inline const char* kSkyVertex =
     "#version 450 core\n"
@@ -194,5 +241,6 @@ inline const char* kSkyFragment =
 
 #undef STRATA_FRAME_BLOCK
 #undef STRATA_POINT_LIGHT_BLOCK
+#undef STRATA_POINT_SHADOW_BLOCK
 
 }  // namespace strata::render::shaders

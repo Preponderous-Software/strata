@@ -54,6 +54,8 @@ private:
     void writePointLightUniforms();
     void drawPrimitives(bool forShadow);
     void shadowPass(const Cascades& cascades);
+    void ensurePointShadowMaps(int cubes);
+    void pointShadowPass();
     void opaquePass(int width, int height);
     void skyPass(int width, int height);
 
@@ -73,7 +75,7 @@ private:
     rhi::BufferHandle frameUniforms_, shadowUniforms_, pointLightUniforms_;
     size_t shadowUniformStride_ = 256;
 
-    rhi::PipelineHandle legacyPipeline_, sunPipeline_, shadowPipeline_, skyPipeline_;
+    rhi::PipelineHandle legacyPipeline_, sunPipeline_, shadowPipeline_, skyPipeline_, pointShadowPipeline_;
 
     // Headless surfaces draw here instead of a default framebuffer.
     rhi::TextureHandle offscreenColor_, offscreenDepth_;
@@ -83,6 +85,16 @@ private:
     rhi::TextureHandle shadowMaps_;
     std::array<rhi::TargetHandle, kMaxCascades> shadowTargets_{};
     int shadowSize_ = 0, shadowLayers_ = 0;
+
+    // Cube shadow maps for shadow-casting point lights (L4): one cube map
+    // array, a depth target per layer-face, and the lights' slots this frame.
+    rhi::TextureHandle pointShadowMaps_;
+    std::vector<rhi::TargetHandle> pointShadowTargets_;
+    int pointShadowCubes_ = 0;
+    rhi::BufferHandle pointShadowUniforms_;
+    size_t pointShadowUniformStride_ = 256;
+    std::vector<int> pointShadowSlot_;  // per light: slot or -1
+    int pointShadowCount_ = 0;
 
     StrataCamera camera_{};
     StrataLighting lighting_{};

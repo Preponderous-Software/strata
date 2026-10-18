@@ -36,14 +36,15 @@ struct TextureDesc {
     int width = 0;
     int height = 0;
     int layers = 0;  // 0: a 2D texture; >= 1: a 2D array of that many layers
+    bool cube = false;  // with layers >= 1: a cube map array of `layers` cubes (6 * layers layer-faces)
     TextureFormat format = TextureFormat::RGBA8;
-    bool depthCompare = false;  // sample as sampler2DShadow / sampler2DArrayShadow
+    bool depthCompare = false;  // sample as sampler2DShadow / sampler2DArrayShadow / samplerCubeArrayShadow
     const char* debugName = nullptr;
 };
 
 struct Attachment {
     TextureHandle texture;
-    int layer = -1;  // -1: the whole texture; >= 0: one layer of an array
+    int layer = -1;  // -1: the whole texture; >= 0: one layer of an array (cube arrays: 6 * cube + face)
 };
 
 struct TargetDesc {

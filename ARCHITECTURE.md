@@ -40,7 +40,7 @@ to write one.
   struct with its own id, a new enum or flag value) bump `STRATA_ABI_MINOR`
   instead, so every ABI 1 host keeps working. A host that uses an addition
   checks `strata_abi_minor()` at run time; `strata.h` names the minor each
-  addition arrived in (1.1: point lights).
+  addition arrived in (1.1: point lights; 1.2: point-light shadows).
 - **Layouts are checkable.** `strata_struct_size(id)` and
   `strata_struct_field_offset(id, field)` report every boundary struct. The C++
   unit tests `static_assert` the layouts. The C# tests
@@ -73,7 +73,8 @@ SDL3 window.
 
 A host-context engine records the GL state it is about to change: program,
 VAO, framebuffers, viewport, depth/cull/blend/scissor/offset/clamp enables,
-masks, texture bindings on units 0–1 and uniform-buffer bindings on slots 0–2. It restores them
+masks, texture bindings on units 0–2 (2D, 2D array and cube-map array) and
+uniform-buffer bindings on slots 0–2. It restores them
 after each frame and readback, so the host's own renderers (ImGui, labels)
 keep working.
 
@@ -86,7 +87,8 @@ the list is logged:
 
 ```text
 shadow:   instances, camera, lighting -> shadow_map
-opaque:   instances, camera, lighting, point_lights, shadow_map -> color, depth
+point_shadow: instances, point_lights -> point_shadow_maps
+opaque:   instances, camera, lighting, point_lights, shadow_map, point_shadow_maps -> color, depth
 sky:      camera, lighting, depth -> color
 readback: color -> pixels
 ```
@@ -162,7 +164,25 @@ renderer. The C# harness reproduces the C++ golden with zero differing pixels.
 - The lights live in a 1 KiB uniform block (binding 2), so a frame with lights
   costs no extra draws.
 
-**Later:** shadowed point lights (L4).
+### Shadowed point lights (L4)
+
+- A light with `STRATA_POINT_LIGHT_CAST_SHADOWS` in its flags renders the
+  scene into a cube shadow map every frame. At most four lights may carry the
+  flag; `strata_set_point_lights` rejects a fifth.
+- All cubes live in one `GL_TEXTURE_CUBE_MAP_ARRAY` of `DEPTH_COMPONENT32F`,
+  512² per face. Face i of light slot s is layer `6s + i`. The faces use GL's
+  cube conventions (`cubeFaceViewProjections` in `src/render/lights.cpp`): a
+  90° perspective from the light out to its range.
+- The `point_shadow` pass writes **distance / range** from the fragment shader
+  rather than projected depth, so a lookup is one direction and one distance
+  compare (`samplerCubeArrayShadow`). Polygon offset does not apply to written
+  depth, so the bias is in the lookup instead. The world position is pushed
+  along the normal by one texel, growing to four as the light grazes the
+  surface, and the compared distance is pulled in by 1.5 texels.
+- Nine taps around the lookup direction, about 1.5 texels apart, with hardware
+  depth comparison, soften the edge.
+- Shadow-casting lights cost six extra passes each, every frame, and each pass
+  draws every primitive.
 
 ## Optional modules
 

@@ -104,7 +104,7 @@ struct HostState {
     GLint depthFunc = GL_LESS, cullFaceMode = GL_BACK, frontFace = GL_CCW;
     GLfloat polygonOffsetFactor = 0, polygonOffsetUnits = 0;
     GLint activeTexture = GL_TEXTURE0;
-    GLint texture2D[2] = {0, 0}, texture2DArray[2] = {0, 0};
+    GLint texture2D[3] = {0, 0, 0}, texture2DArray[3] = {0, 0, 0}, textureCubeArray[3] = {0, 0, 0};
     GLint uniformBuffers[3] = {0, 0, 0};
     GLint elementArrayBuffer = 0, arrayBuffer = 0;
 };
@@ -174,11 +174,12 @@ public:
     TextureHandle createTexture(const TextureDesc& desc) override {
         TextureRecord record;
         record.desc = desc;
-        const GLenum target = desc.layers > 0 ? GL_TEXTURE_2D_ARRAY : GL_TEXTURE_2D;
+        const bool cube = desc.cube && desc.layers > 0;
+        const GLenum target = cube ? GL_TEXTURE_CUBE_MAP_ARRAY : desc.layers > 0 ? GL_TEXTURE_2D_ARRAY : GL_TEXTURE_2D;
         const GLenum format = desc.format == TextureFormat::RGBA8 ? GL_RGBA8 : GL_DEPTH_COMPONENT32F;
         glCreateTextures(target, 1, &record.name);
         if (desc.layers > 0) {
-            glTextureStorage3D(record.name, 1, format, desc.width, desc.height, desc.layers);
+            glTextureStorage3D(record.name, 1, format, desc.width, desc.height, cube ? desc.layers * 6 : desc.layers);
         } else {
             glTextureStorage2D(record.name, 1, format, desc.width, desc.height);
         }
@@ -186,6 +187,7 @@ public:
         glTextureParameteri(record.name, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTextureParameteri(record.name, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTextureParameteri(record.name, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        if (cube) glTextureParameteri(record.name, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
         if (desc.depthCompare) {
             glTextureParameteri(record.name, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
             glTextureParameteri(record.name, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
@@ -417,10 +419,11 @@ public:
         glGetFloatv(GL_POLYGON_OFFSET_FACTOR, &s.polygonOffsetFactor);
         glGetFloatv(GL_POLYGON_OFFSET_UNITS, &s.polygonOffsetUnits);
         glGetIntegerv(GL_ACTIVE_TEXTURE, &s.activeTexture);
-        for (int unit = 0; unit < 2; ++unit) {
+        for (int unit = 0; unit < 3; ++unit) {
             glActiveTexture(GL_TEXTURE0 + unit);
             glGetIntegerv(GL_TEXTURE_BINDING_2D, &s.texture2D[unit]);
             glGetIntegerv(GL_TEXTURE_BINDING_2D_ARRAY, &s.texture2DArray[unit]);
+            glGetIntegerv(GL_TEXTURE_BINDING_CUBE_MAP_ARRAY, &s.textureCubeArray[unit]);
         }
         for (int slot = 0; slot < 3; ++slot) {
             glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, static_cast<GLuint>(slot), &s.uniformBuffers[slot]);
@@ -448,10 +451,11 @@ public:
         glCullFace(static_cast<GLenum>(s.cullFaceMode));
         glFrontFace(static_cast<GLenum>(s.frontFace));
         glPolygonOffset(s.polygonOffsetFactor, s.polygonOffsetUnits);
-        for (int unit = 0; unit < 2; ++unit) {
+        for (int unit = 0; unit < 3; ++unit) {
             glActiveTexture(GL_TEXTURE0 + unit);
             glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(s.texture2D[unit]));
             glBindTexture(GL_TEXTURE_2D_ARRAY, static_cast<GLuint>(s.texture2DArray[unit]));
+            glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, static_cast<GLuint>(s.textureCubeArray[unit]));
         }
         for (int slot = 0; slot < 3; ++slot) {
             glBindBufferBase(GL_UNIFORM_BUFFER, static_cast<GLuint>(slot), static_cast<GLuint>(s.uniformBuffers[slot]));
