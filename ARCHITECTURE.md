@@ -41,7 +41,7 @@ to write one.
   instead, so every ABI 1 host keeps working. A host that uses an addition
   checks `strata_abi_minor()` at run time; `strata.h` names the minor each
   addition arrived in (1.1: point lights; 1.2: point-light shadows; 1.3: a
-  terrain tile).
+  terrain tile; 1.4: static meshes).
 - **Layouts are checkable.** `strata_struct_size(id)` and
   `strata_struct_field_offset(id, field)` report every boundary struct. The C++
   unit tests `static_assert` the layouts. The C# tests
@@ -87,9 +87,9 @@ start-up that every read has an earlier writer. With `STRATA_LOG_DEBUG=1` set,
 the list is logged:
 
 ```text
-shadow:   instances, terrain, camera, lighting -> shadow_map
-point_shadow: instances, terrain, point_lights -> point_shadow_maps
-opaque:   instances, terrain, camera, lighting, point_lights, shadow_map, point_shadow_maps -> color, depth
+shadow:   instances, terrain, meshes, camera, lighting -> shadow_map
+point_shadow: instances, terrain, meshes, point_lights -> point_shadow_maps
+opaque:   instances, terrain, meshes, camera, lighting, point_lights, shadow_map, point_shadow_maps -> color, depth
 sky:      camera, lighting, depth -> color
 readback: color -> pixels
 ```
@@ -202,6 +202,26 @@ renderer. The C# harness reproduces the C++ golden with zero differing pixels.
   every point-light cube face, so it casts shadows and receives them, both
   from itself and from primitives.
 - **Later (T2–T4):** several tiles, streaming, LOD and texture splatting.
+
+## Static meshes (ABI 1.4)
+
+- `strata_add_mesh` takes one `StrataMesh`: world-space positions, optional
+  normals, optional linear RGB colour per vertex (else one colour for the
+  mesh) and 32-bit triangle indices. The engine validates it, builds the
+  terrain's vertex format (`src/render/static_mesh.cpp`) and copies it into
+  GPU buffers; the host's arrays are not kept. It returns an id (never 0, not
+  reused); `strata_remove_mesh(id)` and `strata_clear_meshes` free them. At
+  most `STRATA_MAX_MESHES` (256) at once, each up to 2^24 vertices.
+- Without host normals the engine sums each triangle's unnormalised face
+  normal into its three vertices (area weighting) and normalises. Flat
+  shading is had by not sharing vertices between faces.
+- Meshes are the `meshes` frame input. They are drawn right after the terrain
+  with the terrain's pipelines, one draw call each: in the opaque pass (back
+  faces culled, so triangles wind counter-clockwise seen from outside), and
+  into every sun cascade and point-light cube face with culling off, so open
+  surfaces such as ribbons still cast.
+- This is a narrow precursor to RFC 0020 §9 (cooked meshes, instancing,
+  materials): no UVs, tangents, instancing, transforms or LOD.
 
 ## Optional modules
 

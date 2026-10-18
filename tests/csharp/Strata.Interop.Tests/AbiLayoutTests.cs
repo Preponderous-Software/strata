@@ -48,6 +48,21 @@ namespace Strata.Interop.Tests {
         }
 
         [Fact]
+        public void MeshMatchesNative() {
+            AssertLayout<StrataMesh>(StrataAbi.StructMesh, "positions", "normals", "colors", "indices",
+                "vertex_count", "index_count", "color");
+        }
+
+        [Fact]
+        public unsafe void MeshCallsRejectANullEngine() {
+            var mesh = new StrataMesh();
+            uint id = 0;
+            Assert.Equal(1, StrataNative.strata_add_mesh(IntPtr.Zero, &mesh, &id));  // STRATA_ERROR_INVALID_ARGUMENT
+            Assert.Equal(1, StrataNative.strata_remove_mesh(IntPtr.Zero, 1));
+            Assert.Equal(1, StrataNative.strata_clear_meshes(IntPtr.Zero));
+        }
+
+        [Fact]
         public unsafe void SetTerrainRejectsANullEngine() {
             Assert.Equal(1, StrataNative.strata_set_terrain(IntPtr.Zero, null));  // STRATA_ERROR_INVALID_ARGUMENT
         }

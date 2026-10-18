@@ -74,6 +74,11 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
         tile.colors = scene.terrainColors.empty() ? nullptr : scene.terrainColors.data();
         ok = ok && check(strata_set_terrain(engine, &tile), "strata_set_terrain");
     }
+    for (const auto& mesh : scene.meshes) {
+        const StrataMesh view = mesh.view();
+        uint32_t id = 0;
+        ok = ok && check(strata_add_mesh(engine, &view, &id), "strata_add_mesh");
+    }
     if (!scene.pointLights.empty()) {
         ok = ok && check(strata_set_point_lights(engine, scene.pointLights.data(),
                                                  static_cast<int32_t>(scene.pointLights.size())),

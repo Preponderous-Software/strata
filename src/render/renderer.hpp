@@ -28,6 +28,9 @@ public:
     void setLighting(const StrataLighting& lighting);
     void setPointLights(const StrataPointLight* lights, size_t count);
     void setTerrain(const StrataTerrainTile* tile);
+    uint32_t addMesh(const StrataMesh& mesh);
+    void removeMesh(uint32_t id);
+    void clearMeshes();
 
     void beginFrame(const StrataFrameDesc& desc);
     void submit(const StrataRenderItem* items, size_t count);
@@ -55,6 +58,9 @@ private:
     void writePointLightUniforms();
     void drawPrimitives(bool forShadow);
     void drawTerrain();
+    // Draws the terrain and every static mesh with whichever terrain-format
+    // pipeline the caller picks (nothing is bound when there are none).
+    void drawWorldMeshes(rhi::PipelineHandle pipeline);
     void shadowPass(const Cascades& cascades);
     void ensurePointShadowMaps(int cubes);
     void pointShadowPass();
@@ -84,6 +90,15 @@ private:
     uint32_t terrainIndexCount_ = 0;
     rhi::PipelineHandle terrainLegacyPipeline_, terrainSunPipeline_, terrainShadowPipeline_,
         terrainPointShadowPipeline_;
+
+    // Static meshes (ABI 1.4): the terrain's vertex format and pipelines.
+    struct MeshEntry {
+        uint32_t id = 0;
+        rhi::BufferHandle vertices, indices;
+        uint32_t indexCount = 0;
+    };
+    std::vector<MeshEntry> meshes_;
+    uint32_t nextMeshId_ = 1;
 
     // Headless surfaces draw here instead of a default framebuffer.
     rhi::TextureHandle offscreenColor_, offscreenDepth_;

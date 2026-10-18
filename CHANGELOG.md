@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Static meshes (ABI 1.4): `StrataMesh`, `strata_add_mesh`,
+  `strata_remove_mesh` and `strata_clear_meshes`. Up to 256 indexed triangle
+  meshes, already in world space, with a linear RGB colour per vertex or per
+  mesh and host or engine-computed (area-weighted) normals. They share the
+  terrain's vertex format and pipelines, so they are drawn under both lighting
+  modes and cast and receive sun and point-light shadows. For geometry the
+  primitives and the terrain tile cannot express, such as extruded footprints
+  and ribbons; a narrow precursor to RFC 0020 §9's cooked meshes and
+  materials, not milestone M1.
+- Scene files take `mesh`, `vertices`, `vcolors` and `triangles` lines.
+  `tools/gen_mesh_scene.py` writes the static-mesh goldens' world.
+
 ## 0.2.0
 
 Lighting milestones L3–L4 and terrain milestone T1 from RFC 0020. Every ABI
