@@ -21,9 +21,13 @@ fi
 prefix="$work/$key"
 # shellcheck disable=SC2086
 python3 "$work/src/build_scripts/build_usd.py" $OPENUSD_FLAGS -j "$jobs" \
-  --src "$work/deps-src" --inst "$work/deps-inst" "$prefix" > "$work/build.log" 2>&1 \
+  --src "$work/deps-src" "$prefix" > "$work/build.log" 2>&1 \
   || { tail -200 "$work/build.log"; exit 1; }
 tail -5 "$work/build.log"
+# Dependencies (oneTBB) install into the same prefix, so the tarball is self-contained.
+for f in lib/libtbb.so lib/cmake/TBB/TBBConfig.cmake include/oneapi/tbb.h pxrConfig.cmake; do
+  [ -e "$prefix/$f" ] || { echo "::error::prebuilt is missing $f" >&2; exit 1; }
+done
 # Ship the licences beside the libraries (TOST 1.0 / Apache-2.0 notices).
 mkdir -p "$prefix/share/licenses"
 cp "$work/src/LICENSE.txt" "$prefix/share/licenses/OpenUSD-LICENSE.txt"
