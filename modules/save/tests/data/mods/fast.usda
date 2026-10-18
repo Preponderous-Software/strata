@@ -1,0 +1,12 @@
+#usda 1.0
+(
+    doc = "Toy mod: faster agents."
+)
+
+over "Prefabs"
+{
+    over "Agent"
+    {
+        double toy:stats:speed = 3
+    }
+}

@@ -1,0 +1,12 @@
+#usda 1.0
+(
+    doc = "Toy mod: heavier props."
+)
+
+over "Prefabs"
+{
+    over "Prop"
+    {
+        double toy:stats:weight = 9
+    }
+}
