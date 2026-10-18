@@ -60,6 +60,9 @@ public:
 
     void setCamera(const StrataCamera& camera);
     void setLighting(const StrataLighting& lighting);
+    // ABI 1.6. Places the sun (a vector towards it, world space); nullptr goes
+    // back to the lighting's time_of_day and latitude_degrees.
+    void setSunDirection(const float* toSun);
     // Replaces the point lights (copied). count 0 removes them; at most
     // STRATA_MAX_POINT_LIGHTS. Validates every light before changing any.
     void setPointLights(const StrataPointLight* lights, size_t count);
@@ -97,6 +100,10 @@ private:
 // Defaults for a lighting mode. LEGACY returns Beyond Nations'
 // PrimitiveRenderer constants.
 StrataLighting lightingDefaults(int32_t mode);
+
+// ABI 1.6. The sun's position at a moment (seconds since 1970-01-01 UTC) and
+// place (degrees, north and east positive). Throws INVALID_ARGUMENT.
+StrataSolarPosition solarPosition(double unixSecondsUtc, double latitudeDegrees, double longitudeDegrees);
 
 // Right-handed look-at view and an OpenGL (depth -1..1) perspective.
 StrataCamera cameraLookAt(const float eye[3], const float target[3], const float up[3], float fovYDegrees,

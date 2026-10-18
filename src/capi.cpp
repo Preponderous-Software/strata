@@ -115,6 +115,12 @@ const int32_t kTextFields[] = {STRATA_OFFSET(StrataText, x),     STRATA_OFFSET(S
                                STRATA_OFFSET(StrataText, pixel_size), STRATA_OFFSET(StrataText, flags),
                                STRATA_OFFSET(StrataText, color), STRATA_OFFSET(StrataText, utf8)};
 
+const int32_t kSolarPositionFields[] = {
+    STRATA_OFFSET(StrataSolarPosition, to_sun),           STRATA_OFFSET(StrataSolarPosition, elevation_degrees),
+    STRATA_OFFSET(StrataSolarPosition, azimuth_degrees),  STRATA_OFFSET(StrataSolarPosition, declination_degrees),
+    STRATA_OFFSET(StrataSolarPosition, hour_angle_degrees),
+    STRATA_OFFSET(StrataSolarPosition, equation_of_time_minutes)};
+
 #define STRATA_TABLE(type, fields) \
     FieldTable { static_cast<int32_t>(sizeof(type)), fields, static_cast<int32_t>(sizeof(fields) / sizeof(fields[0])) }
 
@@ -126,7 +132,7 @@ const FieldTable* fieldTable(int32_t structId) {
         STRATA_TABLE(StrataEvent, kEventFields),           STRATA_TABLE(StrataPointLight, kPointLightFields),
         STRATA_TABLE(StrataTerrainTile, kTerrainTileFields), STRATA_TABLE(StrataMesh, kMeshFields),
         STRATA_TABLE(StrataLineVertex, kLineVertexFields), STRATA_TABLE(StrataPoint, kPointFields),
-        STRATA_TABLE(StrataText, kTextFields)};
+        STRATA_TABLE(StrataText, kTextFields),             STRATA_TABLE(StrataSolarPosition, kSolarPositionFields)};
     if (structId < 0 || structId >= static_cast<int32_t>(sizeof tables / sizeof tables[0])) return nullptr;
     return &tables[structId];
 }
@@ -258,6 +264,17 @@ StrataStatus strata_lighting_defaults(int32_t mode, StrataLighting* out) {
 StrataStatus strata_set_lighting(StrataEngine* engine, const StrataLighting* lighting) {
     if (!engine || !lighting) return invalid("engine and lighting must not be NULL");
     return guard([&] { engine->engine->setLighting(*lighting); });
+}
+
+StrataStatus strata_solar_position(double unix_seconds_utc, double latitude_degrees, double longitude_degrees,
+                                   StrataSolarPosition* out) {
+    if (!out) return invalid("out must not be NULL");
+    return guard([&] { *out = strata::solarPosition(unix_seconds_utc, latitude_degrees, longitude_degrees); });
+}
+
+StrataStatus strata_set_sun_direction(StrataEngine* engine, const float to_sun[3]) {
+    if (!engine) return invalid("engine must not be NULL");
+    return guard([&] { engine->engine->setSunDirection(to_sun); });
 }
 
 StrataStatus strata_set_point_lights(StrataEngine* engine, const StrataPointLight* lights, int32_t count) {

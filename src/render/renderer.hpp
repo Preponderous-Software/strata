@@ -13,6 +13,7 @@
 #include "platform/surface.hpp"
 #include "render/cascades.hpp"
 #include "render/overlay.hpp"
+#include "render/sun.hpp"
 #include "rhi/gpu_device.hpp"
 #include "strata/strata.h"
 
@@ -28,6 +29,9 @@ public:
 
     void setCamera(const StrataCamera& camera);
     void setLighting(const StrataLighting& lighting);
+    // ABI 1.6. Unit vector towards the sun for STRATA_LIGHTING_SUN, used
+    // instead of time_of_day and latitude; nullptr goes back to them.
+    void setSunDirection(const float* toSun);
     void setPointLights(const StrataPointLight* lights, size_t count);
     void setTerrain(const StrataTerrainTile* tile);
     uint32_t addMesh(const StrataMesh& mesh);
@@ -129,6 +133,9 @@ private:
 
     StrataCamera camera_{};
     StrataLighting lighting_{};
+    bool hasSunDirection_ = false;
+    glm::vec3 sunDirection_{0, 1, 0};
+    SkyState currentSky() const;
     std::vector<StrataPointLight> pointLights_;
     StrataFrameDesc frame_{};
     StrataFrameStats stats_{};

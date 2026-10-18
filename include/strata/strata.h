@@ -49,9 +49,11 @@
  *   1.4  static triangle meshes (StrataMesh, strata_add_mesh,
  *        strata_remove_mesh, strata_clear_meshes)
  *   1.5  unlit overlays (StrataLineVertex, StrataPoint, StrataText,
- *        strata_submit_lines/_points/_text) and STRATA_LIGHTING_SPACE */
+ *        strata_submit_lines/_points/_text) and STRATA_LIGHTING_SPACE
+ *   1.6  a sun placed by date, time and place (StrataSolarPosition,
+ *        strata_solar_position, strata_set_sun_direction) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 5u
+#define STRATA_ABI_MINOR 6u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -182,6 +184,20 @@ typedef struct StrataLighting {
     float split_lambda;         /* SUN: 0 uniform .. 1 logarithmic cascade splits */
     int32_t fog;                /* SUN: non-zero enables distance fog */
 } StrataLighting;
+
+/* ABI 1.6. Where the sun is in the sky at one moment, seen from one place on
+ * Earth, as strata_solar_position computes it (NOAA's solar position
+ * equations, after Meeus: within about a minute of arc for 1800-2100). The
+ * position is geometric: atmospheric refraction, which lifts a sun near the
+ * horizon by up to about half a degree, is not applied. 32 bytes. */
+typedef struct StrataSolarPosition {
+    float to_sun[3];                /* unit vector towards the sun in Strata's world frame: +X east, +Y up, +Z south */
+    float elevation_degrees;        /* above the horizon; negative at night */
+    float azimuth_degrees;          /* clockwise from north: 90 east, 180 south, 270 west */
+    float declination_degrees;      /* -23.44 at the December solstice .. +23.44 at the June solstice */
+    float hour_angle_degrees;       /* 0 at local solar noon, negative before it */
+    float equation_of_time_minutes; /* apparent minus mean solar time */
+} StrataSolarPosition;
 
 /* ------------------------------------------------------------- point lights */
 
@@ -375,7 +391,8 @@ enum {
     STRATA_STRUCT_MESH = 9,         /* ABI 1.4 */
     STRATA_STRUCT_LINE_VERTEX = 10, /* ABI 1.5 */
     STRATA_STRUCT_POINT = 11,       /* ABI 1.5 */
-    STRATA_STRUCT_TEXT = 12         /* ABI 1.5 */
+    STRATA_STRUCT_TEXT = 12,        /* ABI 1.5 */
+    STRATA_STRUCT_SOLAR_POSITION = 13 /* ABI 1.6 */
 };
 
 /* Field ids for strata_struct_field_offset(STRATA_STRUCT_RENDER_ITEM, ...). */
@@ -437,6 +454,22 @@ STRATA_API StrataStatus strata_camera_look_at(const float eye[3], const float ta
  * Nations' PrimitiveRenderer constants. */
 STRATA_API StrataStatus strata_lighting_defaults(int32_t mode, StrataLighting* out);
 STRATA_API StrataStatus strata_set_lighting(StrataEngine* engine, const StrataLighting* lighting);
+
+/* ABI 1.6. The sun's position at unix_seconds_utc (seconds since 1970-01-01
+ * 00:00 UTC, fractions allowed) seen from latitude_degrees (-90..90, north
+ * positive) and longitude_degrees (-180..180, east positive). The seasons come
+ * from the date: at 40 degrees north the noon sun stands about 73 degrees high
+ * at the June solstice and 27 degrees at the December one. Needs no engine.
+ * Strata's world has -Z north; a host whose map is turned rotates to_sun about
+ * +Y itself before passing it to strata_set_sun_direction. */
+STRATA_API StrataStatus strata_solar_position(double unix_seconds_utc, double latitude_degrees,
+                                              double longitude_degrees, StrataSolarPosition* out);
+/* ABI 1.6. Places the STRATA_LIGHTING_SUN sun: to_sun is a vector towards it
+ * in world space (normalised by the engine), used instead of the lighting's
+ * time_of_day and latitude_degrees for the sun, moon, sky, ambient and
+ * shadows. It stays until the next call, across strata_set_lighting calls.
+ * NULL goes back to time_of_day and latitude_degrees. */
+STRATA_API StrataStatus strata_set_sun_direction(StrataEngine* engine, const float to_sun[3]);
 
 /* ABI 1.1. Replaces the scene's point lights with a copy of `lights`; they
  * stay until the next call. count 0 (lights may then be NULL) removes them
