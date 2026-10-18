@@ -26,6 +26,7 @@ is built now. Where the RFC plans more, that is called out as **later**.
 | `src/render/` | Primitive meshes, sun and sky model, cascade maths, pass list, `Renderer` | no: draws through `GpuDevice` |
 | `src/image/` | PNG reading and writing (stb), golden-image comparison | no |
 | `tools/` | `strata-golden`, `strata-imgcmp`, the scene-file parser | no |
+| `modules/sim/` | Deterministic simulation building blocks: seeded RNG, entity-component registry, 2D fields with diffusion, fixed-step clock, state hash, colormaps. C++ only (`strata::sim`), not in the C ABI | no |
 
 `render/` never calls GL directly. Everything goes through `GpuDevice`, so a
 later backend would not mean rewriting the passes. Strata does **not** promise

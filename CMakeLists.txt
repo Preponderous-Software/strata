@@ -148,6 +148,15 @@ if(STRATA_WITH_USD)
     endforeach()
 endif()
 
+# The simulation module (modules/sim) has no dependencies and no GL, so it is
+# on by default: a seeded RNG, an entity-component registry with a fixed
+# iteration order, 2D fields with diffusion, a fixed-step clock and a state
+# fingerprint, for games whose simulation is C++.
+option(STRATA_WITH_SIM "Build the deterministic simulation module (modules/sim)" ON)
+if(STRATA_WITH_SIM)
+    add_subdirectory(modules/sim)
+endif()
+
 # ---------------------------------------------------------------- tools
 if(STRATA_BUILD_TOOLS)
     add_library(strata_scene STATIC tools/common/scene_file.cpp)
