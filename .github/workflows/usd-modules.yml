@@ -103,7 +103,10 @@ jobs:
         run: |
           ls -la openusd-dist
           sha256sum "openusd-dist/${KEY}.tar.gz"
-          tar -tzf "openusd-dist/${KEY}.tar.gz" | grep -q "${KEY}/pxrConfig.cmake"
+          tar -tzf "openusd-dist/${KEY}.tar.gz" > contents.txt
+          for f in pxrConfig.cmake lib/libtbb.so lib/cmake/TBB/TBBConfig.cmake lib/libusd_usd.so; do
+            grep -qx "${KEY}/$f" contents.txt || { echo "::error::prebuilt lacks $f"; exit 1; }
+          done
 
   modules:
     name: USD + save modules (tests, crash suite, bench gate)
