@@ -22,6 +22,8 @@
 //   circle <cx cy cz> <radius> <segments> <r g b a>  (line loop in the XZ plane)
 //   point <px py pz> <size_pixels> <world_diameter> <r g b a> [soft] (ABI 1.5)
 //   text <x> <y> <pixel_size> <r g b a> [shadow] : <text to the end of the line>
+//   sun date <YYYY-MM-DD> <HH:MM> <utc_offset_hours> <latitude> <longitude>
+//                                 (ABI 1.6: places the sun with strata_solar_position)
 #pragma once
 
 #include <string>
@@ -50,6 +52,10 @@ struct Scene {
     float nearPlane = 0.1f;
     float farPlane = 300.0f;
     StrataLighting lighting{};
+    bool hasSunDate = false;  // ABI 1.6
+    double sunUnixSeconds = 0.0;
+    double sunLatitude = 0.0;
+    double sunLongitude = 0.0;
     StrataFrameDesc frame{};
     std::vector<StrataRenderItem> items;
     std::vector<StrataLineVertex> lines;

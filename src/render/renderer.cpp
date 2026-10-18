@@ -315,6 +315,24 @@ void Renderer::setCamera(const StrataCamera& camera) {
     camera_ = camera;
 }
 
+SkyState Renderer::currentSky() const {
+    return hasSunDirection_ ? evaluateSkyForSun(sunDirection_)
+                            : evaluateSky(lighting_.time_of_day, lighting_.latitude_degrees);
+}
+
+void Renderer::setSunDirection(const float* toSun) {
+    if (toSun == nullptr) {
+        hasSunDirection_ = false;
+        return;
+    }
+    const glm::vec3 d(toSun[0], toSun[1], toSun[2]);
+    if (!std::isfinite(d.x) || !std::isfinite(d.y) || !std::isfinite(d.z) || glm::length(d) < 1e-6f) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "sun direction must be a finite, non-zero vector");
+    }
+    sunDirection_ = glm::normalize(d);
+    hasSunDirection_ = true;
+}
+
 void Renderer::setLighting(const StrataLighting& lighting) {
     validateLighting(lighting);
     lighting_ = lighting;
@@ -572,7 +590,7 @@ void Renderer::writeFrameUniforms(int width, int height, const Cascades* cascade
         u.groundAmbient = glm::vec4(ambient, 0.0f);
         u.zenith = glm::vec4(0.0f, 0.0f, 0.0f, camera_.far_plane);
     } else {
-        const SkyState sky = evaluateSky(lighting_.time_of_day, lighting_.latitude_degrees);
+        const SkyState sky = currentSky();
         u.light = glm::vec4(sky.toLight, cascades ? sky.shadowStrength : 0.0f);
         u.lightColor = glm::vec4(sky.lightColor, 0.0f);
         u.skyAmbient = glm::vec4(sky.skyAmbient, lighting_.fog ? 1.0f : 0.0f);
@@ -744,7 +762,7 @@ void Renderer::endFrame() {
     const bool lit = lighting_.mode != STRATA_LIGHTING_LEGACY;
     bool shadows = false;
     if (sun && lighting_.cascade_count > 0) {
-        const SkyState sky = evaluateSky(lighting_.time_of_day, lighting_.latitude_degrees);
+        const SkyState sky = currentSky();
         shadows = sky.shadowStrength > 0.0f;
         if (shadows) {
             ensureShadowMaps(lighting_.shadow_map_size, lighting_.cascade_count);

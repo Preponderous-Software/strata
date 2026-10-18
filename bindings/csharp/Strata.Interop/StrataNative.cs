@@ -9,8 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting.</summary>
-        public const uint Minor = 5;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place.</summary>
+        public const uint Minor = 6;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
@@ -23,7 +23,8 @@ namespace Strata.Interop {
             StructPointLight = 7,  // ABI 1.1
             StructTerrainTile = 8, // ABI 1.3
             StructMesh = 9,        // ABI 1.4
-            StructLineVertex = 10, StructPoint = 11, StructText = 12;  // ABI 1.5
+            StructLineVertex = 10, StructPoint = 11, StructText = 12,  // ABI 1.5
+            StructSolarPosition = 13;  // ABI 1.6
 
         public const int MaxPointLights = 32;  // ABI 1.1
         public const uint PointLightCastShadows = 0x1u;  // ABI 1.2
@@ -177,6 +178,17 @@ namespace Strata.Interop {
         public byte* utf8;  // NUL-terminated UTF-8
     }
 
+    /// <summary>StrataSolarPosition (ABI 1.6): 32 bytes. to_sun is in Strata's world frame (+X east, +Y up, +Z south).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct StrataSolarPosition {
+        public fixed float to_sun[3];
+        public float elevation_degrees;
+        public float azimuth_degrees;
+        public float declination_degrees;
+        public float hour_angle_degrees;
+        public float equation_of_time_minutes;
+    }
+
     public static unsafe class StrataNative {
         public const string Library = "strata";
 
@@ -209,6 +221,10 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_set_camera(IntPtr engine, StrataCamera* camera);
         [DllImport(Library)] public static extern int strata_lighting_defaults(int mode, StrataLighting* lighting);
         [DllImport(Library)] public static extern int strata_set_lighting(IntPtr engine, StrataLighting* lighting);
+        /// <summary>ABI 1.6. Seconds since 1970-01-01 UTC; degrees, north and east positive. Needs no engine.</summary>
+        [DllImport(Library)] public static extern int strata_solar_position(double unixSecondsUtc, double latitudeDegrees, double longitudeDegrees, StrataSolarPosition* position);
+        /// <summary>ABI 1.6. toSun points at three floats; null goes back to the lighting's time of day and latitude.</summary>
+        [DllImport(Library)] public static extern int strata_set_sun_direction(IntPtr engine, float* toSun);
         /// <summary>ABI 1.1.</summary>
         [DllImport(Library)] public static extern int strata_set_point_lights(IntPtr engine, StrataPointLight* lights, int count);
         /// <summary>ABI 1.3. tile null removes the terrain.</summary>

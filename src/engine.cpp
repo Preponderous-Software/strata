@@ -100,6 +100,7 @@ void Engine::resize(int32_t width, int32_t height) {
 
 void Engine::setCamera(const StrataCamera& camera) { impl_->renderer->setCamera(camera); }
 void Engine::setLighting(const StrataLighting& lighting) { impl_->renderer->setLighting(lighting); }
+void Engine::setSunDirection(const float* toSun) { impl_->renderer->setSunDirection(toSun); }
 
 void Engine::setTerrain(const StrataTerrainTile* tile) { impl_->renderer->setTerrain(tile); }
 
@@ -169,6 +170,25 @@ void Engine::saveScreenshotPng(const std::string& path) {
     if (!image::writePng(path, img, &error)) {
         fail(STRATA_ERROR_IO, "could not write %s: %s", path.c_str(), error.c_str());
     }
+}
+
+StrataSolarPosition solarPosition(double unixSecondsUtc, double latitudeDegrees, double longitudeDegrees) {
+    if (!std::isfinite(unixSecondsUtc) || !std::isfinite(latitudeDegrees) || !std::isfinite(longitudeDegrees) ||
+        std::fabs(latitudeDegrees) > 90.0 || std::fabs(longitudeDegrees) > 180.0) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "solar position needs a finite time, latitude in [-90, 90] and "
+                                            "longitude in [-180, 180]");
+    }
+    const render::SolarPosition p = render::solarPosition(unixSecondsUtc, latitudeDegrees, longitudeDegrees);
+    StrataSolarPosition out{};
+    out.to_sun[0] = p.toSun.x;
+    out.to_sun[1] = p.toSun.y;
+    out.to_sun[2] = p.toSun.z;
+    out.elevation_degrees = static_cast<float>(p.elevationDegrees);
+    out.azimuth_degrees = static_cast<float>(p.azimuthDegrees);
+    out.declination_degrees = static_cast<float>(p.declinationDegrees);
+    out.hour_angle_degrees = static_cast<float>(p.hourAngleDegrees);
+    out.equation_of_time_minutes = static_cast<float>(p.equationOfTimeMinutes);
+    return out;
 }
 
 StrataLighting lightingDefaults(int32_t mode) {

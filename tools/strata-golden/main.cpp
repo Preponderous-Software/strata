@@ -68,6 +68,12 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
                      "strata_camera_look_at");
     ok = ok && check(strata_set_camera(engine, &camera), "strata_set_camera");
     ok = ok && check(strata_set_lighting(engine, &scene.lighting), "strata_set_lighting");
+    if (scene.hasSunDate) {
+        StrataSolarPosition sun{};
+        ok = ok && check(strata_solar_position(scene.sunUnixSeconds, scene.sunLatitude, scene.sunLongitude, &sun),
+                         "strata_solar_position");
+        ok = ok && check(strata_set_sun_direction(engine, sun.to_sun), "strata_set_sun_direction");
+    }
     if (scene.hasTerrain) {
         StrataTerrainTile tile = scene.terrain;  // point at this scene's arrays, whatever copies were made
         tile.heights = scene.terrainHeights.data();

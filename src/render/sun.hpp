@@ -25,8 +25,25 @@ struct SkyState {
 };
 
 SkyState evaluateSky(float timeOfDay, float latitudeDegrees);
+// The same sky for a sun in a given direction (unit vector towards it), for
+// hosts that place the sun themselves (ABI 1.6).
+SkyState evaluateSkyForSun(const glm::vec3& toSun);
 
 // Unit vector towards the sun, before any colour is decided.
 glm::vec3 sunDirection(float timeOfDay, float latitudeDegrees);
+
+// ABI 1.6. The sun's position for a moment (seconds since 1970-01-01 UTC) and
+// a place on Earth, from NOAA's solar position equations (after Meeus): good
+// to about a minute of arc between 1800 and 2100. Geometric: no atmospheric
+// refraction. Arguments are not validated here.
+struct SolarPosition {
+    glm::vec3 toSun{0, 1, 0};  // unit, world frame (+X east, +Y up, +Z south)
+    double elevationDegrees = 90.0;
+    double azimuthDegrees = 180.0;  // clockwise from north
+    double declinationDegrees = 0.0;
+    double hourAngleDegrees = 0.0;  // 0 at local solar noon, negative before it
+    double equationOfTimeMinutes = 0.0;
+};
+SolarPosition solarPosition(double unixSecondsUtc, double latitudeDegrees, double longitudeDegrees);
 
 }  // namespace strata::render

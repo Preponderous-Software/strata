@@ -25,9 +25,63 @@ glm::vec3 sunDirection(float timeOfDay, float latitudeDegrees) {
     return glm::normalize(glm::vec3(east, up, -north));
 }
 
+SolarPosition solarPosition(double unixSecondsUtc, double latitudeDegrees, double longitudeDegrees) {
+    constexpr double kDeg = 3.14159265358979323846 / 180.0;
+    auto wrap360 = [](double a) {
+        a = std::fmod(a, 360.0);
+        return a < 0.0 ? a + 360.0 : a;
+    };
+    const double julianDay = unixSecondsUtc / 86400.0 + 2440587.5;
+    const double jc = (julianDay - 2451545.0) / 36525.0;  // Julian centuries since J2000.0
+
+    const double meanLong = wrap360(280.46646 + jc * (36000.76983 + jc * 0.0003032));
+    const double meanAnom = 357.52911 + jc * (35999.05029 - 0.0001537 * jc);
+    const double eccent = 0.016708634 - jc * (0.000042037 + 0.0000001267 * jc);
+    const double m = meanAnom * kDeg;
+    const double centre = std::sin(m) * (1.914602 - jc * (0.004817 + 0.000014 * jc)) +
+                          std::sin(2.0 * m) * (0.019993 - 0.000101 * jc) + std::sin(3.0 * m) * 0.000289;
+    const double trueLong = meanLong + centre;
+    const double omega = (125.04 - 1934.136 * jc) * kDeg;
+    const double apparentLong = trueLong - 0.00569 - 0.00478 * std::sin(omega);
+    const double meanObliquity =
+        23.0 + (26.0 + (21.448 - jc * (46.815 + jc * (0.00059 - jc * 0.001813))) / 60.0) / 60.0;
+    const double obliquity = (meanObliquity + 0.00256 * std::cos(omega)) * kDeg;
+    const double declination = std::asin(std::sin(obliquity) * std::sin(apparentLong * kDeg));
+
+    const double y = std::tan(obliquity / 2.0) * std::tan(obliquity / 2.0);
+    const double l0 = meanLong * kDeg;
+    const double eotRadians = y * std::sin(2.0 * l0) - 2.0 * eccent * std::sin(m) +
+                              4.0 * eccent * y * std::sin(m) * std::cos(2.0 * l0) -
+                              0.5 * y * y * std::sin(4.0 * l0) - 1.25 * eccent * eccent * std::sin(2.0 * m);
+    const double eotMinutes = 4.0 * eotRadians / kDeg;
+
+    double dayMinutes = std::fmod(unixSecondsUtc / 60.0, 1440.0);
+    if (dayMinutes < 0.0) dayMinutes += 1440.0;
+    const double trueSolarMinutes = dayMinutes + eotMinutes + 4.0 * longitudeDegrees;
+    double hourAngle = wrap360(trueSolarMinutes / 4.0) - 180.0;  // degrees, in [-180, 180)
+
+    const double lat = latitudeDegrees * kDeg, h = hourAngle * kDeg;
+    const double east = -std::cos(declination) * std::sin(h);
+    const double north = std::cos(lat) * std::sin(declination) - std::sin(lat) * std::cos(declination) * std::cos(h);
+    const double up = std::sin(lat) * std::sin(declination) + std::cos(lat) * std::cos(declination) * std::cos(h);
+
+    SolarPosition p;
+    p.toSun = glm::normalize(glm::vec3(static_cast<float>(east), static_cast<float>(up), static_cast<float>(-north)));
+    p.elevationDegrees = std::asin(glm::clamp(up, -1.0, 1.0)) / kDeg;
+    p.azimuthDegrees = wrap360(std::atan2(east, north) / kDeg);
+    p.declinationDegrees = declination / kDeg;
+    p.hourAngleDegrees = hourAngle;
+    p.equationOfTimeMinutes = eotMinutes;
+    return p;
+}
+
 SkyState evaluateSky(float timeOfDay, float latitudeDegrees) {
+    return evaluateSkyForSun(sunDirection(timeOfDay, latitudeDegrees));
+}
+
+SkyState evaluateSkyForSun(const glm::vec3& toSun) {
     SkyState s;
-    s.toSun = sunDirection(timeOfDay, latitudeDegrees);
+    s.toSun = toSun;
     const float e = s.toSun.y;
     s.sunElevation = e;
 

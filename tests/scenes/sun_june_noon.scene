@@ -1,0 +1,10 @@
+# ABI 1.6: the sun placed by date, time and place. Solar noon on the
+# June solstice at 40 degrees north on the prime meridian (12:00 UTC is
+# within two minutes of it). The noon sun stands about 73 degrees high,
+# so shadows are short and point north (-Z). Same village and camera as l2_csm_noon.
+size 640 360
+camera -48 22 46  4 0 -6  60 0.3 400
+lighting sun 0.50 35  4 2048 150 0.6 1
+sun date 2026-06-21 12:00 0 40 0
+clear 0 0 0 1 sky
+include _village_items.scene

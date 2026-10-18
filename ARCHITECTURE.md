@@ -129,6 +129,15 @@ renderer. The C# harness reproduces the C++ golden with zero differing pixels.
   and Strata only evaluates them (`src/render/sun.cpp`). World axes are +Y up,
   +X east and +Z south. The sun follows an equinox path: it rises due east at
   0.25, is highest at 0.5 and sets due west at 0.75.
+- **Seasonal sun (ABI 1.6).** `strata_solar_position` turns a moment (Unix
+  seconds, UTC) and a latitude and longitude into the sun's direction,
+  elevation, azimuth, declination, hour angle and equation of time with NOAA's
+  solar position equations (after Meeus; geometric, no refraction). It needs no
+  engine and agrees with pyephem to about a minute of arc. The host passes the
+  direction to `strata_set_sun_direction`, which replaces `time_of_day` and
+  latitude for the sun, moon, sky, ambient and shadows until it is cleared with
+  NULL. The engine keeps no calendar or clock of its own: the game still owns
+  time, and a host whose map is turned rotates the vector about +Y itself.
 - **Key light.** By day it is the sun: warm when low, white when high. At night
   it is a dim, bluish **moon** that casts **no shadows**. Shadow strength fades
   in from a sun elevation of about 2° to 7°, so the sun casts no long,

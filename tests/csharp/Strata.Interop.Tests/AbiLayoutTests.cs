@@ -72,6 +72,18 @@ namespace Strata.Interop.Tests {
         }
 
         [Fact]
+        public unsafe void SolarPositionMatchesNative() {
+            Assert.Equal(32, Unsafe.SizeOf<StrataSolarPosition>());
+            AssertLayout<StrataSolarPosition>(StrataAbi.StructSolarPosition, "to_sun", "elevation_degrees", "azimuth_degrees",
+                "declination_degrees", "hour_angle_degrees", "equation_of_time_minutes");
+            // 2026-06-21 12:00 UTC on the prime meridian at 40 N: the June solstice noon sun stands about 73.4 degrees high.
+            StrataSolarPosition p;
+            Assert.Equal(0, StrataNative.strata_solar_position(1782043200.0, 40.0, 0.0, &p));
+            Assert.InRange(p.elevation_degrees, 73.0f, 73.8f);
+            Assert.Equal(1, StrataNative.strata_set_sun_direction(IntPtr.Zero, null));  // STRATA_ERROR_INVALID_ARGUMENT
+        }
+
+        [Fact]
         public unsafe void OverlaySubmitsRejectANullEngine() {
             var point = new StrataPoint { size_pixels = 2 };
             Assert.Equal(1, StrataNative.strata_submit_points(IntPtr.Zero, &point, 1));  // STRATA_ERROR_INVALID_ARGUMENT

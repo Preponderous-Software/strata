@@ -1,5 +1,6 @@
 // The C ABI's struct layouts are a promise to every binding. These checks pin
 // them, so a change to strata.h that moves a field fails here first.
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 
@@ -63,6 +64,13 @@ static_assert(offsetof(StrataText, utf8) == 32, "64-bit targets");
 static_assert(sizeof(StrataText) == 40, "64-bit targets");
 #endif
 static_assert(STRATA_LIGHTING_SPACE == 2, "ABI 1.5");
+// ABI 1.6
+static_assert(sizeof(StrataSolarPosition) == 32, "");
+static_assert(offsetof(StrataSolarPosition, elevation_degrees) == 12, "");
+static_assert(offsetof(StrataSolarPosition, azimuth_degrees) == 16, "");
+static_assert(offsetof(StrataSolarPosition, declination_degrees) == 20, "");
+static_assert(offsetof(StrataSolarPosition, hour_angle_degrees) == 24, "");
+static_assert(offsetof(StrataSolarPosition, equation_of_time_minutes) == 28, "");
 static_assert(STRATA_ABI_VERSION == 1u, "ABI 1 callers must keep working: additions bump STRATA_ABI_MINOR");
 #if UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu
 static_assert(sizeof(StrataEngineDesc) == 48, "64-bit targets");
@@ -72,7 +80,7 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 5u);
+    CHECK(strata_abi_minor() >= 6u);
 }
 
 TEST(point_light_layout_is_queryable) {
@@ -116,6 +124,21 @@ TEST(space_lighting_defaults_and_validation) {
     CHECK(l.mode == STRATA_LIGHTING_SPACE);
     CHECK(l.legacy_ambient >= 0.0f && l.legacy_ambient <= 0.1f);
     CHECK(l.fog == 0);
+}
+
+TEST(solar_position_is_queryable_and_validated) {
+    CHECK(strata_struct_size(STRATA_STRUCT_SOLAR_POSITION) == 32);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_SOLAR_POSITION, 5) == 28);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_SOLAR_POSITION, 6) == -1);
+    StrataSolarPosition p{};
+    CHECK(strata_solar_position(1782043200.0, 40.0, 0.0, &p) == STRATA_OK);  // 2026-06-21 12:00 UTC
+    CHECK(p.elevation_degrees > 73.0f && p.elevation_degrees < 73.8f);
+    CHECK(strata_solar_position(0.0, 91.0, 0.0, &p) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_solar_position(0.0, 0.0, 181.0, &p) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_solar_position(NAN, 0.0, 0.0, &p) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_solar_position(0.0, 0.0, 0.0, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+    const float up[3] = {0, 1, 0};
+    CHECK(strata_set_sun_direction(nullptr, up) == STRATA_ERROR_INVALID_ARGUMENT);
 }
 
 TEST(set_terrain_rejects_a_null_engine) {

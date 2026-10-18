@@ -1,6 +1,7 @@
 #include "scene_file.hpp"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <sstream>
@@ -29,6 +30,16 @@ int kindFromName(const std::string& name, const std::string& where) {
     if (name == "cylinder") return STRATA_PRIMITIVE_CYLINDER;
     if (name == "sphere") return STRATA_PRIMITIVE_SPHERE;
     bad(where, "unknown primitive '" + name + "'");
+}
+
+// Days from 1970-01-01 to a proleptic Gregorian date (Howard Hinnant's days_from_civil).
+long long daysFromCivil(long long y, unsigned m, unsigned d) {
+    y -= m <= 2;
+    const long long era = (y >= 0 ? y : y - 399) / 400;
+    const unsigned yoe = static_cast<unsigned>(y - era * 400);
+    const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+    const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + static_cast<long long>(doe) - 719468;
 }
 
 void parse(const std::string& path, Scene& scene, int depth) {
@@ -77,6 +88,26 @@ void parse(const std::string& path, Scene& scene, int depth) {
             } else {
                 bad(where, "unknown lighting mode '" + mode + "'");
             }
+        } else if (word == "sun") {
+            std::string kind, date, time;
+            read(in, kind, where, "'date'");
+            if (kind != "date") bad(where, "expected 'sun date'");
+            read(in, date, where, "date (YYYY-MM-DD)");
+            read(in, time, where, "local time (HH:MM)");
+            double utcOffset = 0.0;
+            read(in, utcOffset, where, "UTC offset in hours");
+            read(in, scene.sunLatitude, where, "latitude");
+            read(in, scene.sunLongitude, where, "longitude");
+            int y = 0, mo = 0, d = 0, h = 0, mi = 0;
+            if (std::sscanf(date.c_str(), "%d-%d-%d", &y, &mo, &d) != 3 || mo < 1 || mo > 12 || d < 1 || d > 31) {
+                bad(where, "bad date '" + date + "'");
+            }
+            if (std::sscanf(time.c_str(), "%d:%d", &h, &mi) != 2 || h < 0 || h > 23 || mi < 0 || mi > 59) {
+                bad(where, "bad time '" + time + "'");
+            }
+            const long long days = daysFromCivil(y, static_cast<unsigned>(mo), static_cast<unsigned>(d));
+            scene.sunUnixSeconds = static_cast<double>(days) * 86400.0 + h * 3600.0 + mi * 60.0 - utcOffset * 3600.0;
+            scene.hasSunDate = true;
         } else if (word == "clear") {
             for (float& v : scene.frame.clear_color) read(in, v, where, "clear colour");
             scene.frame.clear_flags = STRATA_CLEAR_COLOR | STRATA_CLEAR_DEPTH;

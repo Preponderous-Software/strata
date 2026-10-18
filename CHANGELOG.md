@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Seasonal sun (ABI 1.6): `StrataSolarPosition`, `strata_solar_position`
+  (the sun's direction, elevation, azimuth, declination, hour angle and
+  equation of time for a UTC moment, latitude and longitude, from NOAA's solar
+  position equations) and `strata_set_sun_direction`, which places the
+  `STRATA_LIGHTING_SUN` sun directly instead of by `time_of_day` and latitude.
+  The existing time-of-day sun is unchanged and stays the default.
+- Scene files take `sun date <YYYY-MM-DD> <HH:MM> <utc_offset> <lat> <lon>`.
+  New goldens `sun_june_noon`, `sun_december_noon` and
+  `sun_december_afternoon`.
+
 ## 0.3.0
 
 Static meshes, overlays and space lighting, and the simulation module. Every
