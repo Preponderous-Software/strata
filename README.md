@@ -27,10 +27,20 @@ Every image above, apart from the animation, is a golden image that CI
 renders on llvmpipe and compares on each pull request. The animation is the L2
 village drawn at 39 times of day by `tools/make_readme_media.py`.
 
-Strata is a small C++17 engine for two simulation games: **Beyond Nations**,
-whose simulation is C#, and a USD-native colony sim written in C++. It is not
-a general-purpose engine. There is no editor, and nothing goes in without a
-consumer in one of those two games.
+Strata is a small C++17 engine for simulation projects. It was built for two
+games and is now used by four projects:
+
+- [**Beyond Nations**](https://github.com/Preponderous-Software/beyond-nations),
+  whose simulation is C#, reaches Strata through the C ABI.
+- [**steading**](https://github.com/Preponderous-Software/steading), a
+  USD-native colony sim in C++, uses the renderer and `modules/save`.
+- [**orrery**](https://github.com/Preponderous-Software/orrery) draws the solar
+  system from JPL data with the overlays and space lighting.
+- [**Microbiome**](https://github.com/Preponderous-Software/microbiome) runs its
+  micro-environments on `modules/sim`.
+
+It is not a general-purpose engine. There is no editor, and nothing goes in
+without a real consumer project that needs it.
 
 The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 
@@ -46,7 +56,7 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 
 `v0.2.0` adds point lights (**L3**), point-light shadows (**L4**) and a first
 terrain tile (**T1**) to `v0.1.0`'s skeleton and lighting **L1–L2**. The C
-ABI is 1.3 (1.4 on `main` adds static meshes): each addition is compatible, and every ABI 1.0 host still works.
+ABI is 1.3 (1.5 on `main` adds static meshes in 1.4 and overlays in 1.5): each addition is compatible, and every ABI 1.0 host still works.
 
 | Milestone | What it is | Golden images |
 |---|---|---|
