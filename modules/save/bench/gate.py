@@ -18,6 +18,8 @@ import sys
 TOLERANCE = 0.20
 # metric -> absolute slack added to the allowed value
 GATED = {"save_ms": 5.0, "load_ms": 5.0, "async_stall_ms": 2.0, "delta_bytes": 1024, "peak_rss_mb": 8.0}
+# Timing metrics are scaled by the runner calibration (calib_ms: SHA-256 of 32 MB).
+TIMED = {"save_ms", "load_ms", "async_stall_ms"}
 # agents -> metric -> budget (RFC 0019 §9)
 BUDGETS = {
     10000: {"async_stall_ms": 50.0, "load_ms": 3000.0, "delta_bytes": 2 * 1024 * 1024, "peak_rss_mb": 500.0},
@@ -43,8 +45,13 @@ def main() -> int:
         if base is None:
             print(f"{tag:>12} (no stored baseline; budgets only)")
             continue
+        speed = 1.0
+        if "calib_ms" in base and r.get("calib_ms"):
+            speed = r["calib_ms"] / base["calib_ms"]
+            print(f"{tag:>12} runner calibration {r['calib_ms']:.2f} ms vs baseline {base['calib_ms']:.2f} ms -> x{speed:.2f}")
         for metric, slack in GATED.items():
-            allowed = base[metric] * (1 + TOLERANCE) + slack
+            scale = speed if metric in TIMED else 1.0
+            allowed = base[metric] * scale * (1 + TOLERANCE) + slack
             status = "ok" if r[metric] <= allowed else "REGRESSED"
             print(f"{tag:>12} {metric:<15} {r[metric]:>12.2f}  baseline {base[metric]:>12.2f}  allowed {allowed:>12.2f}  {status}")
             if r[metric] > allowed:

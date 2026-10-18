@@ -81,6 +81,22 @@ int main(int argc, char** argv) {
         hydrateMs = std::min(hydrateMs, l.hydrateMs);
         loadMs = std::min(loadMs, lt);
     }
+    // Runner-speed calibration: SHA-256 of 32 MB (a 4 MB buffer, 8 times, so
+    // it barely moves peak RSS), min of 5. The gate scales
+    // timing baselines by calib_now / calib_baseline, so a slower shared
+    // runner does not read as a regression (and a faster one cannot hide one).
+    double calibMs = inf;
+    {
+        std::string buf(4u << 20, 'x');
+        for (int i = 0; i < 5; ++i) {
+            const auto c0 = Clock::now();
+            save::Sha256 hasher;
+            for (int k = 0; k < 8; ++k) hasher.update(buf.data(), buf.size());
+            const std::string h = save::toHex(hasher.finish());
+            calibMs = std::min(calibMs, std::chrono::duration<double, std::milli>(Clock::now() - c0).count());
+            buf[static_cast<size_t>(i)] = h[0];
+        }
+    }
     uint64_t baseBytes = 0;
     for (const auto& n : save::fs::list(dir))
         if (n.compare(0, 5, "base-") == 0) {
@@ -92,9 +108,9 @@ int main(int argc, char** argv) {
     std::printf("{\"agents\":%d,\"grid\":%d,\"ticks\":%d,\"reps\":%d,\"save_ms\":%.2f,\"export_ms\":%.2f,"
                 "\"verify_ms\":%.2f,\"commit_ms\":%.2f,\"async_stall_ms\":%.3f,\"async_worker_ms\":%.2f,"
                 "\"load_ms\":%.2f,\"compose_ms\":%.2f,\"hydrate_ms\":%.2f,\"base_bytes\":%llu,\"delta_bytes\":%llu,"
-                "\"peak_rss_mb\":%.1f,\"round_trip\":\"%s\"}\n",
+                "\"peak_rss_mb\":%.1f,\"calib_ms\":%.2f,\"round_trip\":\"%s\"}\n",
                 agents, grid, ticks, reps, totalMs, exportMs, verifyMs, commitMs, stallMs, asyncMs, loadMs, composeMs,
                 hydrateMs, static_cast<unsigned long long>(baseBytes), static_cast<unsigned long long>(deltaBytes),
-                ru.ru_maxrss / 1024.0, exact ? "EXACT" : "MISMATCH");
+                ru.ru_maxrss / 1024.0, calibMs, exact ? "EXACT" : "MISMATCH");
     return exact ? 0 : 1;
 }

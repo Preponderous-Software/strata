@@ -159,7 +159,7 @@ jobs:
         run: |
           bench=build/modules/save/strata-save-bench
           "$bench" "$RUNNER_TEMP/bench1k" 1000 64 300 5 2>/dev/null | tee results.jsonl
-          "$bench" "$RUNNER_TEMP/bench10k" 10000 256 300 3 2>/dev/null | tee -a results.jsonl
+          "$bench" "$RUNNER_TEMP/bench10k" 10000 256 300 5 2>/dev/null | tee -a results.jsonl
           python3 modules/save/bench/gate.py results.jsonl modules/save/bench/baseline.json
 
       - uses: actions/upload-artifact@v4
