@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
+
+Static meshes, overlays and space lighting, and the simulation module. Every
+ABI addition is compatible: `STRATA_ABI_VERSION` stays 1 and
+`STRATA_ABI_MINOR` is 5.
 
 - Static meshes (ABI 1.4): `StrataMesh`, `strata_add_mesh`,
   `strata_remove_mesh` and `strata_clear_meshes`. Up to 256 indexed triangle
@@ -26,6 +30,14 @@
   `R8` textures with initial data.
 - Scene files take `lighting space`, `line`, `circle`, `point` and `text`
   lines. New goldens `o1_space_system` and `o1_overlays_sun`.
+- `modules/sim` (`strata::sim`, C++ only, `STRATA_WITH_SIM`, on by default;
+  not in the C ABI and no GL): a seeded PCG32 `Rng`, a `Registry` with a fixed
+  iteration order, `Field2D`/`Mask2D` with mass-conserving diffusion and
+  decay, a `FixedStep` clock, a `StateHasher` fingerprint and colormaps.
+- Optional OpenUSD modules behind `STRATA_WITH_USD` (off by default):
+  `modules/usd` (the flat world and USD sync points) and `modules/save`
+  (content-addressed, integrity-checked saves). CI fetches a prebuilt OpenUSD
+  keyed by its pin.
 - A simulation module, `modules/sim` (`strata::sim`, C++ only, on by default
   with `STRATA_WITH_SIM`): a seeded PCG32 `Rng`, a `Registry<Components...>`
   with a deterministic iteration order, `Field2D`/`Mask2D` scalar fields with

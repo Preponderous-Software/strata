@@ -54,9 +54,11 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 
 ## Status
 
-`v0.2.0` adds point lights (**L3**), point-light shadows (**L4**) and a first
-terrain tile (**T1**) to `v0.1.0`'s skeleton and lighting **L1–L2**. The C
-ABI is 1.3 (1.5 on `main` adds static meshes in 1.4 and overlays in 1.5): each addition is compatible, and every ABI 1.0 host still works.
+`v0.3.0` adds static meshes (ABI 1.4), unlit overlays and a space lighting
+mode (**O1**, ABI 1.5) and the C++-only `modules/sim` to `v0.2.0`'s point
+lights (**L3**), point-light shadows (**L4**) and terrain tile (**T1**), and
+`v0.1.0`'s skeleton and lighting **L1–L2**. The C ABI is 1.5: each addition is
+compatible, and every ABI 1.0 host still works.
 
 | Milestone | What it is | Golden images |
 |---|---|---|
@@ -66,8 +68,8 @@ ABI is 1.3 (1.5 on `main` adds static meshes in 1.4 and overlays in 1.5): each a
 | L3 *(ABI 1.1)* | Up to 32 unshadowed point lights with a range-windowed falloff | `l3_point_lights_night`, `l3_point_lights_falloff` |
 | L4 *(ABI 1.2)* | Up to 4 of them cast shadows through cube shadow maps | `l4_point_shadows_pillars`, `l4_point_shadows_night` |
 | T1 *(ABI 1.3)* | One static heightmapped terrain tile, lit, casting and receiving sun and point-light shadows | `t1_terrain_noon`, `t1_terrain_morning`, `t1_terrain_night_fire` |
-| Static meshes *(ABI 1.4, unreleased)* | Up to 256 host-built indexed triangle meshes in world space with per-vertex colour, drawn and shadowed like the terrain | `mesh_static_morning`, `mesh_static_night_lamp` |
-| O1 *(ABI 1.5, unreleased)* | Unlit overlays (lines, round points, screen text in a public-domain 8×8 font) and a space lighting mode lit only by point lights | `o1_space_system`, `o1_overlays_sun` |
+| Static meshes *(ABI 1.4)* | Up to 256 host-built indexed triangle meshes in world space with per-vertex colour, drawn and shadowed like the terrain | `mesh_static_morning`, `mesh_static_night_lamp` |
+| O1 *(ABI 1.5)* | Unlit overlays (lines, round points, screen text in a public-domain 8×8 font) and a space lighting mode lit only by point lights | `o1_space_system`, `o1_overlays_sun` |
 
 Next come streaming and larger terrain (T2–T4), meshes and materials (M1–M4),
 and optional OpenUSD modules (`STRATA_WITH_USD`, off by default).
