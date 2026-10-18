@@ -117,12 +117,12 @@ if(MSVC)
 else()
     target_link_libraries(strata PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,strata_static>")
     if(NOT APPLE)
-        # Only the C ABI is exported. Strata's own code is compiled with hidden
-        # visibility; SDL marks its API visible, so its archive is excluded
-        # from the export table by name.
+        # Only the C ABI is exported (cmake/strata.map), whatever the static
+        # archives linked in would otherwise make visible.
         target_link_options(strata PRIVATE
-            "-Wl,--exclude-libs,libSDL3.a"
+            "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/strata.map"
             "-Wl,--no-undefined")
+        set_property(TARGET strata APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/strata.map")
     endif()
 endif()
 set_target_properties(strata PROPERTIES
