@@ -6,7 +6,11 @@
   `strata_set_point_lights`, up to 32 unshadowed lights with a range-windowed
   falloff in sun lighting. `strata_abi_minor()` and `STRATA_ABI_MINOR`
   report compatible additions; `STRATA_ABI_VERSION` stays 1.
-- Scene files take `light point` lines.
+- Shadowed point lights (milestone L4, ABI 1.2):
+  `STRATA_POINT_LIGHT_CAST_SHADOWS` gives up to four point lights cube shadow
+  maps (one cube-map array, 512² faces, distance/range depth, nine-tap
+  filtering), drawn in a new `point_shadow` pass.
+- Scene files take `light point` lines, with an optional `shadow`.
 
 ## 0.1.0
 

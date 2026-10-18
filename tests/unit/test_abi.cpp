@@ -23,6 +23,7 @@ static_assert(offsetof(StrataPointLight, range) == 12, "");
 static_assert(offsetof(StrataPointLight, color) == 16, "");
 static_assert(offsetof(StrataPointLight, intensity) == 28, "");
 static_assert(offsetof(StrataPointLight, flags) == 32, "");
+static_assert(STRATA_POINT_LIGHT_CAST_SHADOWS == 0x1u, "ABI 1.2");
 static_assert(STRATA_ABI_VERSION == 1u, "ABI 1 callers must keep working: additions bump STRATA_ABI_MINOR");
 #if UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu
 static_assert(sizeof(StrataEngineDesc) == 48, "64-bit targets");
@@ -32,7 +33,7 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 1u);
+    CHECK(strata_abi_minor() >= 2u);
 }
 
 TEST(point_light_layout_is_queryable) {

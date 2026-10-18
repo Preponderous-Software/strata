@@ -1,0 +1,16 @@
+# L4: the village at night (time of day 0.95) lit by a shadow-casting
+# campfire and two shadow-casting lamps. The houses, pawns and trees throw
+# shadows away from each light; the cold blue light in the field is unshadowed.
+size 640 360
+camera -18 12 20  -1 0 -2  60 0.3 400
+lighting sun 0.95 35  4 2048 150 0.6 1
+clear 0 0 0 1 sky
+include _village_items.scene
+item cylinder -2 0.75 4.5  0.5 0.25 0.5  0.35 0.22 0.12
+item cube -2 0.7 4.5  1.4 0.3 0.3  0.35 0.22 0.12
+light point -2 1.6 4.5  16  1.0 0.55 0.2  6 shadow
+item cylinder -11 1.5 -4  0.3 1 0.3  0.3 0.3 0.3
+light point -11 2.8 -4  10  1.0 0.8 0.5  4 shadow
+item cylinder 7.5 1.5 -4.5  0.3 1 0.3  0.3 0.3 0.3
+light point 7.5 2.8 -4.5  10  1.0 0.8 0.5  4 shadow
+light point 10 1.5 8  8  0.3 0.5 1.0  4

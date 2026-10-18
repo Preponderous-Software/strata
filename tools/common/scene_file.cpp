@@ -89,6 +89,11 @@ void parse(const std::string& path, Scene& scene, int depth) {
             read(in, light.range, where, "range");
             for (float& v : light.color) read(in, v, where, "colour");
             read(in, light.intensity, where, "intensity");
+            std::string option;
+            if (in >> option) {
+                if (option != "shadow") bad(where, "expected 'shadow' or nothing after the intensity");
+                light.flags |= STRATA_POINT_LIGHT_CAST_SHADOWS;
+            }
             scene.pointLights.push_back(light);
         } else if (word == "include") {
             std::string other;

@@ -1,4 +1,4 @@
-// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.1).
+// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.2).
 // Copyright (c) 2026 Daniel McCoy Stephenson. MIT licence; see LICENSE.
 using System;
 using System.IO;
@@ -9,8 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights.</summary>
-        public const uint Minor = 1;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows.</summary>
+        public const uint Minor = 2;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
@@ -22,6 +22,8 @@ namespace Strata.Interop {
             StructPointLight = 7;  // ABI 1.1
 
         public const int MaxPointLights = 32;  // ABI 1.1
+        public const uint PointLightCastShadows = 0x1u;  // ABI 1.2
+        public const int MaxShadowedPointLights = 4;     // ABI 1.2
 
         public const int Ok = 0;
     }
