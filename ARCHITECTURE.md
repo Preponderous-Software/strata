@@ -40,7 +40,8 @@ to write one.
   struct with its own id, a new enum or flag value) bump `STRATA_ABI_MINOR`
   instead, so every ABI 1 host keeps working. A host that uses an addition
   checks `strata_abi_minor()` at run time; `strata.h` names the minor each
-  addition arrived in (1.1: point lights; 1.2: point-light shadows).
+  addition arrived in (1.1: point lights; 1.2: point-light shadows; 1.3: a
+  terrain tile).
 - **Layouts are checkable.** `strata_struct_size(id)` and
   `strata_struct_field_offset(id, field)` report every boundary struct. The C++
   unit tests `static_assert` the layouts. The C# tests
@@ -86,9 +87,9 @@ start-up that every read has an earlier writer. With `STRATA_LOG_DEBUG=1` set,
 the list is logged:
 
 ```text
-shadow:   instances, camera, lighting -> shadow_map
-point_shadow: instances, point_lights -> point_shadow_maps
-opaque:   instances, camera, lighting, point_lights, shadow_map, point_shadow_maps -> color, depth
+shadow:   instances, terrain, camera, lighting -> shadow_map
+point_shadow: instances, terrain, point_lights -> point_shadow_maps
+opaque:   instances, terrain, camera, lighting, point_lights, shadow_map, point_shadow_maps -> color, depth
 sky:      camera, lighting, depth -> color
 readback: color -> pixels
 ```
@@ -183,6 +184,24 @@ renderer. The C# harness reproduces the C++ golden with zero differing pixels.
   depth comparison, soften the edge.
 - Shadow-casting lights cost six extra passes each, every frame, and each pass
   draws every primitive.
+
+## Terrain (T1)
+
+- `strata_set_terrain` takes one `StrataTerrainTile`: an origin, a cell size,
+  a `samples_x` × `samples_z` grid of heights (2..1025 per side, x fastest)
+  and either a linear RGB colour per sample or one colour for the tile. The
+  engine validates it, builds a mesh (`src/render/terrain_mesh.cpp`) and
+  copies it into GPU buffers. The host's arrays are not kept. NULL removes
+  the tile. On an invalid tile the old one stays.
+- Mesh: one vertex per sample (position, normal and colour, 36 bytes) and two
+  counter-clockwise triangles per cell. Normals come from central differences,
+  one-sided at the edges.
+- The tile is part of the `terrain` frame input. It is drawn after the
+  primitives in the opaque pass, with its own vertex shader feeding the same
+  legacy or sun fragment shader. It is also drawn into every sun cascade and
+  every point-light cube face, so it casts shadows and receives them, both
+  from itself and from primitives.
+- **Later (T2–T4):** several tiles, streaming, LOD and texture splatting.
 
 ## Optional modules
 

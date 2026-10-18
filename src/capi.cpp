@@ -97,6 +97,11 @@ const int32_t kPointLightFields[] = {
     STRATA_OFFSET(StrataPointLight, position), STRATA_OFFSET(StrataPointLight, range),
     STRATA_OFFSET(StrataPointLight, color),    STRATA_OFFSET(StrataPointLight, intensity),
     STRATA_OFFSET(StrataPointLight, flags)};
+const int32_t kTerrainTileFields[] = {
+    STRATA_OFFSET(StrataTerrainTile, origin),    STRATA_OFFSET(StrataTerrainTile, cell_size),
+    STRATA_OFFSET(StrataTerrainTile, samples_x), STRATA_OFFSET(StrataTerrainTile, samples_z),
+    STRATA_OFFSET(StrataTerrainTile, heights),   STRATA_OFFSET(StrataTerrainTile, colors),
+    STRATA_OFFSET(StrataTerrainTile, color)};
 
 #define STRATA_TABLE(type, fields) \
     FieldTable { static_cast<int32_t>(sizeof(type)), fields, static_cast<int32_t>(sizeof(fields) / sizeof(fields[0])) }
@@ -106,7 +111,8 @@ const FieldTable* fieldTable(int32_t structId) {
         STRATA_TABLE(StrataRenderItem, kRenderItemFields), STRATA_TABLE(StrataEngineDesc, kEngineDescFields),
         STRATA_TABLE(StrataCamera, kCameraFields),         STRATA_TABLE(StrataLighting, kLightingFields),
         STRATA_TABLE(StrataFrameDesc, kFrameDescFields),   STRATA_TABLE(StrataFrameStats, kFrameStatsFields),
-        STRATA_TABLE(StrataEvent, kEventFields),           STRATA_TABLE(StrataPointLight, kPointLightFields)};
+        STRATA_TABLE(StrataEvent, kEventFields),           STRATA_TABLE(StrataPointLight, kPointLightFields),
+        STRATA_TABLE(StrataTerrainTile, kTerrainTileFields)};
     if (structId < 0 || structId >= static_cast<int32_t>(sizeof tables / sizeof tables[0])) return nullptr;
     return &tables[structId];
 }
@@ -243,6 +249,11 @@ StrataStatus strata_set_point_lights(StrataEngine* engine, const StrataPointLigh
     if (count < 0) return invalid("count is negative");
     if (count > 0 && !lights) return invalid("lights is NULL with a non-zero count");
     return guard([&] { engine->engine->setPointLights(lights, static_cast<size_t>(count)); });
+}
+
+StrataStatus strata_set_terrain(StrataEngine* engine, const StrataTerrainTile* tile) {
+    if (!engine) return invalid("engine is NULL");
+    return guard([&] { engine->engine->setTerrain(tile); });
 }
 
 StrataStatus strata_begin_frame(StrataEngine* engine, const StrataFrameDesc* desc) {

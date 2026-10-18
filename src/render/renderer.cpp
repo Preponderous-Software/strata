@@ -13,6 +13,7 @@
 #include "render/primitive_mesh.hpp"
 #include "render/shaders.hpp"
 #include "render/sun.hpp"
+#include "render/terrain_mesh.hpp"
 
 namespace strata::render {
 namespace {
@@ -123,6 +124,12 @@ Renderer::~Renderer() {
     for (auto target : pointShadowTargets_) device_.destroy(target);
     device_.destroy(pointShadowMaps_);
     device_.destroy(pointShadowPipeline_);
+    device_.destroy(terrainVertices_);
+    device_.destroy(terrainIndices_);
+    device_.destroy(terrainLegacyPipeline_);
+    device_.destroy(terrainSunPipeline_);
+    device_.destroy(terrainShadowPipeline_);
+    device_.destroy(terrainPointShadowPipeline_);
     for (auto target : shadowTargets_) device_.destroy(target);
     device_.destroy(shadowMaps_);
     device_.destroy(offscreenTarget_);
@@ -208,6 +215,38 @@ void Renderer::buildPipelines() {
     pointShadow.depthClamp = false;
     pointShadowPipeline_ = device_.createPipeline(pointShadow);
 
+    // Terrain: position, normal and colour per vertex, no instances.
+    const std::vector<VertexBufferLayout> terrainBuffers = {
+        {0, TerrainMesh::kFloatsPerVertex * sizeof(float), false}};
+    const std::vector<VertexAttribute> terrainAttributes = {
+        {0, 0, 3, AttribType::Float, 0},
+        {1, 0, 3, AttribType::Float, 3 * sizeof(float)},
+        {5, 0, 3, AttribType::Float, 6 * sizeof(float)},
+    };
+    PipelineDesc terrain = legacy;
+    terrain.name = "opaque.terrain.legacy";
+    terrain.vertexSource = shaders::kTerrainVertex;
+    terrain.buffers = terrainBuffers;
+    terrain.attributes = terrainAttributes;
+    terrainLegacyPipeline_ = device_.createPipeline(terrain);
+    terrain.name = "opaque.terrain.sun";
+    terrain.fragmentSource = shaders::kSunFragment;
+    terrainSunPipeline_ = device_.createPipeline(terrain);
+
+    PipelineDesc terrainShadow = shadow;
+    terrainShadow.name = "shadow.terrain";
+    terrainShadow.vertexSource = shaders::kTerrainShadowVertex;
+    terrainShadow.buffers = terrainBuffers;
+    terrainShadow.attributes = {terrainAttributes[0]};
+    terrainShadowPipeline_ = device_.createPipeline(terrainShadow);
+
+    PipelineDesc terrainPointShadow = pointShadow;
+    terrainPointShadow.name = "point_shadow.terrain";
+    terrainPointShadow.vertexSource = shaders::kTerrainPointShadowVertex;
+    terrainPointShadow.buffers = terrainBuffers;
+    terrainPointShadow.attributes = {terrainAttributes[0]};
+    terrainPointShadowPipeline_ = device_.createPipeline(terrainPointShadow);
+
     PipelineDesc sky;
     sky.name = "sky";
     sky.vertexSource = shaders::kSkyVertex;
@@ -288,6 +327,27 @@ void Renderer::setPointLights(const StrataPointLight* lights, size_t count) {
     }
 }
 
+void Renderer::setTerrain(const StrataTerrainTile* tile) {
+    if (!tile) {
+        device_.destroy(terrainVertices_);
+        device_.destroy(terrainIndices_);
+        terrainVertices_ = {};
+        terrainIndices_ = {};
+        terrainIndexCount_ = 0;
+        return;
+    }
+    const TerrainMesh mesh = buildTerrainMesh(*tile);  // validates first; throws before anything changes
+    const rhi::BufferHandle vertices = device_.createBuffer(mesh.vertices.size() * sizeof(float),
+                                                            mesh.vertices.data(), false, "strata.terrain-vertices");
+    const rhi::BufferHandle indices = device_.createBuffer(mesh.indices.size() * sizeof(uint32_t),
+                                                           mesh.indices.data(), false, "strata.terrain-indices");
+    device_.destroy(terrainVertices_);
+    device_.destroy(terrainIndices_);
+    terrainVertices_ = vertices;
+    terrainIndices_ = indices;
+    terrainIndexCount_ = static_cast<uint32_t>(mesh.indices.size());
+}
+
 void Renderer::ensurePointShadowMaps(int cubes) {
     if (pointShadowMaps_ && cubes <= pointShadowCubes_) return;
     for (auto target : pointShadowTargets_) device_.destroy(target);
@@ -337,6 +397,10 @@ void Renderer::pointShadowPass() {
             device_.bindPipeline(pointShadowPipeline_);
             device_.bindUniformBuffer(1, pointShadowUniforms_, layer * pointShadowUniformStride_, sizeof u);
             drawPrimitives(true);
+            if (terrainIndexCount_ > 0) {
+                device_.bindPipeline(terrainPointShadowPipeline_);
+                drawTerrain();
+            }
             device_.endPass();
         }
     }
@@ -496,6 +560,16 @@ void Renderer::drawPrimitives(bool forShadow) {
     }
 }
 
+void Renderer::drawTerrain() {
+    if (terrainIndexCount_ == 0) return;
+    device_.bindVertexBuffer(0, terrainVertices_, 0);
+    device_.bindIndexBuffer(terrainIndices_);
+    rhi::DrawIndexed draw;
+    draw.indexCount = terrainIndexCount_;
+    device_.drawIndexed(draw);
+    ++stats_.draw_calls;
+}
+
 void Renderer::shadowPass(const Cascades& cascades) {
     for (int i = 0; i < cascades.count; ++i) {
         const auto index = static_cast<size_t>(i);
@@ -511,6 +585,10 @@ void Renderer::shadowPass(const Cascades& cascades) {
         device_.bindPipeline(shadowPipeline_);
         device_.bindUniformBuffer(1, shadowUniforms_, index * shadowUniformStride_, sizeof(glm::mat4));
         drawPrimitives(true);
+        if (terrainIndexCount_ > 0) {
+            device_.bindPipeline(terrainShadowPipeline_);
+            drawTerrain();
+        }
         device_.endPass();
     }
     stats_.shadow_cascades = cascades.count;
@@ -534,6 +612,10 @@ void Renderer::opaquePass(int width, int height) {
         device_.bindUniformBuffer(2, pointLightUniforms_, 0, sizeof(PointLightUniforms));
     }
     drawPrimitives(false);
+    if (terrainIndexCount_ > 0) {
+        device_.bindPipeline(lighting_.mode == STRATA_LIGHTING_LEGACY ? terrainLegacyPipeline_ : terrainSunPipeline_);
+        drawTerrain();
+    }
     device_.endPass();
 }
 

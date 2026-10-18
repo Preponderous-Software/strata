@@ -13,12 +13,12 @@ bool contains(const std::vector<std::string>& list, const char* name) {
 }  // namespace
 
 const std::vector<PassInfo>& framePasses() {
-    // Later milestones slot in here: a depth pre-pass, terrain inside opaque,
+    // Later milestones slot in here: a depth pre-pass,
     // transparent and labels, post (tonemap, fog), and UI.
     static const std::vector<PassInfo> passes = {
-        {"shadow", {"instances", "camera", "lighting"}, {"shadow_map"}},
-        {"point_shadow", {"instances", "point_lights"}, {"point_shadow_maps"}},
-        {"opaque", {"instances", "camera", "lighting", "point_lights", "shadow_map", "point_shadow_maps"},
+        {"shadow", {"instances", "terrain", "camera", "lighting"}, {"shadow_map"}},
+        {"point_shadow", {"instances", "terrain", "point_lights"}, {"point_shadow_maps"}},
+        {"opaque", {"instances", "terrain", "camera", "lighting", "point_lights", "shadow_map", "point_shadow_maps"},
          {"color", "depth"}},
         {"sky", {"camera", "lighting", "depth"}, {"color"}},
         {"readback", {"color"}, {"pixels"}},
@@ -27,7 +27,7 @@ const std::vector<PassInfo>& framePasses() {
 }
 
 const std::vector<const char*>& frameInputs() {
-    static const std::vector<const char*> inputs = {"instances", "camera", "lighting", "point_lights"};
+    static const std::vector<const char*> inputs = {"instances", "terrain", "camera", "lighting", "point_lights"};
     return inputs;
 }
 

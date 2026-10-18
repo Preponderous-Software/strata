@@ -42,6 +42,17 @@ namespace Strata.Interop.Tests {
         }
 
         [Fact]
+        public void TerrainTileMatchesNative() {
+            AssertLayout<StrataTerrainTile>(StrataAbi.StructTerrainTile, "origin", "cell_size", "samples_x", "samples_z",
+                "heights", "colors", "color");
+        }
+
+        [Fact]
+        public unsafe void SetTerrainRejectsANullEngine() {
+            Assert.Equal(1, StrataNative.strata_set_terrain(IntPtr.Zero, null));  // STRATA_ERROR_INVALID_ARGUMENT
+        }
+
+        [Fact]
         public unsafe void SetPointLightsRejectsANullEngine() {
             var light = new StrataPointLight { range = 5, intensity = 1 };
             Assert.Equal(1, StrataNative.strata_set_point_lights(IntPtr.Zero, &light, 1));  // STRATA_ERROR_INVALID_ARGUMENT

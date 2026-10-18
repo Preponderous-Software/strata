@@ -63,6 +63,8 @@ public:
     // Replaces the point lights (copied). count 0 removes them; at most
     // STRATA_MAX_POINT_LIGHTS. Validates every light before changing any.
     void setPointLights(const StrataPointLight* lights, size_t count);
+    // Replaces the terrain tile (copied into a mesh); nullptr removes it.
+    void setTerrain(const StrataTerrainTile* tile);
 
     void beginFrame(const StrataFrameDesc& desc);
     void submitPrimitives(const StrataRenderItem* items, size_t count);

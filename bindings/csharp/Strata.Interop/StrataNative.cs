@@ -1,4 +1,4 @@
-// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.2).
+// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.3).
 // Copyright (c) 2026 Daniel McCoy Stephenson. MIT licence; see LICENSE.
 using System;
 using System.IO;
@@ -9,8 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows.</summary>
-        public const uint Minor = 2;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile.</summary>
+        public const uint Minor = 3;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
@@ -19,7 +19,8 @@ namespace Strata.Interop {
 
         public const int StructRenderItem = 0, StructEngineDesc = 1, StructCamera = 2, StructLighting = 3,
             StructFrameDesc = 4, StructFrameStats = 5, StructEvent = 6,
-            StructPointLight = 7;  // ABI 1.1
+            StructPointLight = 7,  // ABI 1.1
+            StructTerrainTile = 8; // ABI 1.3
 
         public const int MaxPointLights = 32;  // ABI 1.1
         public const uint PointLightCastShadows = 0x1u;  // ABI 1.2
@@ -117,6 +118,18 @@ namespace Strata.Interop {
         public uint flags;
     }
 
+    /// <summary>StrataTerrainTile (ABI 1.3): 56 bytes on 64-bit. The arrays are copied during strata_set_terrain.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct StrataTerrainTile {
+        public fixed float origin[3];
+        public float cell_size;
+        public int samples_x;
+        public int samples_z;
+        public float* heights;   // samples_x * samples_z, x fastest
+        public float* colors;    // null, or 3 floats per sample
+        public fixed float color[4];
+    }
+
     public static unsafe class StrataNative {
         public const string Library = "strata";
 
@@ -151,6 +164,8 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_set_lighting(IntPtr engine, StrataLighting* lighting);
         /// <summary>ABI 1.1.</summary>
         [DllImport(Library)] public static extern int strata_set_point_lights(IntPtr engine, StrataPointLight* lights, int count);
+        /// <summary>ABI 1.3. tile null removes the terrain.</summary>
+        [DllImport(Library)] public static extern int strata_set_terrain(IntPtr engine, StrataTerrainTile* tile);
         [DllImport(Library)] public static extern int strata_begin_frame(IntPtr engine, StrataFrameDesc* desc);
         /// <summary>items points at count 44-byte records with the StrataRenderItem layout.</summary>
         [DllImport(Library)] public static extern int strata_submit_primitives(IntPtr engine, void* items, int count);

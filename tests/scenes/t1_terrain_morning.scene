@@ -1,0 +1,8 @@
+# T1: the same tile just after sunrise (time of day 0.28). The sun is low in
+# the east, so the peak and the ridge throw long shadows west across the
+# valley: the terrain shadows itself through the cascades.
+size 640 360
+camera 52 34 62  -8 2 -12  60 0.3 400
+lighting sun 0.28 35  4 2048 150 0.6 1
+clear 0 0 0 1 sky
+include _terrain_hills.scene

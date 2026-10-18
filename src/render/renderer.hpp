@@ -27,6 +27,7 @@ public:
     void setCamera(const StrataCamera& camera);
     void setLighting(const StrataLighting& lighting);
     void setPointLights(const StrataPointLight* lights, size_t count);
+    void setTerrain(const StrataTerrainTile* tile);
 
     void beginFrame(const StrataFrameDesc& desc);
     void submit(const StrataRenderItem* items, size_t count);
@@ -53,6 +54,7 @@ private:
     void writeFrameUniforms(int width, int height, const Cascades* cascades);
     void writePointLightUniforms();
     void drawPrimitives(bool forShadow);
+    void drawTerrain();
     void shadowPass(const Cascades& cascades);
     void ensurePointShadowMaps(int cubes);
     void pointShadowPass();
@@ -76,6 +78,12 @@ private:
     size_t shadowUniformStride_ = 256;
 
     rhi::PipelineHandle legacyPipeline_, sunPipeline_, shadowPipeline_, skyPipeline_, pointShadowPipeline_;
+
+    // The terrain tile (T1): its own mesh and pipelines.
+    rhi::BufferHandle terrainVertices_, terrainIndices_;
+    uint32_t terrainIndexCount_ = 0;
+    rhi::PipelineHandle terrainLegacyPipeline_, terrainSunPipeline_, terrainShadowPipeline_,
+        terrainPointShadowPipeline_;
 
     // Headless surfaces draw here instead of a default framebuffer.
     rhi::TextureHandle offscreenColor_, offscreenDepth_;

@@ -8,6 +8,9 @@
 //   lighting sun <time_of_day> <latitude> <cascades> <map_size> <shadow_distance> <lambda> <fog 0|1>
 //   clear <r> <g> <b> <a> [sky]
 //   light point <px py pz> <range> <r g b> <intensity> [shadow]
+//   terrain <ox oy oz> <cell_size> <samples_x> <samples_z> <r g b>
+//   heights <h ...>               (any number per line, x fastest, until samples_x * samples_z)
+//   colors <r g b ...>            (optional: one linear RGB triple per sample)
 //   include <file>                (relative to the including file)
 //   item <cube|capsule|cylinder|sphere> <px py pz> <sx sy sz> <r g b> [a]
 #pragma once
@@ -31,6 +34,10 @@ struct Scene {
     StrataFrameDesc frame{};
     std::vector<StrataRenderItem> items;
     std::vector<StrataPointLight> pointLights;
+    bool hasTerrain = false;
+    StrataTerrainTile terrain{};  // heights/colors point into the vectors below once loaded
+    std::vector<float> terrainHeights;
+    std::vector<float> terrainColors;
 };
 
 // Throws std::runtime_error with "file:line: message" on a malformed scene.
