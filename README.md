@@ -1,5 +1,28 @@
 # Strata
 
+<p align="center">
+  <img src="docs/media/day-cycle.gif" width="640" alt="A low-poly village through one day: cascaded sun shadows sweep across the grass from dawn to dusk, the sky turns orange at sunset, and a campfire and two lamps light the houses at night.">
+</p>
+
+<table>
+  <tr>
+    <td align="center"><img src="tests/golden/l2_csm_morning/linux-llvmpipe.png" width="200" alt="Morning"><br>morning</td>
+    <td align="center"><img src="tests/golden/l2_csm_noon/linux-llvmpipe.png" width="200" alt="Noon"><br>noon</td>
+    <td align="center"><img src="tests/golden/l2_csm_dusk/linux-llvmpipe.png" width="200" alt="Dusk"><br>dusk</td>
+    <td align="center"><img src="tests/golden/l2_csm_night/linux-llvmpipe.png" width="200" alt="Night"><br>night</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="tests/golden/l3_point_lights_falloff/linux-llvmpipe.png" width="200" alt="Three coloured point lights"><br>point lights (L3)</td>
+    <td align="center"><img src="tests/golden/l4_point_shadows_pillars/linux-llvmpipe.png" width="200" alt="Cube shadow maps"><br>point shadows (L4)</td>
+    <td align="center"><img src="tests/golden/t1_terrain_morning/linux-llvmpipe.png" width="200" alt="Terrain at sunrise"><br>terrain (T1)</td>
+    <td align="center"><img src="tests/golden/t1_terrain_night_fire/linux-llvmpipe.png" width="200" alt="Terrain lit by a campfire"><br>terrain at night</td>
+  </tr>
+</table>
+
+Every image above, apart from the animation, is a golden image that CI
+renders on llvmpipe and compares on each pull request. The animation is the L2
+village drawn at 39 times of day by `tools/make_readme_media.py`.
+
 Strata is a small C++17 engine for two simulation games: **Beyond Nations**,
 whose simulation is C#, and a USD-native colony sim written in C++. It is not
 a general-purpose engine. There is no editor, and nothing goes in without a
@@ -17,16 +40,18 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 
 ## Status
 
-`v0.1.0` is the **skeleton milestone** plus lighting milestones **L1–L2**:
+`v0.2.0` adds point lights (**L3**), point-light shadows (**L4**) and a first
+terrain tile (**T1**) to `v0.1.0`'s skeleton and lighting **L1–L2**. The C
+ABI is 1.3: each addition is compatible, and every ABI 1.0 host still works.
 
 | Milestone | What it is | Golden images |
 |---|---|---|
 | Skeleton | CMake, the C ABI, the GL 4.5 device, SDL3 and EGL surfaces, golden-image harness, Beyond Nations' four primitives drawn from C# | `bn_primitives_legacy` (C++ **and** the C# harness) |
 | L1 | A sun driven by time of day, with one shadow map | `l1_sun_single_map` |
 | L2 | Four stabilised cascaded shadow maps, a moon at night, hemisphere ambient, fog and an analytic sky | `l2_csm_morning`, `l2_csm_noon`, `l2_csm_dusk`, `l2_csm_night` |
-| L3 *(unreleased, ABI 1.1)* | Up to 32 unshadowed point lights with a range-windowed falloff | `l3_point_lights_night`, `l3_point_lights_falloff` |
-| L4 *(unreleased, ABI 1.2)* | Up to 4 of them cast shadows through cube shadow maps | `l4_point_shadows_pillars`, `l4_point_shadows_night` |
-| T1 *(unreleased, ABI 1.3)* | One static heightmapped terrain tile, lit, casting and receiving sun and point-light shadows | `t1_terrain_noon`, `t1_terrain_morning`, `t1_terrain_night_fire` |
+| L3 *(ABI 1.1)* | Up to 32 unshadowed point lights with a range-windowed falloff | `l3_point_lights_night`, `l3_point_lights_falloff` |
+| L4 *(ABI 1.2)* | Up to 4 of them cast shadows through cube shadow maps | `l4_point_shadows_pillars`, `l4_point_shadows_night` |
+| T1 *(ABI 1.3)* | One static heightmapped terrain tile, lit, casting and receiving sun and point-light shadows | `t1_terrain_noon`, `t1_terrain_morning`, `t1_terrain_night_fire` |
 
 Next come streaming and larger terrain (T2–T4), meshes and materials (M1–M4),
 and optional OpenUSD modules (`STRATA_WITH_USD`, off by default).
