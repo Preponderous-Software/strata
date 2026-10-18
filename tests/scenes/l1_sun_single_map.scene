@@ -1,0 +1,6 @@
+# L1: the sun with a single shadow map (one cascade) over the same village.
+size 640 360
+camera -48 22 46  4 0 -6  60 0.3 400
+lighting sun 0.40 35  1 2048 150 0.6 1
+clear 0 0 0 1 sky
+include _village_items.scene

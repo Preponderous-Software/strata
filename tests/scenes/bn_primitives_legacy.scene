@@ -1,0 +1,43 @@
+# The skeleton milestone's exit scene: Beyond Nations' four primitives at BN's
+# scales and colours, lit exactly as BN's PrimitiveRenderer lights them
+# (one directional light plus ambient, no shadows, no fog). The C# harness
+# draws this same file through the C ABI and must match the same golden.
+size 640 360
+camera 13 9 15  -1 1.5 -1  60 0.1 300
+lighting legacy -0.35 -0.85 -0.4 0.35
+clear 0.45 0.65 0.90 1
+
+# ground: 15-unit tiles whose tops sit at y = 0.5
+item cube -15 0 -15  15 1 15  0.20 0.55 0.20
+item cube   0 0 -15  15 1 15  0.24 0.60 0.22
+item cube  15 0 -15  15 1 15  0.20 0.55 0.20
+item cube -15 0   0  15 1 15  0.24 0.60 0.22
+item cube   0 0   0  15 1 15  0.22 0.58 0.21
+item cube  15 0   0  15 1 15  0.24 0.60 0.22
+item cube -15 0  15  15 1 15  0.20 0.55 0.20
+item cube   0 0  15  15 1 15  0.24 0.60 0.22
+item cube  15 0  15  15 1 15  0.20 0.55 0.20
+
+# trees: a cylinder trunk of scale (1, h, 1) reaches y = h; leaves at h - 1
+item cylinder -6 0 -4   1 4 1   0.45 0.30 0.15
+item cube     -6 3 -4   3 3 3   0.10 0.45 0.12
+item cylinder  8 0 -9   1 5 1   0.45 0.30 0.15
+item cube      8 4 -9   3 3 3   0.12 0.50 0.10
+item cylinder -12 0 6   1 3 1   0.40 0.27 0.13
+item cube     -12 2 6   2.5 2.5 2.5  0.15 0.52 0.15
+
+# pawns
+item capsule   0 1.5  0   1 1 1   0.80 0.20 0.20
+item capsule   2 1.5  3   1 1 1   0.20 0.30 0.80
+item capsule  -3 1.5  6   1 1 1   0.85 0.75 0.20
+
+# rocks, an apple tree's dropped apples, a chicken
+item sphere    5 0.8  4   1.6 1.2 1.6   0.50 0.50 0.52
+item sphere   10 0.7 10   1.2 0.9 1.2   0.45 0.45 0.47
+item sphere   -2 0.75 -1  0.5 0.5 0.5   0.85 0.10 0.10
+item sphere   -1.4 0.75 -1.6  0.5 0.5 0.5   0.85 0.10 0.10
+item sphere    4 0.9 -3   0.8 0.8 0.8   0.95 0.95 0.92
+
+# a settlement
+item cube    -9 1.5 -12   5 2 5   0.65 0.50 0.35
+item cube    -9 3.0 -12   4 1 4   0.55 0.20 0.15

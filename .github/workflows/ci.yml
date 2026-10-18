@@ -1,0 +1,216 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Test jobs run in an Ubuntu image pinned by digest whose packages come from
+  # a dated archive snapshot, so Mesa (llvmpipe) is the same on every run.
+  # Moving SNAPSHOT forward is a deliberate change that re-checks every golden.
+  SNAPSHOT: 20261001T000000Z
+
+jobs:
+  # Release binaries are built on manylinux_2_28 (glibc 2.28, a current GCC
+  # toolset), so libstrata.so loads on Ubuntu 20.04 and later. The golden
+  # job tests these exact binaries rather than a second build.
+  build-linux:
+    name: Build (Linux, manylinux_2_28)
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux_2_28_x86_64@sha256:39df0042d5cc900b085aa25a0659368b42a0006c54c474299b785b44c1b4ff82
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SDL3 build dependencies
+        run: |
+          dnf install -y libX11-devel libXext-devel libXcursor-devel libXi-devel libXfixes-devel \
+            libXrandr-devel libXScrnSaver-devel
+          cmake --version
+          gcc --version | head -1
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSTRATA_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build -j4
+
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Check exported symbols
+        run: |
+          # Only the C ABI may be exported; SDL, glad and C++ internals stay hidden.
+          nm -D --defined-only build/libstrata.so | awk '$2 == "T" {print $3}' | sort > exports.txt
+          cat exports.txt
+          if grep -v '^strata_' exports.txt; then echo "::error::libstrata exports non-strata symbols"; exit 1; fi
+          objdump -T build/libstrata.so | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1
+
+      - name: Stage binaries
+        run: |
+          mkdir -p dist/lib dist/bin dist/include/strata
+          cp -P build/libstrata.so* dist/lib/
+          cp build/strata-golden build/strata-imgcmp dist/bin/
+          cp include/strata/strata.h dist/include/strata/
+          cp LICENSE THIRD_PARTY_NOTICES.md dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: strata-linux-x64
+          path: dist/
+          if-no-files-found: error
+
+  golden-linux:
+    name: Golden images (llvmpipe) and C# harness
+    needs: build-linux
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      GALLIUM_DRIVER: llvmpipe
+      __EGL_VENDOR_LIBRARY_FILENAMES: /usr/share/glvnd/egl_vendor.d/50_mesa.json
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - name: Install pinned Mesa, Xvfb and .NET 8
+        run: |
+          apt-get update --snapshot "$SNAPSHOT"
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --snapshot "$SNAPSHOT" \
+            ca-certificates git libegl1 libegl-mesa0 libgl1-mesa-dri libglx-mesa0 libgl1 xvfb xauth \
+            dotnet-sdk-8.0
+          dpkg-query -W libgl1-mesa-dri libegl-mesa0 dotnet-sdk-8.0
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: strata-linux-x64
+          path: dist
+
+      - name: Golden images (headless EGL surfaceless)
+        run: |
+          chmod +x dist/bin/*
+          LD_LIBRARY_PATH=dist/lib dist/bin/strata-golden check tests/scenes tests/golden golden-out/headless
+
+      - name: Golden images (SDL3 window under Xvfb)
+        run: |
+          Xvfb :99 -screen 0 1024x768x24 &
+          sleep 2
+          DISPLAY=:99 LD_LIBRARY_PATH=dist/lib dist/bin/strata-golden check tests/scenes tests/golden golden-out/window --surface window
+
+      - name: C# ABI layout tests
+        env:
+          STRATA_NATIVE_DIR: ${{ github.workspace }}/dist/lib
+        run: dotnet test tests/csharp/Strata.Interop.Tests -c Release
+
+      - name: C# primitives harness (skeleton exit criterion)
+        run: |
+          mkdir -p golden-out/csharp
+          dotnet run --project tests/csharp/Strata.PrimitivesHarness -c Release -- \
+            tests/scenes/bn_primitives_legacy.scene golden-out/csharp/bn_primitives_legacy.actual.png --native-dir dist/lib
+          LD_LIBRARY_PATH=dist/lib dist/bin/strata-imgcmp tests/golden/bn_primitives_legacy/linux-llvmpipe.png \
+            golden-out/csharp/bn_primitives_legacy.actual.png --diff golden-out/csharp/bn_primitives_legacy.diff.png
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: golden-out
+          path: golden-out/
+          if-no-files-found: ignore
+
+  sanitize:
+    name: Sanitizers (ASan + UBSan, headless)
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      GALLIUM_DRIVER: llvmpipe
+      __EGL_VENDOR_LIBRARY_FILENAMES: /usr/share/glvnd/egl_vendor.d/50_mesa.json
+      # Mesa's llvmpipe keeps caches alive for the life of the process.
+      ASAN_OPTIONS: detect_leaks=0
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+    steps:
+      - name: Install toolchain and pinned Mesa
+        run: |
+          apt-get update --snapshot "$SNAPSHOT"
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --snapshot "$SNAPSHOT" \
+            ca-certificates git g++ cmake make libegl1 libegl-mesa0 libgl1-mesa-dri
+      - uses: actions/checkout@v4
+      - name: Build (Debug, sanitizers, no SDL)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DSTRATA_SANITIZE=ON -DSTRATA_WITH_SDL=OFF
+          cmake --build build -j4
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
+      - name: Golden images under sanitizers
+        run: build/strata-golden check tests/scenes tests/golden golden-out
+
+  build-windows:
+    name: Build (Windows, MSVC)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+      - name: Build
+        run: cmake --build build --config Release -- /m:4
+      - name: Unit tests
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Stage binaries
+        shell: bash
+        run: |
+          mkdir -p dist/bin dist/include/strata
+          cp build/Release/strata.dll build/Release/strata.lib build/Release/strata-golden.exe build/Release/strata-imgcmp.exe dist/bin/
+          cp include/strata/strata.h dist/include/strata/
+          cp LICENSE THIRD_PARTY_NOTICES.md dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: strata-win-x64
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-linux, golden-linux, sanitize, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: strata-linux-x64
+          path: linux
+      - uses: actions/download-artifact@v4
+        with:
+          name: strata-win-x64
+          path: windows
+      - name: Package
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p assets
+          tar -C linux -czf "assets/strata-${version}-linux-x64.tar.gz" .
+          (cd windows && zip -qr "../assets/strata-${version}-win-x64.zip" .)
+          # Bare libraries too, so a consumer can fetch exactly one file and
+          # check it against SHA256SUMS.
+          cp -L linux/lib/libstrata.so "assets/libstrata-${version}-linux-x64.so"
+          cp windows/bin/strata.dll "assets/strata-${version}-win-x64.dll"
+          (cd assets && sha256sum * > SHA256SUMS)
+          cat assets/SHA256SUMS
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="## ${version}" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" assets/* --title "Strata ${version}" --notes-file notes.md --verify-tag

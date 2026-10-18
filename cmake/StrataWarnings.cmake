@@ -1,0 +1,15 @@
+# Warning flags for Strata's own targets. Third-party code is not held to them.
+function(strata_set_warnings target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /permissive- /wd4251)
+        if(STRATA_WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE /WX)
+        endif()
+    else()
+        target_compile_options(${target} PRIVATE
+            $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Wshadow -Wnon-virtual-dtor>)
+        if(STRATA_WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE -Werror)
+        endif()
+    endif()
+endfunction()
