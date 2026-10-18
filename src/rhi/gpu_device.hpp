@@ -30,7 +30,7 @@ using TextureHandle = Handle<struct TextureTag>;
 using TargetHandle = Handle<struct TargetTag>;
 using PipelineHandle = Handle<struct PipelineTag>;
 
-enum class TextureFormat { RGBA8, Depth32F };
+enum class TextureFormat { RGBA8, R8, Depth32F };
 
 struct TextureDesc {
     int width = 0;
@@ -39,6 +39,10 @@ struct TextureDesc {
     bool cube = false;  // with layers >= 1: a cube map array of `layers` cubes (6 * layers layer-faces)
     TextureFormat format = TextureFormat::RGBA8;
     bool depthCompare = false;  // sample as sampler2DShadow / sampler2DArrayShadow / samplerCubeArrayShadow
+    bool nearest = false;       // nearest-texel filtering instead of linear
+    // 2D colour textures only: tightly packed texels, top row first as stored
+    // (row 0 is v = 0). nullptr leaves the content undefined.
+    const void* initialData = nullptr;
     const char* debugName = nullptr;
 };
 
@@ -70,6 +74,9 @@ struct VertexBufferLayout {
 };
 
 enum class CullMode { None, Back, Front };
+enum class Topology { Triangles, Lines };
+// Alpha: src * a + dst * (1 - a). Additive: src * a + dst.
+enum class BlendMode { None, Alpha, Additive };
 enum class DepthTest { Off, Less, LessEqual };
 
 struct PipelineDesc {
@@ -85,6 +92,8 @@ struct PipelineDesc {
     float depthBiasConstant = 0.0f;  // glPolygonOffset units
     float depthBiasSlope = 0.0f;     // glPolygonOffset factor
     bool depthClamp = false;
+    Topology topology = Topology::Triangles;  // what drawArrays assembles; drawIndexed is always triangles
+    BlendMode blend = BlendMode::None;
 };
 
 struct PassDesc {
@@ -102,6 +111,13 @@ struct DrawIndexed {
     uint32_t instanceCount = 1;
     uint32_t firstIndex = 0;
     int32_t baseVertex = 0;
+    uint32_t baseInstance = 0;
+};
+
+struct DrawArrays {
+    uint32_t vertexCount = 0;
+    uint32_t instanceCount = 1;
+    uint32_t firstVertex = 0;
     uint32_t baseInstance = 0;
 };
 
@@ -134,6 +150,8 @@ public:
     virtual void bindUniformBuffer(uint32_t slot, BufferHandle buffer, size_t offset, size_t bytes) = 0;
     virtual void bindTexture(uint32_t unit, TextureHandle texture) = 0;
     virtual void drawIndexed(const DrawIndexed& draw) = 0;
+    // Non-indexed, instanced, assembled with the bound pipeline's topology.
+    virtual void drawArrays(const DrawArrays& draw) = 0;
     virtual void drawFullscreenTriangle() = 0;
     virtual void endPass() = 0;
 

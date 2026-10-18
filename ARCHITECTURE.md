@@ -91,10 +91,12 @@ shadow:   instances, terrain, meshes, camera, lighting -> shadow_map
 point_shadow: instances, terrain, meshes, point_lights -> point_shadow_maps
 opaque:   instances, terrain, meshes, camera, lighting, point_lights, shadow_map, point_shadow_maps -> color, depth
 sky:      camera, lighting, depth -> color
+overlay:  lines, points, camera, depth -> color
+text:     text -> color
 readback: color -> pixels
 ```
 
-**Later** passes slot into this list: depth pre-pass, transparent and labels,
+**Later** passes slot into this list: depth pre-pass, transparent geometry,
 post (tonemap) and UI.
 
 **Instances.** `submit_primitives` partitions items by kind as they arrive. At
@@ -149,15 +151,26 @@ renderer. The C# harness reproduces the C++ golden with zero differing pixels.
   all come from the same time-of-day curve.
 - **L1** is the same path with `cascade_count = 1`.
 
+### `STRATA_LIGHTING_SPACE` (ABI 1.4)
+
+The sun fragment shader with the key light switched off: no sun or moon, no
+cascades, no fog and no sky, and a flat ambient term from `legacy_ambient`.
+Only point lights light the scene. It is for scenes whose light source sits
+in them, such as a star at the centre of a planetary system: a point light at
+the star with a range far beyond the scene gives near-constant intensity and
+the correct per-fragment direction to every body. Point-light shadows still
+work.
+
 ### Point lights (L3)
 
 - `strata_set_point_lights` replaces the scene's point lights with a copy of
   up to 32 `StrataPointLight`s (position, range, linear colour, intensity).
   They persist until the next call. Every light is validated before any is
   replaced.
-- They shade `STRATA_LIGHTING_SUN` scenes only, in the opaque pass: Lambert
-  diffuse, added to the key light and ambient, before fog. Legacy lighting is
-  untouched, so it stays pixel-identical with Beyond Nations' renderer.
+- They shade `STRATA_LIGHTING_SUN` and `STRATA_LIGHTING_SPACE` scenes, in the
+  opaque pass: Lambert diffuse, added to the key light and ambient, before
+  fog. Legacy lighting is untouched, so it stays pixel-identical with Beyond
+  Nations' renderer.
 - Falloff, with x = distance / range: `intensity · w² / (1 + 16x²)`, where
   `w = clamp(1 − x⁴, 0, 1)` (`src/render/lights.cpp`, mirrored in the shader).
   The shape depends only on x, so a pool of light looks the same at any world
@@ -222,6 +235,35 @@ renderer. The C# harness reproduces the C++ golden with zero differing pixels.
   surfaces such as ribbons still cast.
 - This is a narrow precursor to RFC 0020 §9 (cooked meshes, instancing,
   materials): no UVs, tangents, instancing, transforms or LOD.
+
+## Overlays (ABI 1.5)
+
+Unlit lines, points and screen text, for orbits, markers, labels and debug
+drawing. They are frame inputs like primitives (submitted between
+`begin_frame` and `end_frame`, copied, never retained) and are drawn by
+`src/render/overlay.cpp` in two passes after the sky:
+
+- **overlay** draws lines (`GL_LINES`, one pixel wide) and then points, alpha
+  blended, depth-tested (`LEQUAL`) against the opaque scene without writing
+  depth, with depth clamp on so nothing is cut by the far plane. A point is a
+  camera-facing quad built in the vertex shader from `gl_VertexID` (six
+  vertices per instance, no vertex buffer). Its diameter is
+  `max(size_pixels, world_diameter · P₁₁ · height / 2w)`, so it can be a fixed
+  marker, a true-size disc, or a true-size disc with a minimum size. Solid
+  points get a one-pixel antialiased edge; `STRATA_POINT_SOFT` points are a
+  quadratic glow blended additively after them.
+- **text** draws every glyph as an instanced quad with no depth test. The font
+  is font8x8 (public domain, `third_party/font8x8`): printable ASCII in an
+  8-pixel cell, uploaded once as a 760 × 8 `R8` texture and read with
+  `texelFetch`, so whole-number scales stay sharp. Layout is monospaced and
+  happens on the CPU (`layoutText`): a UTF-8 sequence shows as one `?`, `\n`
+  starts a new line, and `STRATA_TEXT_SHADOW` adds a black copy one font pixel
+  down and right.
+
+`GpuDevice` gained what this needed: a pipeline topology (triangles or lines),
+blend modes (alpha, additive), non-indexed instanced draws, and `R8` textures
+with initial data and nearest filtering. A host context gets its blend state
+and texture unit 3 back after each frame.
 
 ## Optional modules
 

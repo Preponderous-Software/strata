@@ -1,5 +1,7 @@
 #include "scene_file.hpp"
 
+#include <cmath>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -69,6 +71,9 @@ void parse(const std::string& path, Scene& scene, int depth) {
                 read(in, l.shadow_distance, where, "shadow distance");
                 read(in, l.split_lambda, where, "split lambda");
                 read(in, l.fog, where, "fog");
+            } else if (mode == "space") {
+                l.mode = STRATA_LIGHTING_SPACE;
+                read(in, l.legacy_ambient, where, "ambient");
             } else {
                 bad(where, "unknown lighting mode '" + mode + "'");
             }
@@ -143,6 +148,61 @@ void parse(const std::string& path, Scene& scene, int depth) {
             float alpha;
             if (in >> alpha) item.color[3] = alpha;
             scene.items.push_back(item);
+        } else if (word == "line") {
+            StrataLineVertex a{}, b{};
+            for (float& v : a.position) read(in, v, where, "start");
+            for (float& v : b.position) read(in, v, where, "end");
+            for (float& v : a.color) read(in, v, where, "colour");
+            std::memcpy(b.color, a.color, sizeof b.color);
+            scene.lines.push_back(a);
+            scene.lines.push_back(b);
+        } else if (word == "circle") {
+            float centre[3], radius = 0.0f, color[4];
+            int segments = 0;
+            for (float& v : centre) read(in, v, where, "centre");
+            read(in, radius, where, "radius");
+            read(in, segments, where, "segments");
+            for (float& v : color) read(in, v, where, "colour");
+            if (segments < 3) bad(where, "a circle needs at least 3 segments");
+            for (int i = 0; i < segments; ++i) {
+                for (int end = 0; end < 2; ++end) {
+                    const double angle = 6.283185307179586 * (i + end) / segments;
+                    StrataLineVertex v{};
+                    v.position[0] = centre[0] + radius * static_cast<float>(std::cos(angle));
+                    v.position[1] = centre[1];
+                    v.position[2] = centre[2] + radius * static_cast<float>(std::sin(angle));
+                    std::memcpy(v.color, color, sizeof v.color);
+                    scene.lines.push_back(v);
+                }
+            }
+        } else if (word == "point") {
+            StrataPoint p{};
+            for (float& v : p.position) read(in, v, where, "position");
+            read(in, p.size_pixels, where, "size in pixels");
+            read(in, p.world_diameter, where, "world diameter");
+            for (float& v : p.color) read(in, v, where, "colour");
+            std::string option;
+            if (in >> option) {
+                if (option != "soft") bad(where, "expected 'soft' or nothing after the colour");
+                p.flags |= STRATA_POINT_SOFT;
+            }
+            scene.points.push_back(p);
+        } else if (word == "text") {
+            Scene::Text t;
+            read(in, t.text.x, where, "x");
+            read(in, t.text.y, where, "y");
+            read(in, t.text.pixel_size, where, "pixel size");
+            for (float& v : t.text.color) read(in, v, where, "colour");
+            std::string option;
+            read(in, option, where, "':' before the text");
+            if (option == "shadow") {
+                t.text.flags |= STRATA_TEXT_SHADOW;
+                read(in, option, where, "':' before the text");
+            }
+            if (option != ":") bad(where, "expected ':' before the text");
+            std::getline(in, t.value);
+            if (!t.value.empty() && t.value[0] == ' ') t.value.erase(0, 1);
+            scene.texts.push_back(std::move(t));
         } else {
             bad(where, "unknown directive '" + word + "'");
         }

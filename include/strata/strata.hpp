@@ -74,6 +74,10 @@ public:
 
     void beginFrame(const StrataFrameDesc& desc);
     void submitPrimitives(const StrataRenderItem* items, size_t count);
+    // Overlays (ABI 1.5): unlit lines, points and screen text for this frame.
+    void submitLines(const StrataLineVertex* vertices, size_t count);
+    void submitPoints(const StrataPoint* points, size_t count);
+    void submitText(const StrataText* texts, size_t count);
     void endFrame();
     void present();
 

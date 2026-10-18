@@ -47,6 +47,22 @@ static_assert(offsetof(StrataMesh, color) == 40, "64-bit targets");
 static_assert(sizeof(StrataMesh) == 56, "64-bit targets");
 #endif
 static_assert(STRATA_MAX_MESHES == 256, "ABI 1.4");
+// ABI 1.5
+static_assert(sizeof(StrataLineVertex) == 28, "");
+static_assert(offsetof(StrataLineVertex, color) == 12, "");
+static_assert(sizeof(StrataPoint) == 40, "");
+static_assert(offsetof(StrataPoint, size_pixels) == 12, "");
+static_assert(offsetof(StrataPoint, world_diameter) == 16, "");
+static_assert(offsetof(StrataPoint, color) == 20, "");
+static_assert(offsetof(StrataPoint, flags) == 36, "");
+static_assert(offsetof(StrataText, pixel_size) == 8, "");
+static_assert(offsetof(StrataText, flags) == 12, "");
+static_assert(offsetof(StrataText, color) == 16, "");
+#if UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu
+static_assert(offsetof(StrataText, utf8) == 32, "64-bit targets");
+static_assert(sizeof(StrataText) == 40, "64-bit targets");
+#endif
+static_assert(STRATA_LIGHTING_SPACE == 2, "ABI 1.5");
 static_assert(STRATA_ABI_VERSION == 1u, "ABI 1 callers must keep working: additions bump STRATA_ABI_MINOR");
 #if UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu
 static_assert(sizeof(StrataEngineDesc) == 48, "64-bit targets");
@@ -56,7 +72,7 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 4u);
+    CHECK(strata_abi_minor() >= 5u);
 }
 
 TEST(point_light_layout_is_queryable) {
@@ -67,6 +83,39 @@ TEST(point_light_layout_is_queryable) {
     CHECK(strata_struct_field_offset(STRATA_STRUCT_POINT_LIGHT, 3) == 28);
     CHECK(strata_struct_field_offset(STRATA_STRUCT_POINT_LIGHT, 4) == 32);
     CHECK(strata_struct_field_offset(STRATA_STRUCT_POINT_LIGHT, 5) == -1);
+}
+
+TEST(overlay_layouts_are_queryable) {
+    CHECK(strata_struct_size(STRATA_STRUCT_LINE_VERTEX) == 28);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_LINE_VERTEX, 1) == 12);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_LINE_VERTEX, 2) == -1);
+    CHECK(strata_struct_size(STRATA_STRUCT_POINT) == 40);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_POINT, 4) == 36);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_POINT, 5) == -1);
+    CHECK(strata_struct_size(STRATA_STRUCT_TEXT) == static_cast<int32_t>(sizeof(StrataText)));
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_TEXT, 5) == static_cast<int32_t>(offsetof(StrataText, utf8)));
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_TEXT, 6) == -1);
+}
+
+TEST(overlay_submits_reject_bad_arguments_without_a_context) {
+    StrataLineVertex v[2]{};
+    StrataPoint p{};
+    StrataText t{};
+    CHECK(strata_submit_lines(nullptr, v, 2) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_submit_points(nullptr, &p, 1) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_submit_text(nullptr, &t, 1) == STRATA_ERROR_INVALID_ARGUMENT);
+    StrataEngine* engine = reinterpret_cast<StrataEngine*>(0x1);  // never dereferenced: count is checked first
+    CHECK(strata_submit_lines(engine, v, -2) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_submit_points(engine, nullptr, 3) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_submit_text(engine, nullptr, 1) == STRATA_ERROR_INVALID_ARGUMENT);
+}
+
+TEST(space_lighting_defaults_and_validation) {
+    StrataLighting l{};
+    REQUIRE(strata_lighting_defaults(STRATA_LIGHTING_SPACE, &l) == STRATA_OK);
+    CHECK(l.mode == STRATA_LIGHTING_SPACE);
+    CHECK(l.legacy_ambient >= 0.0f && l.legacy_ambient <= 0.1f);
+    CHECK(l.fog == 0);
 }
 
 TEST(set_terrain_rejects_a_null_engine) {

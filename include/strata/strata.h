@@ -47,9 +47,11 @@
  *   1.2  shadowed point lights (STRATA_POINT_LIGHT_CAST_SHADOWS)
  *   1.3  a terrain tile (StrataTerrainTile, strata_set_terrain)
  *   1.4  static triangle meshes (StrataMesh, strata_add_mesh,
- *        strata_remove_mesh, strata_clear_meshes) */
+ *        strata_remove_mesh, strata_clear_meshes)
+ *   1.5  unlit overlays (StrataLineVertex, StrataPoint, StrataText,
+ *        strata_submit_lines/_points/_text) and STRATA_LIGHTING_SPACE */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 4u
+#define STRATA_ABI_MINOR 5u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -159,7 +161,13 @@ enum {
     STRATA_LIGHTING_LEGACY = 0,
     /* A sun (and a moon) driven by time of day, hemisphere ambient, distance
      * fog, an analytic sky and cascaded shadow maps. */
-    STRATA_LIGHTING_SUN = 1
+    STRATA_LIGHTING_SUN = 1,
+    /* ABI 1.5. Point lights only, over a flat ambient term (legacy_ambient,
+     * 0..1): no sun or moon, no shadows from them, no fog and no sky. For
+     * scenes lit by lights placed in them, such as a star at the origin of a
+     * planetary system. Point lights with STRATA_POINT_LIGHT_CAST_SHADOWS
+     * still cast shadows. Every other StrataLighting field is ignored. */
+    STRATA_LIGHTING_SPACE = 2
 };
 
 typedef struct StrataLighting {
@@ -249,6 +257,55 @@ typedef struct StrataMesh {
     float color[4];          /* linear RGBA used when colors is NULL */
 } StrataMesh;
 
+/* ----------------------------------------------------------------- overlays */
+
+/* ABI 1.5. Overlays are drawn after the lit scene and the sky, unlit, with
+ * alpha blending, and never cast or receive shadows. Like primitives they are
+ * submitted between begin_frame and end_frame, read during the call and
+ * never retained.
+ *
+ * Lines and points are in world space, tested against the scene's depth
+ * (an opaque object in front hides them) but never write depth, and they are
+ * not clipped by the far plane. Text is in pixels and drawn on top of
+ * everything. */
+
+/* One end of a line segment. 28 bytes. */
+typedef struct StrataLineVertex {
+    float position[3]; /* world space */
+    float color[4];    /* linear RGBA; alpha blends */
+} StrataLineVertex;
+
+/* StrataPoint.flags. */
+#define STRATA_POINT_SOFT 0x1u /* a soft glow that fades to nothing at the edge, instead of a solid disc */
+
+/* A round, camera-facing point. Its diameter on screen is the larger of
+ * size_pixels and world_diameter as projected at the point's distance, so a
+ * point can be a fixed-size marker, a disc the size of a real object, or a
+ * real-size disc that never shrinks below a few pixels. 40 bytes. */
+typedef struct StrataPoint {
+    float position[3];    /* world space, the centre */
+    float size_pixels;    /* >= 0: smallest diameter on screen, in pixels */
+    float world_diameter; /* >= 0: diameter in world units; 0 for a pure screen-size point */
+    float color[4];       /* linear RGBA; alpha blends */
+    uint32_t flags;       /* STRATA_POINT_*; any other bit is rejected */
+} StrataPoint;
+
+/* StrataText.flags. */
+#define STRATA_TEXT_SHADOW 0x1u /* draw a black copy one font pixel down and right first, for legibility */
+
+/* A run of text on screen in Strata's built-in 8 x 8 bitmap font (printable
+ * ASCII; other bytes show as '?'; '\n' starts a new line). Every glyph is a
+ * square cell pixel_size wide and tall and the font is monospaced, so a line
+ * of n characters is n * pixel_size pixels wide. Multiples of 8 stay crisp.
+ * 40 bytes on 64-bit targets. */
+typedef struct StrataText {
+    float x, y;          /* top-left of the first glyph, in pixels from the top-left of the drawable */
+    float pixel_size;    /* 1..512: glyph cell size in pixels */
+    uint32_t flags;      /* STRATA_TEXT_*; any other bit is rejected */
+    float color[4];      /* linear RGBA */
+    const char* utf8;    /* NUL-terminated; copied during the call */
+} StrataText;
+
 /* ------------------------------------------------------------------- frames */
 
 enum {
@@ -315,7 +372,10 @@ enum {
     STRATA_STRUCT_EVENT = 6,
     STRATA_STRUCT_POINT_LIGHT = 7, /* ABI 1.1 */
     STRATA_STRUCT_TERRAIN_TILE = 8, /* ABI 1.3 */
-    STRATA_STRUCT_MESH = 9          /* ABI 1.4 */
+    STRATA_STRUCT_MESH = 9,         /* ABI 1.4 */
+    STRATA_STRUCT_LINE_VERTEX = 10, /* ABI 1.5 */
+    STRATA_STRUCT_POINT = 11,       /* ABI 1.5 */
+    STRATA_STRUCT_TEXT = 12         /* ABI 1.5 */
 };
 
 /* Field ids for strata_struct_field_offset(STRATA_STRUCT_RENDER_ITEM, ...). */
@@ -406,6 +466,13 @@ STRATA_API StrataStatus strata_clear_meshes(StrataEngine* engine);
  * Submitted arrays are read during the call and never retained. */
 STRATA_API StrataStatus strata_begin_frame(StrataEngine* engine, const StrataFrameDesc* desc);
 STRATA_API StrataStatus strata_submit_primitives(StrataEngine* engine, const StrataRenderItem* items, int32_t count);
+/* ABI 1.5. Overlays (see above). Each call adds to this frame's overlays.
+ * Every element is checked first, and on an invalid one nothing from the
+ * call is added. Lines: count is a number of vertices, even, and each pair is
+ * one segment. */
+STRATA_API StrataStatus strata_submit_lines(StrataEngine* engine, const StrataLineVertex* vertices, int32_t count);
+STRATA_API StrataStatus strata_submit_points(StrataEngine* engine, const StrataPoint* points, int32_t count);
+STRATA_API StrataStatus strata_submit_text(StrataEngine* engine, const StrataText* texts, int32_t count);
 STRATA_API StrataStatus strata_end_frame(StrataEngine* engine);
 /* Window: swaps buffers. Headless and host context: no-op. */
 STRATA_API StrataStatus strata_present(StrataEngine* engine);

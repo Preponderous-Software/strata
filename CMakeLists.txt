@@ -73,6 +73,7 @@ set(STRATA_ENGINE_SOURCES
     src/render/terrain_mesh.cpp
     src/render/static_mesh.cpp
     src/render/pass_list.cpp
+    src/render/overlay.cpp
     src/render/renderer.cpp
     src/engine.cpp
     src/capi.cpp)

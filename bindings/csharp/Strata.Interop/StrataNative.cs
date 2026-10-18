@@ -1,4 +1,4 @@
-// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.4).
+// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.5).
 // Copyright (c) 2026 Daniel McCoy Stephenson. MIT licence; see LICENSE.
 using System;
 using System.IO;
@@ -9,25 +9,30 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes.</summary>
-        public const uint Minor = 4;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting.</summary>
+        public const uint Minor = 5;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
         public const int LightingLegacy = 0, LightingSun = 1;
+        public const int LightingSpace = 2;  // ABI 1.5
         public const uint ClearColor = 1u << 0, ClearDepth = 1u << 1, ClearSky = 1u << 2;
 
         public const int StructRenderItem = 0, StructEngineDesc = 1, StructCamera = 2, StructLighting = 3,
             StructFrameDesc = 4, StructFrameStats = 5, StructEvent = 6,
             StructPointLight = 7,  // ABI 1.1
             StructTerrainTile = 8, // ABI 1.3
-            StructMesh = 9;        // ABI 1.4
+            StructMesh = 9,        // ABI 1.4
+            StructLineVertex = 10, StructPoint = 11, StructText = 12;  // ABI 1.5
 
         public const int MaxPointLights = 32;  // ABI 1.1
         public const uint PointLightCastShadows = 0x1u;  // ABI 1.2
         public const int MaxShadowedPointLights = 4;     // ABI 1.2
         public const int MaxMeshes = 256;                // ABI 1.4
         public const int MaxMeshVertices = 16777216;     // ABI 1.4
+
+        public const uint PointSoft = 0x1u;   // ABI 1.5
+        public const uint TextShadow = 0x1u;  // ABI 1.5
 
         public const int Ok = 0;
     }
@@ -145,6 +150,33 @@ namespace Strata.Interop {
         public fixed float color[4];
     }
 
+    /// <summary>StrataLineVertex (ABI 1.5): 28 bytes; pairs make segments.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct StrataLineVertex {
+        public fixed float position[3];
+        public fixed float color[4];
+    }
+
+    /// <summary>StrataPoint (ABI 1.5): 40 bytes.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct StrataPoint {
+        public fixed float position[3];
+        public float size_pixels;
+        public float world_diameter;
+        public fixed float color[4];
+        public uint flags;
+    }
+
+    /// <summary>StrataText (ABI 1.5): 40 bytes on 64-bit. utf8 is copied during strata_submit_text.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct StrataText {
+        public float x, y;
+        public float pixel_size;
+        public uint flags;
+        public fixed float color[4];
+        public byte* utf8;  // NUL-terminated UTF-8
+    }
+
     public static unsafe class StrataNative {
         public const string Library = "strata";
 
@@ -190,6 +222,12 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_begin_frame(IntPtr engine, StrataFrameDesc* desc);
         /// <summary>items points at count 44-byte records with the StrataRenderItem layout.</summary>
         [DllImport(Library)] public static extern int strata_submit_primitives(IntPtr engine, void* items, int count);
+        /// <summary>ABI 1.5. count is a number of vertices and must be even.</summary>
+        [DllImport(Library)] public static extern int strata_submit_lines(IntPtr engine, StrataLineVertex* vertices, int count);
+        /// <summary>ABI 1.5.</summary>
+        [DllImport(Library)] public static extern int strata_submit_points(IntPtr engine, StrataPoint* points, int count);
+        /// <summary>ABI 1.5.</summary>
+        [DllImport(Library)] public static extern int strata_submit_text(IntPtr engine, StrataText* texts, int count);
         [DllImport(Library)] public static extern int strata_end_frame(IntPtr engine);
         [DllImport(Library)] public static extern int strata_present(IntPtr engine);
         [DllImport(Library)] public static extern int strata_get_frame_stats(IntPtr engine, StrataFrameStats* stats);

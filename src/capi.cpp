@@ -107,6 +107,13 @@ const int32_t kMeshFields[] = {
     STRATA_OFFSET(StrataMesh, colors),       STRATA_OFFSET(StrataMesh, indices),
     STRATA_OFFSET(StrataMesh, vertex_count), STRATA_OFFSET(StrataMesh, index_count),
     STRATA_OFFSET(StrataMesh, color)};
+const int32_t kLineVertexFields[] = {STRATA_OFFSET(StrataLineVertex, position), STRATA_OFFSET(StrataLineVertex, color)};
+const int32_t kPointFields[] = {STRATA_OFFSET(StrataPoint, position), STRATA_OFFSET(StrataPoint, size_pixels),
+                                STRATA_OFFSET(StrataPoint, world_diameter), STRATA_OFFSET(StrataPoint, color),
+                                STRATA_OFFSET(StrataPoint, flags)};
+const int32_t kTextFields[] = {STRATA_OFFSET(StrataText, x),     STRATA_OFFSET(StrataText, y),
+                               STRATA_OFFSET(StrataText, pixel_size), STRATA_OFFSET(StrataText, flags),
+                               STRATA_OFFSET(StrataText, color), STRATA_OFFSET(StrataText, utf8)};
 
 #define STRATA_TABLE(type, fields) \
     FieldTable { static_cast<int32_t>(sizeof(type)), fields, static_cast<int32_t>(sizeof(fields) / sizeof(fields[0])) }
@@ -117,7 +124,9 @@ const FieldTable* fieldTable(int32_t structId) {
         STRATA_TABLE(StrataCamera, kCameraFields),         STRATA_TABLE(StrataLighting, kLightingFields),
         STRATA_TABLE(StrataFrameDesc, kFrameDescFields),   STRATA_TABLE(StrataFrameStats, kFrameStatsFields),
         STRATA_TABLE(StrataEvent, kEventFields),           STRATA_TABLE(StrataPointLight, kPointLightFields),
-        STRATA_TABLE(StrataTerrainTile, kTerrainTileFields), STRATA_TABLE(StrataMesh, kMeshFields)};
+        STRATA_TABLE(StrataTerrainTile, kTerrainTileFields), STRATA_TABLE(StrataMesh, kMeshFields),
+        STRATA_TABLE(StrataLineVertex, kLineVertexFields), STRATA_TABLE(StrataPoint, kPointFields),
+        STRATA_TABLE(StrataText, kTextFields)};
     if (structId < 0 || structId >= static_cast<int32_t>(sizeof tables / sizeof tables[0])) return nullptr;
     return &tables[structId];
 }
@@ -240,7 +249,9 @@ StrataStatus strata_camera_look_at(const float eye[3], const float target[3], co
 
 StrataStatus strata_lighting_defaults(int32_t mode, StrataLighting* out) {
     if (!out) return invalid("out is NULL");
-    if (mode != STRATA_LIGHTING_LEGACY && mode != STRATA_LIGHTING_SUN) return invalid("unknown lighting mode");
+    if (mode != STRATA_LIGHTING_LEGACY && mode != STRATA_LIGHTING_SUN && mode != STRATA_LIGHTING_SPACE) {
+        return invalid("unknown lighting mode");
+    }
     return guard([&] { *out = strata::lightingDefaults(mode); });
 }
 
@@ -286,6 +297,27 @@ StrataStatus strata_submit_primitives(StrataEngine* engine, const StrataRenderIt
     if (count < 0) return invalid("count is negative");
     if (count > 0 && !items) return invalid("items is NULL with a non-zero count");
     return guard([&] { engine->engine->submitPrimitives(items, static_cast<size_t>(count)); });
+}
+
+StrataStatus strata_submit_lines(StrataEngine* engine, const StrataLineVertex* vertices, int32_t count) {
+    if (!engine) return invalid("engine is NULL");
+    if (count < 0) return invalid("count is negative");
+    if (count > 0 && !vertices) return invalid("vertices is NULL with a non-zero count");
+    return guard([&] { engine->engine->submitLines(vertices, static_cast<size_t>(count)); });
+}
+
+StrataStatus strata_submit_points(StrataEngine* engine, const StrataPoint* points, int32_t count) {
+    if (!engine) return invalid("engine is NULL");
+    if (count < 0) return invalid("count is negative");
+    if (count > 0 && !points) return invalid("points is NULL with a non-zero count");
+    return guard([&] { engine->engine->submitPoints(points, static_cast<size_t>(count)); });
+}
+
+StrataStatus strata_submit_text(StrataEngine* engine, const StrataText* texts, int32_t count) {
+    if (!engine) return invalid("engine is NULL");
+    if (count < 0) return invalid("count is negative");
+    if (count > 0 && !texts) return invalid("texts is NULL with a non-zero count");
+    return guard([&] { engine->engine->submitText(texts, static_cast<size_t>(count)); });
 }
 
 StrataStatus strata_end_frame(StrataEngine* engine) {
