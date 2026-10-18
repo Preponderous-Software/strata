@@ -62,6 +62,12 @@ ABI is 1.3 (1.4 on `main` adds static meshes): each addition is compatible, and 
 Next come streaming and larger terrain (T2–T4), meshes and materials (M1–M4),
 and optional OpenUSD modules (`STRATA_WITH_USD`, off by default).
 
+Alongside the renderer, `modules/sim` (`strata::sim`, C++ only, built by
+default) holds deterministic simulation building blocks: a seeded RNG, an
+entity-component registry with a fixed iteration order, 2D fields with
+diffusion and decay, a fixed-step clock and a state fingerprint. See
+[modules/sim/README.md](modules/sim/README.md).
+
 ## Building
 
 You need CMake 3.24 or newer and a C++17 compiler (GCC 9+, Clang 10+ or MSVC

@@ -26,6 +26,12 @@
   `R8` textures with initial data.
 - Scene files take `lighting space`, `line`, `circle`, `point` and `text`
   lines. New goldens `o1_space_system` and `o1_overlays_sun`.
+- A simulation module, `modules/sim` (`strata::sim`, C++ only, on by default
+  with `STRATA_WITH_SIM`): a seeded PCG32 `Rng`, a `Registry<Components...>`
+  with a deterministic iteration order, `Field2D`/`Mask2D` scalar fields with
+  mass-conserving diffusion and decay, a `FixedStep` clock, a `StateHasher`
+  fingerprint and field colormaps for terrain-tile heatmaps. No GL, no new
+  dependencies, no C ABI change. Tested by `strata-sim-tests`.
 
 ## 0.2.0
 
