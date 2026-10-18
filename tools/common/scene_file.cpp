@@ -95,6 +95,23 @@ void parse(const std::string& path, Scene& scene, int depth) {
                 light.flags |= STRATA_POINT_LIGHT_CAST_SHADOWS;
             }
             scene.pointLights.push_back(light);
+        } else if (word == "terrain") {
+            StrataTerrainTile& t = scene.terrain;
+            for (float& v : t.origin) read(in, v, where, "origin");
+            read(in, t.cell_size, where, "cell size");
+            read(in, t.samples_x, where, "samples x");
+            read(in, t.samples_z, where, "samples z");
+            for (int i = 0; i < 3; ++i) read(in, t.color[i], where, "colour");
+            t.color[3] = 1.0f;
+            scene.hasTerrain = true;
+            scene.terrainHeights.clear();
+            scene.terrainColors.clear();
+        } else if (word == "heights" || word == "colors") {
+            if (!scene.hasTerrain) bad(where, "'" + word + "' before 'terrain'");
+            std::vector<float>& out = word == "heights" ? scene.terrainHeights : scene.terrainColors;
+            float v;
+            while (in >> v) out.push_back(v);
+            if (!in.eof()) bad(where, "expected numbers after '" + word + "'");
         } else if (word == "include") {
             std::string other;
             read(in, other, where, "file name");
@@ -128,6 +145,19 @@ Scene loadScene(const std::string& path) {
     scene.frame.clear_color[2] = 0.90f;
     scene.frame.clear_color[3] = 1.0f;
     parse(path, scene, 0);
+    if (scene.hasTerrain) {
+        const size_t samples = static_cast<size_t>(scene.terrain.samples_x) * static_cast<size_t>(scene.terrain.samples_z);
+        if (scene.terrainHeights.size() != samples) {
+            bad(path, "terrain has " + std::to_string(scene.terrainHeights.size()) + " heights, expected " +
+                          std::to_string(samples));
+        }
+        if (!scene.terrainColors.empty() && scene.terrainColors.size() != samples * 3) {
+            bad(path, "terrain has " + std::to_string(scene.terrainColors.size()) + " colour values, expected " +
+                          std::to_string(samples * 3));
+        }
+        scene.terrain.heights = scene.terrainHeights.data();
+        scene.terrain.colors = scene.terrainColors.empty() ? nullptr : scene.terrainColors.data();
+    }
     return scene;
 }
 

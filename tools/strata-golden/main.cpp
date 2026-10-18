@@ -68,6 +68,12 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
                      "strata_camera_look_at");
     ok = ok && check(strata_set_camera(engine, &camera), "strata_set_camera");
     ok = ok && check(strata_set_lighting(engine, &scene.lighting), "strata_set_lighting");
+    if (scene.hasTerrain) {
+        StrataTerrainTile tile = scene.terrain;  // point at this scene's arrays, whatever copies were made
+        tile.heights = scene.terrainHeights.data();
+        tile.colors = scene.terrainColors.empty() ? nullptr : scene.terrainColors.data();
+        ok = ok && check(strata_set_terrain(engine, &tile), "strata_set_terrain");
+    }
     if (!scene.pointLights.empty()) {
         ok = ok && check(strata_set_point_lights(engine, scene.pointLights.data(),
                                                  static_cast<int32_t>(scene.pointLights.size())),

@@ -9,6 +9,7 @@ TEST(engine_pass_list_is_valid) {
     CHECK(describePasses(framePasses()).find("opaque:") != std::string::npos);
     CHECK(describePasses(framePasses()).find("point_lights") != std::string::npos);
     CHECK(describePasses(framePasses()).find("point_shadow:") != std::string::npos);
+    CHECK(describePasses(framePasses()).find("terrain") != std::string::npos);
 }
 
 TEST(reading_before_writing_is_reported) {

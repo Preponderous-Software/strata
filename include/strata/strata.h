@@ -44,9 +44,10 @@
  *
  *   1.0  v0.1.0: primitives, legacy and sun lighting, cascaded shadows
  *   1.1  point lights (StrataPointLight, strata_set_point_lights)
- *   1.2  shadowed point lights (STRATA_POINT_LIGHT_CAST_SHADOWS) */
+ *   1.2  shadowed point lights (STRATA_POINT_LIGHT_CAST_SHADOWS)
+ *   1.3  a terrain tile (StrataTerrainTile, strata_set_terrain) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 2u
+#define STRATA_ABI_MINOR 3u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -199,6 +200,25 @@ typedef struct StrataPointLight {
     uint32_t flags;    /* STRATA_POINT_LIGHT_* (1.2); any other bit is rejected */
 } StrataPointLight;
 
+/* ------------------------------------------------------------------ terrain */
+
+/* ABI 1.3. One static heightmapped terrain tile. Samples form a samples_x by
+ * samples_z grid (x fastest) spaced cell_size apart from `origin` along +X and
+ * +Z; each height is added to origin[1]. The engine copies the data into a
+ * mesh (normals from central differences), so the arrays need not outlive the
+ * call. The tile is drawn in the opaque pass under both lighting modes, and in
+ * STRATA_LIGHTING_SUN it casts and receives sun and point-light shadows.
+ * 56 bytes on 64-bit targets. */
+typedef struct StrataTerrainTile {
+    float origin[3];      /* world position of sample (0, 0) */
+    float cell_size;      /* > 0: distance between neighbouring samples */
+    int32_t samples_x;    /* 2..1025 */
+    int32_t samples_z;    /* 2..1025 */
+    const float* heights; /* samples_x * samples_z heights, row by row along +Z */
+    const float* colors;  /* NULL, or samples_x * samples_z linear RGB triples */
+    float color[4];       /* linear RGBA used when colors is NULL */
+} StrataTerrainTile;
+
 /* ------------------------------------------------------------------- frames */
 
 enum {
@@ -263,7 +283,8 @@ enum {
     STRATA_STRUCT_FRAME_DESC = 4,
     STRATA_STRUCT_FRAME_STATS = 5,
     STRATA_STRUCT_EVENT = 6,
-    STRATA_STRUCT_POINT_LIGHT = 7 /* ABI 1.1 */
+    STRATA_STRUCT_POINT_LIGHT = 7, /* ABI 1.1 */
+    STRATA_STRUCT_TERRAIN_TILE = 8 /* ABI 1.3 */
 };
 
 /* Field ids for strata_struct_field_offset(STRATA_STRUCT_RENDER_ITEM, ...). */
@@ -334,6 +355,11 @@ STRATA_API StrataStatus strata_set_lighting(StrataEngine* engine, const StrataLi
  * >= 2 before setting it. May be called inside or outside a frame;
  * the lights in place at end_frame are the ones drawn. */
 STRATA_API StrataStatus strata_set_point_lights(StrataEngine* engine, const StrataPointLight* lights, int32_t count);
+
+/* ABI 1.3. Replaces the scene's terrain with a mesh built from `tile`, or
+ * removes it when tile is NULL. The tile is validated first; on an invalid one
+ * the old terrain stays. May be called inside or outside a frame. */
+STRATA_API StrataStatus strata_set_terrain(StrataEngine* engine, const StrataTerrainTile* tile);
 
 /* A frame is begin_frame, any number of submits, end_frame, then present.
  * Submitted arrays are read during the call and never retained. */

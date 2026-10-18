@@ -59,6 +59,27 @@ inline const char* kPrimitiveVertex =
     "    gl_Position = uProjection * uView * world;\n"
     "}\n";
 
+// Terrain (T1): one static mesh, already in world space, with a colour per
+// vertex. Writes the same outputs as kPrimitiveVertex, so both opaque fragment
+// shaders serve it unchanged.
+inline const char* kTerrainVertex =
+    "#version 450 core\n"
+    "layout(location = 0) in vec3 aPosition;\n"
+    "layout(location = 1) in vec3 aNormal;\n"
+    "layout(location = 5) in vec3 aColor;\n" STRATA_FRAME_BLOCK
+    "out vec3 vNormal;\n"
+    "out vec4 vColor;\n"
+    "out vec3 vWorld;\n"
+    "out float vViewDepth;\n"
+    "void main() {\n"
+    "    vec4 world = vec4(aPosition, 1.0);\n"
+    "    vNormal = aNormal;\n"
+    "    vColor = vec4(aColor, 1.0);\n"
+    "    vWorld = world.xyz;\n"
+    "    vViewDepth = -(uView * world).z;\n"
+    "    gl_Position = uProjection * uView * world;\n"
+    "}\n";
+
 // LEGACY lighting: BN's PrimitiveRenderer fragment shader, unchanged.
 inline const char* kLegacyFragment =
     "#version 450 core\n"
@@ -180,6 +201,14 @@ inline const char* kShadowVertex =
     "    gl_Position = uLightViewProjection * vec4(aPosition * iScale + iPosition, 1.0);\n"
     "}\n";
 
+inline const char* kTerrainShadowVertex =
+    "#version 450 core\n"
+    "layout(location = 0) in vec3 aPosition;\n"
+    "layout(std140, binding = 1) uniform ShadowPass { mat4 uLightViewProjection; };\n"
+    "void main() {\n"
+    "    gl_Position = uLightViewProjection * vec4(aPosition, 1.0);\n"
+    "}\n";
+
 inline const char* kShadowFragment =
     "#version 450 core\n"
     "void main() {}\n";
@@ -199,6 +228,15 @@ inline const char* kPointShadowVertex =
     "    vec4 world = vec4(aPosition * iScale + iPosition, 1.0);\n"
     "    vWorld = world.xyz;\n"
     "    gl_Position = uFaceViewProjection * world;\n"
+    "}\n";
+
+inline const char* kTerrainPointShadowVertex =
+    "#version 450 core\n"
+    "layout(location = 0) in vec3 aPosition;\n" STRATA_POINT_SHADOW_BLOCK
+    "out vec3 vWorld;\n"
+    "void main() {\n"
+    "    vWorld = aPosition;\n"
+    "    gl_Position = uFaceViewProjection * vec4(aPosition, 1.0);\n"
     "}\n";
 
 inline const char* kPointShadowFragment =

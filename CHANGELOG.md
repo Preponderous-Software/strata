@@ -10,7 +10,13 @@
   `STRATA_POINT_LIGHT_CAST_SHADOWS` gives up to four point lights cube shadow
   maps (one cube-map array, 512² faces, distance/range depth, nine-tap
   filtering), drawn in a new `point_shadow` pass.
-- Scene files take `light point` lines, with an optional `shadow`.
+- A terrain tile (milestone T1, ABI 1.3): `StrataTerrainTile` and
+  `strata_set_terrain`, one static heightmapped tile with per-sample colour,
+  drawn under both lighting modes and casting and receiving sun and
+  point-light shadows.
+- Scene files take `light point` lines, with an optional `shadow`, and
+  `terrain`, `heights` and `colors` lines. `tools/gen_terrain_scene.py`
+  writes the terrain goldens' world.
 
 ## 0.1.0
 

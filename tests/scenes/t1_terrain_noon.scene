@@ -1,0 +1,8 @@
+# T1: one heightmapped terrain tile (65 x 65 samples, 2-unit cells) at
+# midday with four shadow cascades, fog and sky. The trees shadow the slopes;
+# colours come per sample (grass, earth, rock, snow).
+size 640 360
+camera 52 34 62  -8 2 -12  60 0.3 400
+lighting sun 0.45 35  4 2048 150 0.6 1
+clear 0 0 0 1 sky
+include _terrain_hills.scene

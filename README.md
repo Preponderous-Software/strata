@@ -26,8 +26,9 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 | L2 | Four stabilised cascaded shadow maps, a moon at night, hemisphere ambient, fog and an analytic sky | `l2_csm_morning`, `l2_csm_noon`, `l2_csm_dusk`, `l2_csm_night` |
 | L3 *(unreleased, ABI 1.1)* | Up to 32 unshadowed point lights with a range-windowed falloff | `l3_point_lights_night`, `l3_point_lights_falloff` |
 | L4 *(unreleased, ABI 1.2)* | Up to 4 of them cast shadows through cube shadow maps | `l4_point_shadows_pillars`, `l4_point_shadows_night` |
+| T1 *(unreleased, ABI 1.3)* | One static heightmapped terrain tile, lit, casting and receiving sun and point-light shadows | `t1_terrain_noon`, `t1_terrain_morning`, `t1_terrain_night_fire` |
 
-Next come terrain (T1–T4), meshes and materials (M1–M4),
+Next come streaming and larger terrain (T2–T4), meshes and materials (M1–M4),
 and optional OpenUSD modules (`STRATA_WITH_USD`, off by default).
 
 ## Building
