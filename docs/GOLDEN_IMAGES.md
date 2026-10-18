@@ -41,6 +41,7 @@ Alpha is ignored.
 | Same Mesa, same scene, two runs (headless) | 0 |
 | C# harness (System.Numerics, depth 0..1 projection) vs C++ golden (glm, depth −1..1) | 0 |
 | SDL3 window under Xvfb vs headless EGL golden | 2–6 of 230,400 (≤ 0.003 %) |
+| Goldens blessed on Mesa 21.2.6 (LLVM 12) vs CI's pinned Mesa 25.2.8 (LLVM 20) | 0 (max ΔE 0.66) |
 
 The tolerance therefore leaves more than 100× headroom over the noise
 measured between surfaces. It is still small enough that a missing object or a
