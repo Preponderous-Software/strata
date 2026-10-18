@@ -105,7 +105,7 @@ struct HostState {
     GLfloat polygonOffsetFactor = 0, polygonOffsetUnits = 0;
     GLint activeTexture = GL_TEXTURE0;
     GLint texture2D[2] = {0, 0}, texture2DArray[2] = {0, 0};
-    GLint uniformBuffers[2] = {0, 0};
+    GLint uniformBuffers[3] = {0, 0, 0};
     GLint elementArrayBuffer = 0, arrayBuffer = 0;
 };
 
@@ -421,7 +421,9 @@ public:
             glActiveTexture(GL_TEXTURE0 + unit);
             glGetIntegerv(GL_TEXTURE_BINDING_2D, &s.texture2D[unit]);
             glGetIntegerv(GL_TEXTURE_BINDING_2D_ARRAY, &s.texture2DArray[unit]);
-            glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, static_cast<GLuint>(unit), &s.uniformBuffers[unit]);
+        }
+        for (int slot = 0; slot < 3; ++slot) {
+            glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, static_cast<GLuint>(slot), &s.uniformBuffers[slot]);
         }
         glActiveTexture(static_cast<GLenum>(s.activeTexture));
         glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &s.arrayBuffer);
@@ -450,7 +452,9 @@ public:
             glActiveTexture(GL_TEXTURE0 + unit);
             glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(s.texture2D[unit]));
             glBindTexture(GL_TEXTURE_2D_ARRAY, static_cast<GLuint>(s.texture2DArray[unit]));
-            glBindBufferBase(GL_UNIFORM_BUFFER, static_cast<GLuint>(unit), static_cast<GLuint>(s.uniformBuffers[unit]));
+        }
+        for (int slot = 0; slot < 3; ++slot) {
+            glBindBufferBase(GL_UNIFORM_BUFFER, static_cast<GLuint>(slot), static_cast<GLuint>(s.uniformBuffers[slot]));
         }
         glActiveTexture(static_cast<GLenum>(s.activeTexture));
         glBindBuffer(GL_ARRAY_BUFFER, static_cast<GLuint>(s.arrayBuffer));

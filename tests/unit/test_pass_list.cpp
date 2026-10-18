@@ -7,6 +7,7 @@ TEST(engine_pass_list_is_valid) {
     CHECK(validatePassOrder(framePasses(), frameInputs()).empty());
     CHECK(framePasses().front().name == std::string("shadow"));
     CHECK(describePasses(framePasses()).find("opaque:") != std::string::npos);
+    CHECK(describePasses(framePasses()).find("point_lights") != std::string::npos);
 }
 
 TEST(reading_before_writing_is_reported) {

@@ -16,6 +16,14 @@ static_assert(sizeof(StrataLighting) == 48, "");
 static_assert(sizeof(StrataFrameDesc) == 20, "");
 static_assert(sizeof(StrataFrameStats) == 52, "");
 static_assert(sizeof(StrataEvent) == 76, "");
+// ABI 1.1
+static_assert(sizeof(StrataPointLight) == 36, "");
+static_assert(offsetof(StrataPointLight, position) == 0, "");
+static_assert(offsetof(StrataPointLight, range) == 12, "");
+static_assert(offsetof(StrataPointLight, color) == 16, "");
+static_assert(offsetof(StrataPointLight, intensity) == 28, "");
+static_assert(offsetof(StrataPointLight, flags) == 32, "");
+static_assert(STRATA_ABI_VERSION == 1u, "ABI 1 callers must keep working: additions bump STRATA_ABI_MINOR");
 #if UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu
 static_assert(sizeof(StrataEngineDesc) == 48, "64-bit targets");
 #endif
@@ -23,6 +31,25 @@ static_assert(sizeof(StrataEngineDesc) == 48, "64-bit targets");
 TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
+    CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
+    CHECK(strata_abi_minor() >= 1u);
+}
+
+TEST(point_light_layout_is_queryable) {
+    CHECK(strata_struct_size(STRATA_STRUCT_POINT_LIGHT) == 36);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_POINT_LIGHT, 0) == 0);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_POINT_LIGHT, 1) == 12);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_POINT_LIGHT, 2) == 16);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_POINT_LIGHT, 3) == 28);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_POINT_LIGHT, 4) == 32);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_POINT_LIGHT, 5) == -1);
+}
+
+TEST(set_point_lights_rejects_bad_arguments_without_a_context) {
+    StrataPointLight light{};
+    light.range = 5.0f;
+    CHECK(strata_set_point_lights(nullptr, &light, 1) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(std::strlen(strata_last_error()) > 0);
 }
 
 TEST(render_item_layout_is_queryable) {
@@ -40,6 +67,7 @@ TEST(every_struct_has_a_size_and_bad_ids_are_rejected) {
     CHECK(strata_struct_size(STRATA_STRUCT_FRAME_DESC) == static_cast<int32_t>(sizeof(StrataFrameDesc)));
     CHECK(strata_struct_size(STRATA_STRUCT_FRAME_STATS) == static_cast<int32_t>(sizeof(StrataFrameStats)));
     CHECK(strata_struct_size(STRATA_STRUCT_EVENT) == static_cast<int32_t>(sizeof(StrataEvent)));
+    CHECK(strata_struct_size(STRATA_STRUCT_POINT_LIGHT) == static_cast<int32_t>(sizeof(StrataPointLight)));
     CHECK(strata_struct_size(-1) == -1);
     CHECK(strata_struct_size(99) == -1);
     CHECK(strata_struct_field_offset(STRATA_STRUCT_RENDER_ITEM, 4) == -1);

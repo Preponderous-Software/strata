@@ -27,10 +27,25 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Bumped whenever a struct layout or a function signature in this header
- * changes incompatibly. Hosts pass the value they were built against in
- * StrataEngineDesc.abi_version and strata_create refuses a mismatch. */
+/* Versioning.
+ *
+ * STRATA_ABI_VERSION (the major version) is bumped whenever a struct layout or
+ * a function signature in this header changes incompatibly. Hosts pass the
+ * value they were built against in StrataEngineDesc.abi_version and
+ * strata_create refuses a mismatch.
+ *
+ * STRATA_ABI_MINOR is bumped for every compatible addition: a new function, a
+ * new struct (with its own STRATA_STRUCT_* id), a new enum or flag value.
+ * Existing structs and signatures never change within a major version, so a
+ * host built against any 1.x keeps working with every later 1.y. A host that
+ * uses an addition checks strata_abi_minor() at run time and falls back (or
+ * reports the library as too old) when it is lower than the minor the
+ * addition arrived in. Each addition below names that minor.
+ *
+ *   1.0  v0.1.0: primitives, legacy and sun lighting, cascaded shadows
+ *   1.1  point lights (StrataPointLight, strata_set_point_lights) */
 #define STRATA_ABI_VERSION 1u
+#define STRATA_ABI_MINOR 1u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -156,6 +171,27 @@ typedef struct StrataLighting {
     int32_t fog;                /* SUN: non-zero enables distance fog */
 } StrataLighting;
 
+/* ------------------------------------------------------------- point lights */
+
+/* ABI 1.1. The most point lights strata_set_point_lights accepts. */
+#define STRATA_MAX_POINT_LIGHTS 32
+
+/* ABI 1.1. A light that shines equally in every direction from a point. Point
+ * lights shade STRATA_LIGHTING_SUN scenes, on top of the sun or moon and
+ * before fog; STRATA_LIGHTING_LEGACY ignores them. With x = distance / range,
+ * the light falls off as
+ *   intensity * window^2 / (1 + 16 x^2),  window = clamp(1 - x^4, 0, 1)
+ * so it is `intensity` at the light, about a fifth of that at half the range,
+ * and exactly zero at `range`: nothing beyond it is touched.
+ * 36 bytes. */
+typedef struct StrataPointLight {
+    float position[3]; /* world space */
+    float range;       /* > 0: the distance at which the light reaches zero */
+    float color[3];    /* linear RGB, 0..1 each */
+    float intensity;   /* >= 0; at the light itself, 1 is about as bright as the noon sun */
+    uint32_t flags;    /* must be 0 in ABI 1.1 */
+} StrataPointLight;
+
 /* ------------------------------------------------------------------- frames */
 
 enum {
@@ -219,7 +255,8 @@ enum {
     STRATA_STRUCT_LIGHTING = 3,
     STRATA_STRUCT_FRAME_DESC = 4,
     STRATA_STRUCT_FRAME_STATS = 5,
-    STRATA_STRUCT_EVENT = 6
+    STRATA_STRUCT_EVENT = 6,
+    STRATA_STRUCT_POINT_LIGHT = 7 /* ABI 1.1 */
 };
 
 /* Field ids for strata_struct_field_offset(STRATA_STRUCT_RENDER_ITEM, ...). */
@@ -233,6 +270,10 @@ enum {
 /* ---------------------------------------------------------------- functions */
 
 STRATA_API uint32_t strata_abi_version(void);
+/* ABI 1.1. The library's STRATA_ABI_MINOR. A library older than 1.1 does not
+ * export this function, so a host that needs 1.1 or later can treat a missing
+ * symbol as minor 0. */
+STRATA_API uint32_t strata_abi_minor(void);
 STRATA_API const char* strata_version_string(void);
 
 /* Size in bytes of a boundary struct, or -1 for an unknown id. */
@@ -277,6 +318,13 @@ STRATA_API StrataStatus strata_camera_look_at(const float eye[3], const float ta
  * Nations' PrimitiveRenderer constants. */
 STRATA_API StrataStatus strata_lighting_defaults(int32_t mode, StrataLighting* out);
 STRATA_API StrataStatus strata_set_lighting(StrataEngine* engine, const StrataLighting* lighting);
+
+/* ABI 1.1. Replaces the scene's point lights with a copy of `lights`; they
+ * stay until the next call. count 0 (lights may then be NULL) removes them
+ * all. At most STRATA_MAX_POINT_LIGHTS. Every light is checked first, and on
+ * an invalid one nothing changes. May be called inside or outside a frame;
+ * the lights in place at end_frame are the ones drawn. */
+STRATA_API StrataStatus strata_set_point_lights(StrataEngine* engine, const StrataPointLight* lights, int32_t count);
 
 /* A frame is begin_frame, any number of submits, end_frame, then present.
  * Submitted arrays are read during the call and never retained. */

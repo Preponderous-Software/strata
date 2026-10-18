@@ -38,14 +38,17 @@ Useful switches:
 
 ## Rules for changes
 
-- **ABI changes.** Changing a struct or a signature in `strata.h` means:
+- **ABI changes.** Changing an existing struct or signature in `strata.h`
+  breaks every shipped host, needs the owner's agreement, and means:
   - bumping `STRATA_ABI_VERSION`;
   - updating the layout table in `src/capi.cpp`;
   - updating the `static_assert`s in `tests/unit/test_abi.cpp`;
   - updating the C# mirror in `bindings/csharp/Strata.Interop`.
 
-  The C# layout tests fail if one of these is missed. Adding a new function is
-  not a break.
+  The C# layout tests fail if one of these is missed. Adding a new function,
+  struct or enum value is not a break: bump `STRATA_ABI_MINOR` instead, add
+  the minor to the version list at the top of `strata.h`, mark each addition
+  with it, and update the same four places for any new struct.
 - **Golden images.** A golden changes only in a PR that explains why and shows
   the before and after images. See
   [docs/GOLDEN_IMAGES.md](docs/GOLDEN_IMAGES.md).

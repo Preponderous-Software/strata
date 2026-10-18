@@ -1,0 +1,18 @@
+# L3: unshadowed point lights in the village at night (time of day 0.95).
+# A campfire, two lamps and a cold blue light; the moon and fog as in L2.
+size 640 360
+camera -22 14 22  -1 0 -3  60 0.3 400
+lighting sun 0.95 35  4 2048 150 0.6 1
+clear 0 0 0 1 sky
+include _village_items.scene
+# the campfire: logs, with the light just above them
+item cylinder -2 0.75 4.5  0.5 0.25 0.5  0.35 0.22 0.12
+item cube -2 0.7 4.5  1.4 0.3 0.3  0.35 0.22 0.12
+light point -2 1.6 4.5  14  1.0 0.55 0.2  6
+# lamps on posts by the houses
+item cylinder -11 1.5 -4  0.3 1 0.3  0.3 0.3 0.3
+light point -11 2.8 -4  9  1.0 0.8 0.5  4
+item cylinder 7.5 1.5 -4.5  0.3 1 0.3  0.3 0.3 0.3
+light point 7.5 2.8 -4.5  9  1.0 0.8 0.5  4
+# a cold blue light out in the field
+light point 10 1.5 8  8  0.3 0.5 1.0  4

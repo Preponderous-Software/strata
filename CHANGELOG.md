@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Point lights (milestone L3, ABI 1.1): `StrataPointLight` and
+  `strata_set_point_lights`, up to 32 unshadowed lights with a range-windowed
+  falloff in sun lighting. `strata_abi_minor()` and `STRATA_ABI_MINOR`
+  report compatible additions; `STRATA_ABI_VERSION` stays 1.
+- Scene files take `light point` lines.
+
 ## 0.1.0
 
 The skeleton milestone and lighting milestones L1–L2 from RFC 0020.

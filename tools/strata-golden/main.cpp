@@ -68,6 +68,11 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
                      "strata_camera_look_at");
     ok = ok && check(strata_set_camera(engine, &camera), "strata_set_camera");
     ok = ok && check(strata_set_lighting(engine, &scene.lighting), "strata_set_lighting");
+    if (!scene.pointLights.empty()) {
+        ok = ok && check(strata_set_point_lights(engine, scene.pointLights.data(),
+                                                 static_cast<int32_t>(scene.pointLights.size())),
+                         "strata_set_point_lights");
+    }
     // Two frames: the second proves a frame can follow a frame, and is the one captured.
     for (int frame = 0; ok && frame < 2; ++frame) {
         ok = ok && check(strata_begin_frame(engine, &scene.frame), "strata_begin_frame");
@@ -227,7 +232,7 @@ int commandCheck(int argc, char** argv) {
 
 int main(int argc, char** argv) {
     if (argc < 2) return usage();
-    std::printf("strata %s (ABI %u)\n", strata_version_string(), strata_abi_version());
+    std::printf("strata %s (ABI %u.%u)\n", strata_version_string(), strata_abi_version(), strata_abi_minor());
     if (std::strcmp(argv[1], "render") == 0) return commandRender(argc, argv);
     if (std::strcmp(argv[1], "check") == 0) return commandCheck(argc, argv);
     return usage();

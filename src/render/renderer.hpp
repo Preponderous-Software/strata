@@ -26,6 +26,7 @@ public:
 
     void setCamera(const StrataCamera& camera);
     void setLighting(const StrataLighting& lighting);
+    void setPointLights(const StrataPointLight* lights, size_t count);
 
     void beginFrame(const StrataFrameDesc& desc);
     void submit(const StrataRenderItem* items, size_t count);
@@ -50,6 +51,7 @@ private:
     void ensureShadowMaps(int size, int layers);
     void uploadInstances();
     void writeFrameUniforms(int width, int height, const Cascades* cascades);
+    void writePointLightUniforms();
     void drawPrimitives(bool forShadow);
     void shadowPass(const Cascades& cascades);
     void opaquePass(int width, int height);
@@ -68,7 +70,7 @@ private:
     std::array<uint32_t, STRATA_PRIMITIVE_KIND_COUNT> baseInstance_{};
     rhi::BufferHandle instances_;
 
-    rhi::BufferHandle frameUniforms_, shadowUniforms_;
+    rhi::BufferHandle frameUniforms_, shadowUniforms_, pointLightUniforms_;
     size_t shadowUniformStride_ = 256;
 
     rhi::PipelineHandle legacyPipeline_, sunPipeline_, shadowPipeline_, skyPipeline_;
@@ -84,6 +86,7 @@ private:
 
     StrataCamera camera_{};
     StrataLighting lighting_{};
+    std::vector<StrataPointLight> pointLights_;
     StrataFrameDesc frame_{};
     StrataFrameStats stats_{};
     bool frameOpen_ = false;

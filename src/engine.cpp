@@ -100,6 +100,11 @@ void Engine::resize(int32_t width, int32_t height) {
 
 void Engine::setCamera(const StrataCamera& camera) { impl_->renderer->setCamera(camera); }
 void Engine::setLighting(const StrataLighting& lighting) { impl_->renderer->setLighting(lighting); }
+
+void Engine::setPointLights(const StrataPointLight* lights, size_t count) {
+    if (count > 0 && lights == nullptr) fail(STRATA_ERROR_INVALID_ARGUMENT, "lights is NULL with a non-zero count");
+    impl_->renderer->setPointLights(lights, count);
+}
 void Engine::beginFrame(const StrataFrameDesc& desc) { impl_->renderer->beginFrame(desc); }
 
 void Engine::submitPrimitives(const StrataRenderItem* items, size_t count) {
