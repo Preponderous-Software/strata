@@ -45,9 +45,11 @@
  *   1.0  v0.1.0: primitives, legacy and sun lighting, cascaded shadows
  *   1.1  point lights (StrataPointLight, strata_set_point_lights)
  *   1.2  shadowed point lights (STRATA_POINT_LIGHT_CAST_SHADOWS)
- *   1.3  a terrain tile (StrataTerrainTile, strata_set_terrain) */
+ *   1.3  a terrain tile (StrataTerrainTile, strata_set_terrain)
+ *   1.4  static triangle meshes (StrataMesh, strata_add_mesh,
+ *        strata_remove_mesh, strata_clear_meshes) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 3u
+#define STRATA_ABI_MINOR 4u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -219,6 +221,34 @@ typedef struct StrataTerrainTile {
     float color[4];       /* linear RGBA used when colors is NULL */
 } StrataTerrainTile;
 
+/* ------------------------------------------------------------ static meshes */
+
+/* ABI 1.4. The most meshes a scene holds at once. */
+#define STRATA_MAX_MESHES 256
+/* ABI 1.4. The most vertices one mesh may have. */
+#define STRATA_MAX_MESH_VERTICES 16777216
+
+/* ABI 1.4. Arbitrary static geometry already in world space: an indexed
+ * triangle list with a normal and a colour per vertex. The engine copies the
+ * data into GPU buffers, so the arrays need not outlive the call. Meshes are
+ * drawn in the opaque pass exactly like the terrain tile (same vertex format,
+ * same shaders): under both lighting modes, and in STRATA_LIGHTING_SUN they
+ * cast and receive sun and point-light shadows. Back faces are culled in the
+ * opaque pass, so triangles must wind counter-clockwise seen from outside (the
+ * side the normal points to); computed normals follow the same winding. Shadow
+ * passes draw both faces, so an open surface still casts. Colours are linear RGB,
+ * the same space as render-item and terrain colours. Flat shading is had by
+ * not sharing vertices between faces. 56 bytes on 64-bit targets. */
+typedef struct StrataMesh {
+    const float* positions;  /* vertex_count xyz, world space */
+    const float* normals;    /* NULL (the engine computes area-weighted smooth normals) or vertex_count xyz */
+    const float* colors;     /* NULL (use color) or vertex_count linear RGB triples */
+    const uint32_t* indices; /* index_count indices; triangles wind counter-clockwise seen from outside */
+    int32_t vertex_count;    /* 3..STRATA_MAX_MESH_VERTICES */
+    int32_t index_count;     /* > 0, a multiple of 3, every index < vertex_count */
+    float color[4];          /* linear RGBA used when colors is NULL */
+} StrataMesh;
+
 /* ------------------------------------------------------------------- frames */
 
 enum {
@@ -284,7 +314,8 @@ enum {
     STRATA_STRUCT_FRAME_STATS = 5,
     STRATA_STRUCT_EVENT = 6,
     STRATA_STRUCT_POINT_LIGHT = 7, /* ABI 1.1 */
-    STRATA_STRUCT_TERRAIN_TILE = 8 /* ABI 1.3 */
+    STRATA_STRUCT_TERRAIN_TILE = 8, /* ABI 1.3 */
+    STRATA_STRUCT_MESH = 9          /* ABI 1.4 */
 };
 
 /* Field ids for strata_struct_field_offset(STRATA_STRUCT_RENDER_ITEM, ...). */
@@ -360,6 +391,16 @@ STRATA_API StrataStatus strata_set_point_lights(StrataEngine* engine, const Stra
  * removes it when tile is NULL. The tile is validated first; on an invalid one
  * the old terrain stays. May be called inside or outside a frame. */
 STRATA_API StrataStatus strata_set_terrain(StrataEngine* engine, const StrataTerrainTile* tile);
+
+/* ABI 1.4. Adds a static mesh built from a copy of `mesh` and writes its id
+ * (never 0) to *out_id. The mesh is validated first; on an invalid one, or
+ * when STRATA_MAX_MESHES are already present, nothing changes. Ids are not
+ * reused within an engine. May be called inside or outside a frame. */
+STRATA_API StrataStatus strata_add_mesh(StrataEngine* engine, const StrataMesh* mesh, uint32_t* out_id);
+/* ABI 1.4. Removes one mesh; an unknown id is STRATA_ERROR_INVALID_ARGUMENT. */
+STRATA_API StrataStatus strata_remove_mesh(StrataEngine* engine, uint32_t id);
+/* ABI 1.4. Removes every mesh. */
+STRATA_API StrataStatus strata_clear_meshes(StrataEngine* engine);
 
 /* A frame is begin_frame, any number of submits, end_frame, then present.
  * Submitted arrays are read during the call and never retained. */

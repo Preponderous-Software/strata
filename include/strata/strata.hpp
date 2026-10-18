@@ -65,6 +65,12 @@ public:
     void setPointLights(const StrataPointLight* lights, size_t count);
     // Replaces the terrain tile (copied into a mesh); nullptr removes it.
     void setTerrain(const StrataTerrainTile* tile);
+    // Adds a static mesh (copied); returns its id, never 0. Validates first;
+    // at most STRATA_MAX_MESHES.
+    uint32_t addMesh(const StrataMesh& mesh);
+    // Removes one mesh; throws INVALID_ARGUMENT for an unknown id.
+    void removeMesh(uint32_t id);
+    void clearMeshes();
 
     void beginFrame(const StrataFrameDesc& desc);
     void submitPrimitives(const StrataRenderItem* items, size_t count);

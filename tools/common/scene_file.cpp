@@ -112,6 +112,21 @@ void parse(const std::string& path, Scene& scene, int depth) {
             float v;
             while (in >> v) out.push_back(v);
             if (!in.eof()) bad(where, "expected numbers after '" + word + "'");
+        } else if (word == "mesh") {
+            SceneMesh mesh;
+            for (int i = 0; i < 3; ++i) read(in, mesh.color[i], where, "colour");
+            scene.meshes.push_back(mesh);
+        } else if (word == "vertices" || word == "vcolors") {
+            if (scene.meshes.empty()) bad(where, "'" + word + "' before 'mesh'");
+            std::vector<float>& out = word == "vertices" ? scene.meshes.back().positions : scene.meshes.back().colors;
+            float v;
+            while (in >> v) out.push_back(v);
+            if (!in.eof()) bad(where, "expected numbers after '" + word + "'");
+        } else if (word == "triangles") {
+            if (scene.meshes.empty()) bad(where, "'triangles' before 'mesh'");
+            uint32_t v;
+            while (in >> v) scene.meshes.back().indices.push_back(v);
+            if (!in.eof()) bad(where, "expected indices after 'triangles'");
         } else if (word == "include") {
             std::string other;
             read(in, other, where, "file name");
@@ -136,6 +151,17 @@ void parse(const std::string& path, Scene& scene, int depth) {
 
 }  // namespace
 
+StrataMesh SceneMesh::view() const {
+    StrataMesh m{};
+    m.positions = positions.data();
+    m.colors = colors.empty() ? nullptr : colors.data();
+    m.indices = indices.data();
+    m.vertex_count = static_cast<int32_t>(positions.size() / 3);
+    m.index_count = static_cast<int32_t>(indices.size());
+    for (int i = 0; i < 4; ++i) m.color[i] = color[i];
+    return m;
+}
+
 Scene loadScene(const std::string& path) {
     Scene scene;
     strata_lighting_defaults(STRATA_LIGHTING_LEGACY, &scene.lighting);
@@ -157,6 +183,13 @@ Scene loadScene(const std::string& path) {
         }
         scene.terrain.heights = scene.terrainHeights.data();
         scene.terrain.colors = scene.terrainColors.empty() ? nullptr : scene.terrainColors.data();
+    }
+    for (const SceneMesh& mesh : scene.meshes) {
+        if (mesh.positions.size() % 3 != 0) bad(path, "a mesh's vertex values are not a multiple of 3");
+        if (!mesh.colors.empty() && mesh.colors.size() != mesh.positions.size()) {
+            bad(path, "a mesh has " + std::to_string(mesh.colors.size()) + " colour values, expected " +
+                          std::to_string(mesh.positions.size()));
+        }
     }
     return scene;
 }

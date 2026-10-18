@@ -35,6 +35,18 @@ static_assert(offsetof(StrataTerrainTile, colors) == 32, "64-bit targets");
 static_assert(offsetof(StrataTerrainTile, color) == 40, "64-bit targets");
 static_assert(sizeof(StrataTerrainTile) == 56, "64-bit targets");
 #endif
+// ABI 1.4
+static_assert(offsetof(StrataMesh, positions) == 0, "");
+#if UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu
+static_assert(offsetof(StrataMesh, normals) == 8, "64-bit targets");
+static_assert(offsetof(StrataMesh, colors) == 16, "64-bit targets");
+static_assert(offsetof(StrataMesh, indices) == 24, "64-bit targets");
+static_assert(offsetof(StrataMesh, vertex_count) == 32, "64-bit targets");
+static_assert(offsetof(StrataMesh, index_count) == 36, "64-bit targets");
+static_assert(offsetof(StrataMesh, color) == 40, "64-bit targets");
+static_assert(sizeof(StrataMesh) == 56, "64-bit targets");
+#endif
+static_assert(STRATA_MAX_MESHES == 256, "ABI 1.4");
 static_assert(STRATA_ABI_VERSION == 1u, "ABI 1 callers must keep working: additions bump STRATA_ABI_MINOR");
 #if UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu
 static_assert(sizeof(StrataEngineDesc) == 48, "64-bit targets");
@@ -44,7 +56,7 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 3u);
+    CHECK(strata_abi_minor() >= 4u);
 }
 
 TEST(point_light_layout_is_queryable) {
@@ -59,6 +71,15 @@ TEST(point_light_layout_is_queryable) {
 
 TEST(set_terrain_rejects_a_null_engine) {
     CHECK(strata_set_terrain(nullptr, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+}
+
+TEST(mesh_calls_reject_a_null_engine) {
+    StrataMesh mesh{};
+    uint32_t id = 0;
+    CHECK(strata_add_mesh(nullptr, &mesh, &id) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(id == 0);
+    CHECK(strata_remove_mesh(nullptr, 1) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_clear_meshes(nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
 }
 
 TEST(set_point_lights_rejects_bad_arguments_without_a_context) {
@@ -88,6 +109,10 @@ TEST(every_struct_has_a_size_and_bad_ids_are_rejected) {
     CHECK(strata_struct_field_offset(STRATA_STRUCT_TERRAIN_TILE, 6) ==
           static_cast<int32_t>(offsetof(StrataTerrainTile, color)));
     CHECK(strata_struct_field_offset(STRATA_STRUCT_TERRAIN_TILE, 7) == -1);
+    CHECK(strata_struct_size(STRATA_STRUCT_MESH) == static_cast<int32_t>(sizeof(StrataMesh)));
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_MESH, 4) == static_cast<int32_t>(offsetof(StrataMesh, vertex_count)));
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_MESH, 6) == static_cast<int32_t>(offsetof(StrataMesh, color)));
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_MESH, 7) == -1);
     CHECK(strata_struct_size(-1) == -1);
     CHECK(strata_struct_size(99) == -1);
     CHECK(strata_struct_field_offset(STRATA_STRUCT_RENDER_ITEM, 4) == -1);

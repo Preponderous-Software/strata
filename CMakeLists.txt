@@ -71,6 +71,7 @@ set(STRATA_ENGINE_SOURCES
     src/render/sun.cpp
     src/render/lights.cpp
     src/render/terrain_mesh.cpp
+    src/render/static_mesh.cpp
     src/render/pass_list.cpp
     src/render/renderer.cpp
     src/engine.cpp

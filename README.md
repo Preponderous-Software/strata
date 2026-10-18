@@ -17,6 +17,10 @@
     <td align="center"><img src="tests/golden/t1_terrain_morning/linux-llvmpipe.png" width="200" alt="Terrain at sunrise"><br>terrain (T1)</td>
     <td align="center"><img src="tests/golden/t1_terrain_night_fire/linux-llvmpipe.png" width="200" alt="Terrain lit by a campfire"><br>terrain at night</td>
   </tr>
+  <tr>
+    <td align="center"><img src="tests/golden/mesh_static_morning/linux-llvmpipe.png" width="200" alt="Gabled blocks and a road ribbon on terrain"><br>static meshes</td>
+    <td align="center"><img src="tests/golden/mesh_static_night_lamp/linux-llvmpipe.png" width="200" alt="Static meshes lit by a street lamp"><br>meshes at night</td>
+  </tr>
 </table>
 
 Every image above, apart from the animation, is a golden image that CI
@@ -42,7 +46,7 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 
 `v0.2.0` adds point lights (**L3**), point-light shadows (**L4**) and a first
 terrain tile (**T1**) to `v0.1.0`'s skeleton and lighting **L1–L2**. The C
-ABI is 1.3: each addition is compatible, and every ABI 1.0 host still works.
+ABI is 1.3 (1.4 on `main` adds static meshes): each addition is compatible, and every ABI 1.0 host still works.
 
 | Milestone | What it is | Golden images |
 |---|---|---|
@@ -52,6 +56,7 @@ ABI is 1.3: each addition is compatible, and every ABI 1.0 host still works.
 | L3 *(ABI 1.1)* | Up to 32 unshadowed point lights with a range-windowed falloff | `l3_point_lights_night`, `l3_point_lights_falloff` |
 | L4 *(ABI 1.2)* | Up to 4 of them cast shadows through cube shadow maps | `l4_point_shadows_pillars`, `l4_point_shadows_night` |
 | T1 *(ABI 1.3)* | One static heightmapped terrain tile, lit, casting and receiving sun and point-light shadows | `t1_terrain_noon`, `t1_terrain_morning`, `t1_terrain_night_fire` |
+| Static meshes *(ABI 1.4, unreleased)* | Up to 256 host-built indexed triangle meshes in world space with per-vertex colour, drawn and shadowed like the terrain | `mesh_static_morning`, `mesh_static_night_lamp` |
 
 Next come streaming and larger terrain (T2–T4), meshes and materials (M1–M4),
 and optional OpenUSD modules (`STRATA_WITH_USD`, off by default).

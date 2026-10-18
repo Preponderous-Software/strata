@@ -13,6 +13,7 @@
 #include "render/primitive_mesh.hpp"
 #include "render/shaders.hpp"
 #include "render/sun.hpp"
+#include "render/static_mesh.hpp"
 #include "render/terrain_mesh.hpp"
 
 namespace strata::render {
@@ -124,6 +125,7 @@ Renderer::~Renderer() {
     for (auto target : pointShadowTargets_) device_.destroy(target);
     device_.destroy(pointShadowMaps_);
     device_.destroy(pointShadowPipeline_);
+    clearMeshes();
     device_.destroy(terrainVertices_);
     device_.destroy(terrainIndices_);
     device_.destroy(terrainLegacyPipeline_);
@@ -348,6 +350,43 @@ void Renderer::setTerrain(const StrataTerrainTile* tile) {
     terrainIndexCount_ = static_cast<uint32_t>(mesh.indices.size());
 }
 
+uint32_t Renderer::addMesh(const StrataMesh& m) {
+    if (meshes_.size() >= static_cast<size_t>(STRATA_MAX_MESHES)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: the scene already holds STRATA_MAX_MESHES (%d) meshes",
+             STRATA_MAX_MESHES);
+    }
+    if (nextMeshId_ == 0) fail(STRATA_ERROR_INVALID_STATE, "mesh: ids exhausted");
+    const StaticMesh mesh = buildStaticMesh(m);  // validates first; throws before anything changes
+    MeshEntry entry;
+    entry.vertices = device_.createBuffer(mesh.vertices.size() * sizeof(float), mesh.vertices.data(), false,
+                                          "strata.mesh-vertices");
+    entry.indices = device_.createBuffer(mesh.indices.size() * sizeof(uint32_t), mesh.indices.data(), false,
+                                         "strata.mesh-indices");
+    entry.indexCount = static_cast<uint32_t>(mesh.indices.size());
+    entry.id = nextMeshId_++;
+    meshes_.push_back(entry);
+    return entry.id;
+}
+
+void Renderer::removeMesh(uint32_t id) {
+    for (auto it = meshes_.begin(); it != meshes_.end(); ++it) {
+        if (it->id != id) continue;
+        device_.destroy(it->vertices);
+        device_.destroy(it->indices);
+        meshes_.erase(it);
+        return;
+    }
+    fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: no mesh with id %u", id);
+}
+
+void Renderer::clearMeshes() {
+    for (auto& entry : meshes_) {
+        device_.destroy(entry.vertices);
+        device_.destroy(entry.indices);
+    }
+    meshes_.clear();
+}
+
 void Renderer::ensurePointShadowMaps(int cubes) {
     if (pointShadowMaps_ && cubes <= pointShadowCubes_) return;
     for (auto target : pointShadowTargets_) device_.destroy(target);
@@ -397,10 +436,7 @@ void Renderer::pointShadowPass() {
             device_.bindPipeline(pointShadowPipeline_);
             device_.bindUniformBuffer(1, pointShadowUniforms_, layer * pointShadowUniformStride_, sizeof u);
             drawPrimitives(true);
-            if (terrainIndexCount_ > 0) {
-                device_.bindPipeline(terrainPointShadowPipeline_);
-                drawTerrain();
-            }
+            drawWorldMeshes(terrainPointShadowPipeline_);
             device_.endPass();
         }
     }
@@ -570,6 +606,20 @@ void Renderer::drawTerrain() {
     ++stats_.draw_calls;
 }
 
+void Renderer::drawWorldMeshes(rhi::PipelineHandle pipeline) {
+    if (terrainIndexCount_ == 0 && meshes_.empty()) return;
+    device_.bindPipeline(pipeline);
+    drawTerrain();
+    for (const auto& entry : meshes_) {
+        device_.bindVertexBuffer(0, entry.vertices, 0);
+        device_.bindIndexBuffer(entry.indices);
+        rhi::DrawIndexed draw;
+        draw.indexCount = entry.indexCount;
+        device_.drawIndexed(draw);
+        ++stats_.draw_calls;
+    }
+}
+
 void Renderer::shadowPass(const Cascades& cascades) {
     for (int i = 0; i < cascades.count; ++i) {
         const auto index = static_cast<size_t>(i);
@@ -585,10 +635,7 @@ void Renderer::shadowPass(const Cascades& cascades) {
         device_.bindPipeline(shadowPipeline_);
         device_.bindUniformBuffer(1, shadowUniforms_, index * shadowUniformStride_, sizeof(glm::mat4));
         drawPrimitives(true);
-        if (terrainIndexCount_ > 0) {
-            device_.bindPipeline(terrainShadowPipeline_);
-            drawTerrain();
-        }
+        drawWorldMeshes(terrainShadowPipeline_);
         device_.endPass();
     }
     stats_.shadow_cascades = cascades.count;
@@ -612,10 +659,7 @@ void Renderer::opaquePass(int width, int height) {
         device_.bindUniformBuffer(2, pointLightUniforms_, 0, sizeof(PointLightUniforms));
     }
     drawPrimitives(false);
-    if (terrainIndexCount_ > 0) {
-        device_.bindPipeline(lighting_.mode == STRATA_LIGHTING_LEGACY ? terrainLegacyPipeline_ : terrainSunPipeline_);
-        drawTerrain();
-    }
+    drawWorldMeshes(lighting_.mode == STRATA_LIGHTING_LEGACY ? terrainLegacyPipeline_ : terrainSunPipeline_);
     device_.endPass();
 }
 

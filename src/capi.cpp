@@ -102,6 +102,11 @@ const int32_t kTerrainTileFields[] = {
     STRATA_OFFSET(StrataTerrainTile, samples_x), STRATA_OFFSET(StrataTerrainTile, samples_z),
     STRATA_OFFSET(StrataTerrainTile, heights),   STRATA_OFFSET(StrataTerrainTile, colors),
     STRATA_OFFSET(StrataTerrainTile, color)};
+const int32_t kMeshFields[] = {
+    STRATA_OFFSET(StrataMesh, positions),    STRATA_OFFSET(StrataMesh, normals),
+    STRATA_OFFSET(StrataMesh, colors),       STRATA_OFFSET(StrataMesh, indices),
+    STRATA_OFFSET(StrataMesh, vertex_count), STRATA_OFFSET(StrataMesh, index_count),
+    STRATA_OFFSET(StrataMesh, color)};
 
 #define STRATA_TABLE(type, fields) \
     FieldTable { static_cast<int32_t>(sizeof(type)), fields, static_cast<int32_t>(sizeof(fields) / sizeof(fields[0])) }
@@ -112,7 +117,7 @@ const FieldTable* fieldTable(int32_t structId) {
         STRATA_TABLE(StrataCamera, kCameraFields),         STRATA_TABLE(StrataLighting, kLightingFields),
         STRATA_TABLE(StrataFrameDesc, kFrameDescFields),   STRATA_TABLE(StrataFrameStats, kFrameStatsFields),
         STRATA_TABLE(StrataEvent, kEventFields),           STRATA_TABLE(StrataPointLight, kPointLightFields),
-        STRATA_TABLE(StrataTerrainTile, kTerrainTileFields)};
+        STRATA_TABLE(StrataTerrainTile, kTerrainTileFields), STRATA_TABLE(StrataMesh, kMeshFields)};
     if (structId < 0 || structId >= static_cast<int32_t>(sizeof tables / sizeof tables[0])) return nullptr;
     return &tables[structId];
 }
@@ -254,6 +259,21 @@ StrataStatus strata_set_point_lights(StrataEngine* engine, const StrataPointLigh
 StrataStatus strata_set_terrain(StrataEngine* engine, const StrataTerrainTile* tile) {
     if (!engine) return invalid("engine is NULL");
     return guard([&] { engine->engine->setTerrain(tile); });
+}
+
+StrataStatus strata_add_mesh(StrataEngine* engine, const StrataMesh* mesh, uint32_t* out_id) {
+    if (!engine || !mesh || !out_id) return invalid("engine, mesh and out_id must not be NULL");
+    return guard([&] { *out_id = engine->engine->addMesh(*mesh); });
+}
+
+StrataStatus strata_remove_mesh(StrataEngine* engine, uint32_t id) {
+    if (!engine) return invalid("engine is NULL");
+    return guard([&] { engine->engine->removeMesh(id); });
+}
+
+StrataStatus strata_clear_meshes(StrataEngine* engine) {
+    if (!engine) return invalid("engine is NULL");
+    return guard([&] { engine->engine->clearMeshes(); });
 }
 
 StrataStatus strata_begin_frame(StrataEngine* engine, const StrataFrameDesc* desc) {

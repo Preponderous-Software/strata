@@ -1,4 +1,4 @@
-// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.3).
+// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.4).
 // Copyright (c) 2026 Daniel McCoy Stephenson. MIT licence; see LICENSE.
 using System;
 using System.IO;
@@ -9,8 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile.</summary>
-        public const uint Minor = 3;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes.</summary>
+        public const uint Minor = 4;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
@@ -20,11 +20,14 @@ namespace Strata.Interop {
         public const int StructRenderItem = 0, StructEngineDesc = 1, StructCamera = 2, StructLighting = 3,
             StructFrameDesc = 4, StructFrameStats = 5, StructEvent = 6,
             StructPointLight = 7,  // ABI 1.1
-            StructTerrainTile = 8; // ABI 1.3
+            StructTerrainTile = 8, // ABI 1.3
+            StructMesh = 9;        // ABI 1.4
 
         public const int MaxPointLights = 32;  // ABI 1.1
         public const uint PointLightCastShadows = 0x1u;  // ABI 1.2
         public const int MaxShadowedPointLights = 4;     // ABI 1.2
+        public const int MaxMeshes = 256;                // ABI 1.4
+        public const int MaxMeshVertices = 16777216;     // ABI 1.4
 
         public const int Ok = 0;
     }
@@ -130,6 +133,18 @@ namespace Strata.Interop {
         public fixed float color[4];
     }
 
+    /// <summary>StrataMesh (ABI 1.4): 56 bytes on 64-bit. The arrays are copied during strata_add_mesh.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct StrataMesh {
+        public float* positions;  // vertex_count xyz, world space
+        public float* normals;    // null (computed), or vertex_count xyz
+        public float* colors;     // null (use color), or vertex_count linear RGB
+        public uint* indices;     // index_count; counter-clockwise seen from outside
+        public int vertex_count;
+        public int index_count;
+        public fixed float color[4];
+    }
+
     public static unsafe class StrataNative {
         public const string Library = "strata";
 
@@ -166,6 +181,12 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_set_point_lights(IntPtr engine, StrataPointLight* lights, int count);
         /// <summary>ABI 1.3. tile null removes the terrain.</summary>
         [DllImport(Library)] public static extern int strata_set_terrain(IntPtr engine, StrataTerrainTile* tile);
+        /// <summary>ABI 1.4. Writes the new mesh's id (never 0).</summary>
+        [DllImport(Library)] public static extern int strata_add_mesh(IntPtr engine, StrataMesh* mesh, uint* id);
+        /// <summary>ABI 1.4.</summary>
+        [DllImport(Library)] public static extern int strata_remove_mesh(IntPtr engine, uint id);
+        /// <summary>ABI 1.4.</summary>
+        [DllImport(Library)] public static extern int strata_clear_meshes(IntPtr engine);
         [DllImport(Library)] public static extern int strata_begin_frame(IntPtr engine, StrataFrameDesc* desc);
         /// <summary>items points at count 44-byte records with the StrataRenderItem layout.</summary>
         [DllImport(Library)] public static extern int strata_submit_primitives(IntPtr engine, void* items, int count);

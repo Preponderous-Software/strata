@@ -1,0 +1,11 @@
+# Static meshes (ABI 1.4): static meshes on a terrain tile in the morning sun with four shadow
+# cascades, fog and sky. Rotated gabled blocks, a hexagonal hall and a road
+# ribbon draped over the slope: geometry the primitives cannot express. The
+# blocks shade their own roofs and throw long shadows across road and ground.
+size 640 360
+camera -36 22 38  2 0 -2  60 0.3 400
+lighting sun 0.32 35  4 2048 150 0.6 1
+clear 0 0 0 1 sky
+include _mesh_town.scene
+item cylinder -15 0.7 -2  0.6 1.5 0.6  0.45 0.30 0.15
+item sphere -15 3.6 -2  3.2 3.2 3.2  0.12 0.40 0.12
