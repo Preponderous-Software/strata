@@ -1,5 +1,5 @@
 {
-  "_source": "CI run 39143289222 (ubuntu:24.04 container, GitHub-hosted runner), strata-save-bench min of reps",
-  "1000": {"save_ms": 27.78, "load_ms": 22.69, "async_stall_ms": 0.031, "delta_bytes": 56436, "peak_rss_mb": 51.2},
-  "10000": {"save_ms": 326.44, "load_ms": 228.92, "async_stall_ms": 0.216, "delta_bytes": 455227, "peak_rss_mb": 186.7}
+  "_source": "CI run 39144373556 (ubuntu:24.04 container, GitHub-hosted runner), strata-save-bench min of 5 reps; timings scale with calib_ms",
+  "1000": {"save_ms": 46.06, "load_ms": 42.28, "async_stall_ms": 0.057, "delta_bytes": 56436, "peak_rss_mb": 52.0, "calib_ms": 126.09},
+  "10000": {"save_ms": 570.95, "load_ms": 420.77, "async_stall_ms": 0.494, "delta_bytes": 454436, "peak_rss_mb": 190.3, "calib_ms": 125.88}
 }
