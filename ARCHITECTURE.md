@@ -1,0 +1,158 @@
+# Architecture
+
+Strata follows RFC 0020 (*Shared C++ 3D Engine*). This document describes what
+is built now. Where the RFC plans more, that is called out as **later**.
+
+```text
+  C++ game ──> strata.hpp (strata::Engine)         C# game ──> strata.h (C ABI, versioned)
+                     │                                             │  (capi.cpp: a thin shim)
+                     └──────────────────────┬──────────────────────┘
+                                            v
+  platform/            rhi/                 render/                     image/
+  Surface: SDL3        GpuDevice: GL 4.5    Renderer + fixed pass list  PNG I/O, Delta E
+  window, EGL          DSA backend          primitives, sun, cascades   comparison
+  headless, host ctx
+```
+
+## Layers
+
+| Directory | What it owns | Touches GL? |
+|---|---|---|
+| `include/strata/` | The public C ABI (`strata.h`) and C++ API (`strata.hpp`) | no |
+| `src/capi.cpp` | The C shim: argument checks, exception to status, thread-local error text, the struct layout tables | no |
+| `src/engine.cpp` | `strata::Engine`: creates the surface, loads GL with glad, owns the device and the renderer | only to load it |
+| `src/platform/` | `Surface` and its three implementations: `SdlSurface`, `EglSurface`, `HostSurface` | context creation only |
+| `src/rhi/` | `GpuDevice`, the interface the passes draw through, and its GL 4.5 DSA backend | **yes, only here** |
+| `src/render/` | Primitive meshes, sun and sky model, cascade maths, pass list, `Renderer` | no: draws through `GpuDevice` |
+| `src/image/` | PNG reading and writing (stb), golden-image comparison | no |
+| `tools/` | `strata-golden`, `strata-imgcmp`, the scene-file parser | no |
+
+`render/` never calls GL directly. Everything goes through `GpuDevice`, so a
+later backend would not mean rewriting the passes. Strata does **not** promise
+to write one.
+
+## The C ABI
+
+- **Versioned.** `STRATA_ABI_VERSION` is 1. A host passes the version it was
+  built against in `StrataEngineDesc.abi_version`, and also passes
+  `struct_size`. `strata_create` refuses a mismatch with
+  `STRATA_ERROR_ABI_MISMATCH`.
+- **Layouts are checkable.** `strata_struct_size(id)` and
+  `strata_struct_field_offset(id, field)` report every boundary struct. The C++
+  unit tests `static_assert` the layouts. The C# tests
+  (`tests/csharp/Strata.Interop.Tests`) assert `Unsafe.SizeOf` and
+  `Marshal.OffsetOf` against them. A field added on one side therefore fails a
+  test; it cannot silently corrupt the other side.
+- **`StrataRenderItem` is Beyond Nations' `RenderItem`.** It is 44 bytes: an
+  `int32` kind, a `float[3]` position, a `float[3]` scale and a `float[4]`
+  colour. The primitive kind values match BN's `PrimitiveKind`. A BN snapshot
+  list crosses as a raw pointer, with zero copies on the C# side.
+- **No exceptions cross the boundary.** Every entry point returns a
+  `StrataStatus`. `strata_last_error()` gives thread-local text for the last
+  failure.
+- **Main thread only.** The engine never calls the host back, apart from the
+  optional log sink.
+- **Coarse calls.** A frame is `begin_frame`, one or more
+  `submit_primitives`, `end_frame` and `present`. The cost of crossing is per
+  call, not per item.
+
+## Surfaces
+
+| Surface | Context from | Draws into | Used by |
+|---|---|---|---|
+| `STRATA_SURFACE_WINDOW` | SDL3 (`SDL_GL_CreateContext`, 4.5 core) | the window's back buffer | games; CI's Xvfb check |
+| `STRATA_SURFACE_HEADLESS` | EGL. Display: `EGL_MESA_platform_surfaceless`, else `EGL_EXT_platform_device`, else default; no surface | an offscreen RGBA8 + depth target | golden images, CI |
+| `STRATA_SURFACE_HOST_CONTEXT` | whatever is current; GL loaded through the host's `get_proc_address` | the host's bound framebuffer | Beyond Nations phase B1 (inside Silk.NET's window) |
+
+On platforms without EGL (Windows), a headless request falls back to a hidden
+SDL3 window.
+
+A host-context engine records the GL state it is about to change: program,
+VAO, framebuffers, viewport, depth/cull/blend/scissor/offset/clamp enables,
+masks, and texture and uniform-buffer bindings on units 0–1. It restores them
+after each frame and readback, so the host's own renderers (ImGui, labels)
+keep working.
+
+## The frame
+
+A **fixed, ordered pass list**, not a frame graph (`src/render/pass_list.cpp`).
+Each pass declares what it reads and writes. `validatePassOrder` checks at
+start-up that every read has an earlier writer. With `STRATA_LOG_DEBUG=1` set,
+the list is logged:
+
+```text
+shadow:   instances, camera, lighting -> shadow_map
+opaque:   instances, camera, lighting, shadow_map -> color, depth
+sky:      camera, lighting, depth -> color
+readback: color -> pixels
+```
+
+**Later** passes slot into this list: depth pre-pass, transparent and labels,
+post (tonemap) and UI.
+
+**Instances.** `submit_primitives` partitions items by kind as they arrive. At
+`end_frame` the four ranges go into one instance buffer, back to back. The
+vertex shader reads `StrataRenderItem` fields in place (offsets 4, 16 and 28),
+so the engine never builds model matrices. Each kind is then one
+`glDrawElementsInstancedBaseVertexBaseInstance` from a shared vertex and index
+buffer. A frame of primitives is at most four draws per pass. Items with an
+out-of-range kind are skipped and counted in `items_rejected`.
+
+**Primitives.** `src/render/primitive_mesh.cpp` is a line-for-line port of BN's
+`PrimitiveMesh.cs`. It keeps BN's tessellation (sphere and capsule 16 × 24,
+cylinder 24), its vertex order and winding, and Unity's dimensions (cylinder
+and capsule 2 units tall).
+
+## Lighting
+
+### `STRATA_LIGHTING_LEGACY`
+
+This is BN's `PrimitiveRenderer` model, term for term: `light = ambient + (1 −
+ambient) · max(n · −dir, 0)`, with no shadows and no fog. The vertex maths is
+also BN's (normal divided by the squared scale; `projection · view · world`).
+It exists so the native renderer can be compared image-for-image with BN's own
+renderer. The C# harness reproduces the C++ golden with zero differing pixels.
+
+### `STRATA_LIGHTING_SUN` (L1–L2)
+
+- **The game owns time.** The host passes `time_of_day` ∈ [0,1) and a latitude,
+  and Strata only evaluates them (`src/render/sun.cpp`). World axes are +Y up,
+  +X east and +Z south. The sun follows an equinox path: it rises due east at
+  0.25, is highest at 0.5 and sets due west at 0.75.
+- **Key light.** By day it is the sun: warm when low, white when high. At night
+  it is a dim, bluish **moon** that casts **no shadows**. Shadow strength fades
+  in from a sun elevation of about 2° to 7°, so the sun casts no long,
+  flickering shadows at the horizon.
+- **Cascaded shadow maps** (`src/render/cascades.cpp`):
+  - 1–4 cascades in one `GL_TEXTURE_2D_ARRAY` of `DEPTH_COMPONENT32F`, with
+    2048² per cascade by default.
+  - Practical split scheme: λ = 0.6, from the near plane to `shadow_distance`.
+  - Each cascade fits a **bounding sphere** of its frustum slice, so its size
+    is constant as the camera turns. The radius is quantised to 1/16 unit.
+  - The centre is snapped to whole shadow texels in a light space that rotates
+    only with the light, so shadows do not shimmer as the camera moves.
+  - Slope-scaled depth bias (`glPolygonOffset`), a normal offset of 1.5 texels,
+    depth clamp in the shadow pass, and 3×3 hardware PCF
+    (`sampler2DArrayShadow`).
+  - Each cascade blends into the next across its last 10%. The last cascade
+    fades out to unshadowed.
+- **Ambient and sky.** Hemisphere ambient (sky colour above, ground colour
+  below), distance fog to the horizon colour, and an analytic sky gradient with
+  a sun disc and glow (`STRATA_CLEAR_SKY`). Sky, ambient, fog and light colour
+  all come from the same time-of-day curve.
+- **L1** is the same path with `cascade_count = 1`.
+
+**Later:** point lights (L3) and shadowed point lights (L4).
+
+## Optional modules
+
+Engine modules that pull in heavy dependencies live under `modules/<name>/`,
+are **off by default**, and link `strata_static`. `STRATA_WITH_USD` builds
+`modules/usd` and `modules/save` when they exist. Jobs that leave it off never
+fetch or build OpenUSD.
+
+## Threading and errors
+
+The API is main-thread only, and the GL context lives on that thread.
+Internally, C++ code throws `strata::Error(status, message)`. The C shim
+catches it and returns the status. The C++ API lets it propagate.

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    P/Invoke declarations for Strata's C ABI (include/strata/strata.h).
+    Every struct here is [StructLayout(Sequential)] and blittable, and
+    Strata.Interop.Tests asserts each one's size and field offsets against
+    the native library before anything trusts them.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>Strata.Interop</RootNamespace>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

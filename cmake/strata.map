@@ -1,0 +1,9 @@
+/* Export only the C ABI from libstrata. Everything else -- SDL, glad, C++
+   internals, and any libstdc++ helpers a toolchain links in statically --
+   stays local. */
+{
+    global:
+        strata_*;
+    local:
+        *;
+};

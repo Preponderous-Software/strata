@@ -1,0 +1,7 @@
+# L2: the sun at noon (time of day 0.50) with four stabilised shadow cascades,
+# hemisphere ambient, fog and the analytic sky.
+size 640 360
+camera -48 22 46  4 0 -6  60 0.3 400
+lighting sun 0.50 35  4 2048 150 0.6 1
+clear 0 0 0 1 sky
+include _village_items.scene

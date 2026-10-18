@@ -1,0 +1,183 @@
+#include <glad/gl.h>
+
+#include <chrono>
+#include <cmath>
+#include <cstring>
+
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
+#include "core/error.hpp"
+#include "core/log.hpp"
+#include "image/image.hpp"
+#include "platform/surface.hpp"
+#include "render/renderer.hpp"
+#include "rhi/gpu_device.hpp"
+#include "strata/strata.hpp"
+
+namespace strata {
+namespace {
+
+GLADapiproc loadThroughSurface(void* user, const char* name) {
+    auto* surface = static_cast<platform::Surface*>(user);
+    return reinterpret_cast<GLADapiproc>(surface->procAddress(name));
+}
+
+}  // namespace
+
+struct Engine::Impl {
+    EngineDesc desc;
+    std::unique_ptr<platform::Surface> surface;
+    std::unique_ptr<rhi::GpuDevice> device;
+    std::unique_ptr<render::Renderer> renderer;
+    std::string gpuDescription;
+    StrataFrameStats stats{};
+
+    ~Impl() {
+        // GL objects go before the context that owns them.
+        renderer.reset();
+        device.reset();
+        surface.reset();
+    }
+};
+
+std::unique_ptr<Engine> Engine::create(const EngineDesc& desc) {
+    if (desc.width <= 0 || desc.height <= 0 || desc.width > 16384 || desc.height > 16384) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "drawable size must be 1..16384 on each side (got %dx%d)", desc.width,
+             desc.height);
+    }
+    auto impl = std::make_unique<Impl>();
+    impl->desc = desc;
+
+    StrataEngineDesc raw{};
+    raw.struct_size = sizeof raw;
+    raw.abi_version = STRATA_ABI_VERSION;
+    raw.surface = desc.surface;
+    raw.width = desc.width;
+    raw.height = desc.height;
+    raw.flags = desc.flags;
+    raw.title = desc.title.c_str();
+    raw.get_proc_address = desc.getProcAddress;
+    raw.get_proc_address_user = desc.getProcAddressUser;
+    impl->surface = platform::createSurface(raw);
+
+    const int version = gladLoadGLUserPtr(loadThroughSurface, impl->surface.get());
+    if (version == 0) {
+        fail(STRATA_ERROR_GPU, "could not load OpenGL entry points through the %s surface", impl->surface->kind());
+    }
+    const int major = GLAD_VERSION_MAJOR(version), minor = GLAD_VERSION_MINOR(version);
+    if (major < 4 || (major == 4 && minor < 5)) {
+        fail(STRATA_ERROR_GPU, "Strata needs OpenGL 4.5 core; this context is %d.%d", major, minor);
+    }
+
+    impl->device = rhi::createGl45Device((desc.flags & STRATA_FLAG_DEBUG_CONTEXT) != 0);
+    impl->gpuDescription = impl->device->description();
+    logf(LogLevel::Info, "%s surface, GL %d.%d: %s", impl->surface->kind(), major, minor, impl->gpuDescription.c_str());
+    impl->renderer = std::make_unique<render::Renderer>(*impl->device, *impl->surface);
+    return std::unique_ptr<Engine>(new Engine(std::move(impl)));
+}
+
+Engine::Engine(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+Engine::~Engine() = default;
+
+const std::string& Engine::gpuDescription() const { return impl_->gpuDescription; }
+
+bool Engine::pollEvent(StrataEvent& out) { return impl_->surface->pollEvent(out); }
+
+void Engine::drawableSize(int32_t& width, int32_t& height) const {
+    int w = 0, h = 0;
+    impl_->surface->drawableSize(w, h);
+    width = w;
+    height = h;
+}
+
+void Engine::resize(int32_t width, int32_t height) {
+    if (width < 0 || height < 0 || width > 16384 || height > 16384) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "drawable size must be 0..16384 on each side (got %dx%d)", width, height);
+    }
+    impl_->surface->resize(width, height);
+}
+
+void Engine::setCamera(const StrataCamera& camera) { impl_->renderer->setCamera(camera); }
+void Engine::setLighting(const StrataLighting& lighting) { impl_->renderer->setLighting(lighting); }
+void Engine::beginFrame(const StrataFrameDesc& desc) { impl_->renderer->beginFrame(desc); }
+
+void Engine::submitPrimitives(const StrataRenderItem* items, size_t count) {
+    if (count > 0 && items == nullptr) fail(STRATA_ERROR_INVALID_ARGUMENT, "items is NULL with a non-zero count");
+    impl_->renderer->submit(items, count);
+}
+
+void Engine::endFrame() {
+    impl_->renderer->endFrame();
+    impl_->stats = impl_->renderer->stats();
+    if (impl_->desc.flags & STRATA_FLAG_GPU_TIMING) {
+        const auto start = std::chrono::steady_clock::now();
+        impl_->device->finish();
+        impl_->stats.gpu_finish_ms =
+            std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count();
+    }
+}
+
+void Engine::present() { impl_->surface->present(); }
+
+const StrataFrameStats& Engine::frameStats() const { return impl_->stats; }
+
+void Engine::readPixels(std::vector<uint8_t>& rgba, int32_t& width, int32_t& height) {
+    int w = 0, h = 0;
+    impl_->renderer->readPixels(rgba, w, h);
+    width = w;
+    height = h;
+}
+
+void Engine::saveScreenshotPng(const std::string& path) {
+    std::vector<uint8_t> rgba;
+    int32_t width = 0, height = 0;
+    readPixels(rgba, width, height);
+    image::Image img;
+    img.width = width;
+    img.height = height;
+    img.rgba = std::move(rgba);
+    // Screenshots are opaque: alpha would only carry whatever the clear left.
+    for (size_t i = 3; i < img.rgba.size(); i += 4) img.rgba[i] = 255;
+    std::string error;
+    if (!image::writePng(path, img, &error)) {
+        fail(STRATA_ERROR_IO, "could not write %s: %s", path.c_str(), error.c_str());
+    }
+}
+
+StrataLighting lightingDefaults(int32_t mode) {
+    StrataLighting l{};
+    l.mode = mode;
+    // BN's PrimitiveRenderer: LightDirection = normalize(-0.35, -0.85, -0.4), Ambient = 0.35.
+    const glm::vec3 d = glm::normalize(glm::vec3(-0.35f, -0.85f, -0.4f));
+    l.legacy_direction[0] = d.x;
+    l.legacy_direction[1] = d.y;
+    l.legacy_direction[2] = d.z;
+    l.legacy_ambient = 0.35f;
+    l.time_of_day = 0.4f;
+    l.latitude_degrees = 35.0f;
+    l.cascade_count = 4;
+    l.shadow_map_size = 2048;
+    l.shadow_distance = 150.0f;
+    l.split_lambda = 0.6f;
+    l.fog = 1;
+    return l;
+}
+
+StrataCamera cameraLookAt(const float eye[3], const float target[3], const float up[3], float fovYDegrees,
+                          float aspect, float nearPlane, float farPlane) {
+    StrataCamera c{};
+    const glm::vec3 e(eye[0], eye[1], eye[2]);
+    const glm::mat4 view = glm::lookAt(e, glm::vec3(target[0], target[1], target[2]), glm::vec3(up[0], up[1], up[2]));
+    const glm::mat4 projection = glm::perspective(glm::radians(fovYDegrees), aspect, nearPlane, farPlane);
+    std::memcpy(c.view, glm::value_ptr(view), sizeof c.view);
+    std::memcpy(c.projection, glm::value_ptr(projection), sizeof c.projection);
+    c.eye[0] = e.x;
+    c.eye[1] = e.y;
+    c.eye[2] = e.z;
+    c.near_plane = nearPlane;
+    c.far_plane = farPlane;
+    return c;
+}
+
+}  // namespace strata

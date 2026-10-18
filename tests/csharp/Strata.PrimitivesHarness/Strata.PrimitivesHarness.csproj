@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The skeleton milestone's exit criterion: Beyond Nations' primitives drawn
+    from C# through the C ABI. Reads a scene file, builds an array of structs
+    shaped exactly like BN's RenderItem, hands Strata a pointer to it with no
+    conversion, and writes the frame to a PNG for golden comparison.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../bindings/csharp/Strata.Interop/Strata.Interop.csproj" />
+  </ItemGroup>
+</Project>

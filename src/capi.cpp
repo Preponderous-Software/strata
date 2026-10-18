@@ -1,0 +1,285 @@
+// The C ABI: a thin shim over strata::Engine.
+//
+// Every entry point validates its pointers, catches every exception and turns
+// it into a status code plus thread-local error text. Nothing throws across
+// this boundary and nothing here holds on to a caller's pointer.
+#include <cstddef>
+#include <cstring>
+#include <exception>
+#include <new>
+#include <string>
+
+#include "core/error.hpp"
+#include "core/log.hpp"
+#include "strata/strata.h"
+#include "strata/strata.hpp"
+
+#ifndef STRATA_VERSION_STRING
+#define STRATA_VERSION_STRING "0.0.0"
+#endif
+
+struct StrataEngine {
+    std::unique_ptr<strata::Engine> engine;
+};
+
+namespace {
+
+thread_local std::string t_lastError;
+
+void setError(const std::string& message) { t_lastError = message; }
+
+template <typename Fn>
+StrataStatus guard(Fn&& fn) {
+    try {
+        fn();
+        return STRATA_OK;
+    } catch (const strata::Error& e) {
+        setError(e.what());
+        return e.status();
+    } catch (const std::bad_alloc&) {
+        setError("out of memory");
+        return STRATA_ERROR_INTERNAL;
+    } catch (const std::exception& e) {
+        setError(e.what());
+        return STRATA_ERROR_INTERNAL;
+    } catch (...) {
+        setError("unknown internal error");
+        return STRATA_ERROR_INTERNAL;
+    }
+}
+
+StrataStatus invalid(const char* message) {
+    setError(message);
+    return STRATA_ERROR_INVALID_ARGUMENT;
+}
+
+// One table drives both strata_struct_size and strata_struct_field_offset.
+struct FieldTable {
+    int32_t size;
+    const int32_t* offsets;
+    int32_t count;
+};
+
+#define STRATA_OFFSET(type, field) static_cast<int32_t>(offsetof(type, field))
+
+const int32_t kRenderItemFields[] = {
+    STRATA_OFFSET(StrataRenderItem, kind), STRATA_OFFSET(StrataRenderItem, position),
+    STRATA_OFFSET(StrataRenderItem, scale), STRATA_OFFSET(StrataRenderItem, color)};
+const int32_t kEngineDescFields[] = {
+    STRATA_OFFSET(StrataEngineDesc, struct_size), STRATA_OFFSET(StrataEngineDesc, abi_version),
+    STRATA_OFFSET(StrataEngineDesc, surface),     STRATA_OFFSET(StrataEngineDesc, width),
+    STRATA_OFFSET(StrataEngineDesc, height),      STRATA_OFFSET(StrataEngineDesc, flags),
+    STRATA_OFFSET(StrataEngineDesc, title),       STRATA_OFFSET(StrataEngineDesc, get_proc_address),
+    STRATA_OFFSET(StrataEngineDesc, get_proc_address_user)};
+const int32_t kCameraFields[] = {STRATA_OFFSET(StrataCamera, view), STRATA_OFFSET(StrataCamera, projection),
+                                 STRATA_OFFSET(StrataCamera, eye), STRATA_OFFSET(StrataCamera, near_plane),
+                                 STRATA_OFFSET(StrataCamera, far_plane)};
+const int32_t kLightingFields[] = {
+    STRATA_OFFSET(StrataLighting, mode),           STRATA_OFFSET(StrataLighting, legacy_direction),
+    STRATA_OFFSET(StrataLighting, legacy_ambient), STRATA_OFFSET(StrataLighting, time_of_day),
+    STRATA_OFFSET(StrataLighting, latitude_degrees), STRATA_OFFSET(StrataLighting, cascade_count),
+    STRATA_OFFSET(StrataLighting, shadow_map_size), STRATA_OFFSET(StrataLighting, shadow_distance),
+    STRATA_OFFSET(StrataLighting, split_lambda),   STRATA_OFFSET(StrataLighting, fog)};
+const int32_t kFrameDescFields[] = {STRATA_OFFSET(StrataFrameDesc, clear_flags),
+                                    STRATA_OFFSET(StrataFrameDesc, clear_color)};
+const int32_t kFrameStatsFields[] = {
+    STRATA_OFFSET(StrataFrameStats, draw_calls),      STRATA_OFFSET(StrataFrameStats, instances),
+    STRATA_OFFSET(StrataFrameStats, instances_per_kind), STRATA_OFFSET(StrataFrameStats, items_rejected),
+    STRATA_OFFSET(StrataFrameStats, shadow_cascades), STRATA_OFFSET(StrataFrameStats, cpu_ms_shadow),
+    STRATA_OFFSET(StrataFrameStats, cpu_ms_opaque),   STRATA_OFFSET(StrataFrameStats, cpu_ms_sky),
+    STRATA_OFFSET(StrataFrameStats, cpu_ms_frame),    STRATA_OFFSET(StrataFrameStats, gpu_finish_ms)};
+const int32_t kEventFields[] = {
+    STRATA_OFFSET(StrataEvent, type),   STRATA_OFFSET(StrataEvent, scancode), STRATA_OFFSET(StrataEvent, modifiers),
+    STRATA_OFFSET(StrataEvent, repeat), STRATA_OFFSET(StrataEvent, button),   STRATA_OFFSET(StrataEvent, width),
+    STRATA_OFFSET(StrataEvent, height), STRATA_OFFSET(StrataEvent, x),        STRATA_OFFSET(StrataEvent, y),
+    STRATA_OFFSET(StrataEvent, dx),     STRATA_OFFSET(StrataEvent, dy),       STRATA_OFFSET(StrataEvent, text)};
+
+#define STRATA_TABLE(type, fields) \
+    FieldTable { static_cast<int32_t>(sizeof(type)), fields, static_cast<int32_t>(sizeof(fields) / sizeof(fields[0])) }
+
+const FieldTable* fieldTable(int32_t structId) {
+    static const FieldTable tables[] = {
+        STRATA_TABLE(StrataRenderItem, kRenderItemFields), STRATA_TABLE(StrataEngineDesc, kEngineDescFields),
+        STRATA_TABLE(StrataCamera, kCameraFields),         STRATA_TABLE(StrataLighting, kLightingFields),
+        STRATA_TABLE(StrataFrameDesc, kFrameDescFields),   STRATA_TABLE(StrataFrameStats, kFrameStatsFields),
+        STRATA_TABLE(StrataEvent, kEventFields)};
+    if (structId < 0 || structId >= static_cast<int32_t>(sizeof tables / sizeof tables[0])) return nullptr;
+    return &tables[structId];
+}
+
+}  // namespace
+
+extern "C" {
+
+uint32_t strata_abi_version(void) { return STRATA_ABI_VERSION; }
+
+const char* strata_version_string(void) { return STRATA_VERSION_STRING; }
+
+int32_t strata_struct_size(int32_t struct_id) {
+    const FieldTable* table = fieldTable(struct_id);
+    return table ? table->size : -1;
+}
+
+int32_t strata_struct_field_offset(int32_t struct_id, int32_t field_id) {
+    const FieldTable* table = fieldTable(struct_id);
+    if (!table || field_id < 0 || field_id >= table->count) return -1;
+    return table->offsets[field_id];
+}
+
+const char* strata_last_error(void) { return t_lastError.c_str(); }
+
+const char* strata_status_string(StrataStatus status) {
+    switch (status) {
+        case STRATA_OK: return "ok";
+        case STRATA_ERROR_INVALID_ARGUMENT: return "invalid argument";
+        case STRATA_ERROR_ABI_MISMATCH: return "ABI mismatch";
+        case STRATA_ERROR_PLATFORM: return "platform error";
+        case STRATA_ERROR_GPU: return "GPU error";
+        case STRATA_ERROR_IO: return "I/O error";
+        case STRATA_ERROR_INVALID_STATE: return "invalid state";
+        case STRATA_ERROR_UNSUPPORTED: return "unsupported";
+        case STRATA_ERROR_INTERNAL: return "internal error";
+        default: return "unknown status";
+    }
+}
+
+void strata_set_log_callback(StrataLogFn fn, void* user) { strata::setLogSink(fn, user); }
+
+StrataStatus strata_create(const StrataEngineDesc* desc, StrataEngine** out_engine) {
+    if (!out_engine) return invalid("out_engine is NULL");
+    *out_engine = nullptr;
+    if (!desc) return invalid("desc is NULL");
+    if (desc->abi_version != STRATA_ABI_VERSION) {
+        setError("the host was built against Strata ABI " + std::to_string(desc->abi_version) +
+                 " but this library implements ABI " + std::to_string(STRATA_ABI_VERSION));
+        return STRATA_ERROR_ABI_MISMATCH;
+    }
+    if (desc->struct_size != sizeof(StrataEngineDesc)) {
+        setError("StrataEngineDesc.struct_size is " + std::to_string(desc->struct_size) + ", expected " +
+                 std::to_string(sizeof(StrataEngineDesc)));
+        return STRATA_ERROR_ABI_MISMATCH;
+    }
+    return guard([&] {
+        strata::EngineDesc d;
+        d.surface = desc->surface;
+        d.width = desc->width;
+        d.height = desc->height;
+        d.flags = desc->flags;
+        d.title = desc->title ? desc->title : "Strata";
+        d.getProcAddress = desc->get_proc_address;
+        d.getProcAddressUser = desc->get_proc_address_user;
+        auto handle = std::make_unique<StrataEngine>();
+        handle->engine = strata::Engine::create(d);
+        *out_engine = handle.release();
+    });
+}
+
+void strata_destroy(StrataEngine* engine) {
+    if (!engine) return;
+    try {
+        delete engine;
+    } catch (...) {
+        // A destructor that throws has nowhere to report to; swallow it rather
+        // than take the host down.
+    }
+}
+
+const char* strata_gpu_description(const StrataEngine* engine) {
+    if (!engine) return "";
+    return engine->engine->gpuDescription().c_str();
+}
+
+int32_t strata_poll_event(StrataEngine* engine, StrataEvent* out) {
+    if (!engine || !out) return 0;
+    int32_t result = 0;
+    guard([&] { result = engine->engine->pollEvent(*out) ? 1 : 0; });
+    return result;
+}
+
+StrataStatus strata_get_drawable_size(const StrataEngine* engine, int32_t* width, int32_t* height) {
+    if (!engine || !width || !height) return invalid("engine, width and height must not be NULL");
+    return guard([&] { engine->engine->drawableSize(*width, *height); });
+}
+
+StrataStatus strata_resize(StrataEngine* engine, int32_t width, int32_t height) {
+    if (!engine) return invalid("engine is NULL");
+    return guard([&] { engine->engine->resize(width, height); });
+}
+
+StrataStatus strata_set_camera(StrataEngine* engine, const StrataCamera* camera) {
+    if (!engine || !camera) return invalid("engine and camera must not be NULL");
+    return guard([&] { engine->engine->setCamera(*camera); });
+}
+
+StrataStatus strata_camera_look_at(const float eye[3], const float target[3], const float up[3], float fov_y_degrees,
+                                   float aspect, float near_plane, float far_plane, StrataCamera* out) {
+    if (!eye || !target || !up || !out) return invalid("eye, target, up and out must not be NULL");
+    if (!(fov_y_degrees > 0.0f && fov_y_degrees < 180.0f) || !(aspect > 0.0f) || !(near_plane > 0.0f) ||
+        !(far_plane > near_plane)) {
+        return invalid("need 0 < fov < 180, aspect > 0 and 0 < near < far");
+    }
+    return guard([&] { *out = strata::cameraLookAt(eye, target, up, fov_y_degrees, aspect, near_plane, far_plane); });
+}
+
+StrataStatus strata_lighting_defaults(int32_t mode, StrataLighting* out) {
+    if (!out) return invalid("out is NULL");
+    if (mode != STRATA_LIGHTING_LEGACY && mode != STRATA_LIGHTING_SUN) return invalid("unknown lighting mode");
+    return guard([&] { *out = strata::lightingDefaults(mode); });
+}
+
+StrataStatus strata_set_lighting(StrataEngine* engine, const StrataLighting* lighting) {
+    if (!engine || !lighting) return invalid("engine and lighting must not be NULL");
+    return guard([&] { engine->engine->setLighting(*lighting); });
+}
+
+StrataStatus strata_begin_frame(StrataEngine* engine, const StrataFrameDesc* desc) {
+    if (!engine || !desc) return invalid("engine and desc must not be NULL");
+    return guard([&] { engine->engine->beginFrame(*desc); });
+}
+
+StrataStatus strata_submit_primitives(StrataEngine* engine, const StrataRenderItem* items, int32_t count) {
+    if (!engine) return invalid("engine is NULL");
+    if (count < 0) return invalid("count is negative");
+    if (count > 0 && !items) return invalid("items is NULL with a non-zero count");
+    return guard([&] { engine->engine->submitPrimitives(items, static_cast<size_t>(count)); });
+}
+
+StrataStatus strata_end_frame(StrataEngine* engine) {
+    if (!engine) return invalid("engine is NULL");
+    return guard([&] { engine->engine->endFrame(); });
+}
+
+StrataStatus strata_present(StrataEngine* engine) {
+    if (!engine) return invalid("engine is NULL");
+    return guard([&] { engine->engine->present(); });
+}
+
+StrataStatus strata_get_frame_stats(const StrataEngine* engine, StrataFrameStats* out) {
+    if (!engine || !out) return invalid("engine and out must not be NULL");
+    *out = engine->engine->frameStats();
+    return STRATA_OK;
+}
+
+StrataStatus strata_read_pixels_rgba8(StrataEngine* engine, uint8_t* dst, int32_t capacity_bytes, int32_t* out_width,
+                                      int32_t* out_height) {
+    if (!engine || !dst || !out_width || !out_height) return invalid("engine, dst, out_width and out_height must not be NULL");
+    return guard([&] {
+        std::vector<uint8_t> rgba;
+        int32_t width = 0, height = 0;
+        engine->engine->readPixels(rgba, width, height);
+        if (capacity_bytes < 0 || rgba.size() > static_cast<size_t>(capacity_bytes)) {
+            strata::fail(STRATA_ERROR_INVALID_ARGUMENT, "dst holds %d bytes but the frame needs %zu", capacity_bytes,
+                         rgba.size());
+        }
+        std::memcpy(dst, rgba.data(), rgba.size());
+        *out_width = width;
+        *out_height = height;
+    });
+}
+
+StrataStatus strata_save_screenshot_png(StrataEngine* engine, const char* utf8_path) {
+    if (!engine || !utf8_path || !*utf8_path) return invalid("engine and a non-empty path are required");
+    return guard([&] { engine->engine->saveScreenshotPng(utf8_path); });
+}
+
+}  // extern "C"
