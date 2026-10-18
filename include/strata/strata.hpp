@@ -74,6 +74,13 @@ public:
     // Removes one mesh; throws INVALID_ARGUMENT for an unknown id.
     void removeMesh(uint32_t id);
     void clearMeshes();
+    // ABI 1.7. Textures (RGBA8, copied; STRATA_TEXTURE_* flags), textured
+    // meshes and per-mesh model matrices (16 floats, column-major; nullptr
+    // restores the identity).
+    uint32_t createTextureRgba8(int32_t width, int32_t height, const uint8_t* rgba, uint32_t flags);
+    void destroyTexture(uint32_t id);
+    uint32_t addTexturedMesh(const StrataTexturedMesh& mesh);
+    void setMeshTransform(uint32_t id, const float* model);
 
     void beginFrame(const StrataFrameDesc& desc);
     void submitPrimitives(const StrataRenderItem* items, size_t count);

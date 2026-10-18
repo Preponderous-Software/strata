@@ -121,6 +121,10 @@ const int32_t kSolarPositionFields[] = {
     STRATA_OFFSET(StrataSolarPosition, hour_angle_degrees),
     STRATA_OFFSET(StrataSolarPosition, equation_of_time_minutes)};
 
+const int32_t kTexturedMeshFields[] = {STRATA_OFFSET(StrataTexturedMesh, mesh), STRATA_OFFSET(StrataTexturedMesh, uvs),
+                                       STRATA_OFFSET(StrataTexturedMesh, texture),
+                                       STRATA_OFFSET(StrataTexturedMesh, flags)};
+
 #define STRATA_TABLE(type, fields) \
     FieldTable { static_cast<int32_t>(sizeof(type)), fields, static_cast<int32_t>(sizeof(fields) / sizeof(fields[0])) }
 
@@ -132,7 +136,8 @@ const FieldTable* fieldTable(int32_t structId) {
         STRATA_TABLE(StrataEvent, kEventFields),           STRATA_TABLE(StrataPointLight, kPointLightFields),
         STRATA_TABLE(StrataTerrainTile, kTerrainTileFields), STRATA_TABLE(StrataMesh, kMeshFields),
         STRATA_TABLE(StrataLineVertex, kLineVertexFields), STRATA_TABLE(StrataPoint, kPointFields),
-        STRATA_TABLE(StrataText, kTextFields),             STRATA_TABLE(StrataSolarPosition, kSolarPositionFields)};
+        STRATA_TABLE(StrataText, kTextFields),             STRATA_TABLE(StrataSolarPosition, kSolarPositionFields),
+        STRATA_TABLE(StrataTexturedMesh, kTexturedMeshFields)};
     if (structId < 0 || structId >= static_cast<int32_t>(sizeof tables / sizeof tables[0])) return nullptr;
     return &tables[structId];
 }
@@ -292,6 +297,27 @@ StrataStatus strata_set_terrain(StrataEngine* engine, const StrataTerrainTile* t
 StrataStatus strata_add_mesh(StrataEngine* engine, const StrataMesh* mesh, uint32_t* out_id) {
     if (!engine || !mesh || !out_id) return invalid("engine, mesh and out_id must not be NULL");
     return guard([&] { *out_id = engine->engine->addMesh(*mesh); });
+}
+
+StrataStatus strata_add_textured_mesh(StrataEngine* engine, const StrataTexturedMesh* mesh, uint32_t* out_id) {
+    if (!engine || !mesh || !out_id) return invalid("engine, mesh and out_id must not be NULL");
+    return guard([&] { *out_id = engine->engine->addTexturedMesh(*mesh); });
+}
+
+StrataStatus strata_set_mesh_transform(StrataEngine* engine, uint32_t id, const float model[16]) {
+    if (!engine) return invalid("engine must not be NULL");
+    return guard([&] { engine->engine->setMeshTransform(id, model); });
+}
+
+StrataStatus strata_create_texture_rgba8(StrataEngine* engine, int32_t width, int32_t height, const uint8_t* rgba,
+                                         uint32_t flags, uint32_t* out_id) {
+    if (!engine || !rgba || !out_id) return invalid("engine, rgba and out_id must not be NULL");
+    return guard([&] { *out_id = engine->engine->createTextureRgba8(width, height, rgba, flags); });
+}
+
+StrataStatus strata_destroy_texture(StrataEngine* engine, uint32_t id) {
+    if (!engine) return invalid("engine must not be NULL");
+    return guard([&] { engine->engine->destroyTexture(id); });
 }
 
 StrataStatus strata_remove_mesh(StrataEngine* engine, uint32_t id) {

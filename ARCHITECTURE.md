@@ -231,7 +231,8 @@ work.
 - `strata_add_mesh` takes one `StrataMesh`: world-space positions, optional
   normals, optional linear RGB colour per vertex (else one colour for the
   mesh) and 32-bit triangle indices. The engine validates it, builds the
-  terrain's vertex format (`src/render/static_mesh.cpp`) and copies it into
+  mesh vertex format (the terrain's position, normal and colour plus a uv
+  since ABI 1.7; `src/render/static_mesh.cpp`) and copies it into
   GPU buffers; the host's arrays are not kept. It returns an id (never 0, not
   reused); `strata_remove_mesh(id)` and `strata_clear_meshes` free them. At
   most `STRATA_MAX_MESHES` (256) at once, each up to 2^24 vertices.
@@ -239,12 +240,25 @@ work.
   normal into its three vertices (area weighting) and normalises. Flat
   shading is had by not sharing vertices between faces.
 - Meshes are the `meshes` frame input. They are drawn right after the terrain
-  with the terrain's pipelines, one draw call each: in the opaque pass (back
+  with their own pipelines, one draw call each: in the opaque pass (back
   faces culled, so triangles wind counter-clockwise seen from outside), and
   into every sun cascade and point-light cube face with culling off, so open
   surfaces such as ribbons still cast.
+- **Textures and transforms (ABI 1.7).** `strata_create_texture_rgba8`
+  uploads an RGBA8 image (optionally with a mip chain, wrapping or clamping
+  per axis); `strata_add_textured_mesh` adds a mesh with uvs and a texture id.
+  The mesh fragment shaders are the terrain's lit shaders with `vColor`
+  replaced by the vertex colour times the texture (unit 4); untextured meshes
+  sample a 1 x 1 white texel, so they draw exactly as in 1.4. Texels are used
+  as stored, like every other Strata colour (there is no sRGB decode and no
+  output transform). Every mesh has a model matrix (identity until
+  `strata_set_mesh_transform`), sent with the inverse transpose of its 3 x 3
+  in a per-mesh range of uniform binding 3 and applied in the opaque, cascade
+  and cube-shadow passes. `STRATA_MESH_UNLIT` meshes are drawn last in the
+  opaque pass as colour times texture, with no lights or fog, and are left
+  out of every shadow pass, so a star's surface can sit around a point light.
 - This is a narrow precursor to RFC 0020 §9 (cooked meshes, instancing,
-  materials): no UVs, tangents, instancing, transforms or LOD.
+  materials): no tangents, normal maps, instancing or LOD.
 
 ## Overlays (ABI 1.5)
 

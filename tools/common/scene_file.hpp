@@ -22,6 +22,14 @@
 //   circle <cx cy cz> <radius> <segments> <r g b a>  (line loop in the XZ plane)
 //   point <px py pz> <size_pixels> <world_diameter> <r g b a> [soft] (ABI 1.5)
 //   text <x> <y> <pixel_size> <r g b a> [shadow] : <text to the end of the line>
+//   texture <name> checker <w> <h> <cells_u> <cells_v> <r g b> <r g b> [mipmaps] [clamp_v]   (ABI 1.7)
+//   texture <name> globe <w> <h> [mipmaps]  (a test planet: hued checker, white caps, red prime meridian)
+//   sphere_mesh <slices> <stacks> <r g b>   (starts a unit-radius latitude-longitude sphere with planet uvs)
+//   uvs <u v ...>                 (the current mesh's texture coordinates)
+//   mesh_texture <name>           (the current mesh samples that texture)
+//   mesh_unlit                    (the current mesh is STRATA_MESH_UNLIT)
+//   mesh_transform <tx ty tz> <tilt axis x y z> <tilt_deg> <spin_deg> <scale>
+//                                 (model = translate * rotate(tilt axis) * rotate(+Y, spin) * scale)
 //   sun date <YYYY-MM-DD> <HH:MM> <utc_offset_hours> <latitude> <longitude>
 //                                 (ABI 1.6: places the sun with strata_solar_position)
 #pragma once
@@ -38,6 +46,12 @@ struct SceneMesh {
     std::vector<float> positions;
     std::vector<float> colors;
     std::vector<uint32_t> indices;
+    std::vector<float> uvs;   // ABI 1.7
+    std::string texture;      // a scene texture's name, or empty
+    bool unlit = false;
+    bool hasTransform = false;
+    float transform[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    bool textured() const { return !uvs.empty() || !texture.empty() || unlit; }
 
     // A StrataMesh pointing into this mesh's vectors (normals computed by the engine).
     StrataMesh view() const;
@@ -71,6 +85,13 @@ struct Scene {
     std::vector<float> terrainHeights;
     std::vector<float> terrainColors;
     std::vector<SceneMesh> meshes;
+    struct Texture {  // ABI 1.7
+        std::string name;
+        int width = 0, height = 0;
+        uint32_t flags = 0;
+        std::vector<uint8_t> rgba;
+    };
+    std::vector<Texture> textures;
 };
 
 // Throws std::runtime_error with "file:line: message" on a malformed scene.

@@ -71,6 +71,16 @@ static_assert(offsetof(StrataSolarPosition, azimuth_degrees) == 16, "");
 static_assert(offsetof(StrataSolarPosition, declination_degrees) == 20, "");
 static_assert(offsetof(StrataSolarPosition, hour_angle_degrees) == 24, "");
 static_assert(offsetof(StrataSolarPosition, equation_of_time_minutes) == 28, "");
+// ABI 1.7
+static_assert(offsetof(StrataTexturedMesh, mesh) == 0, "");
+#if UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu
+static_assert(offsetof(StrataTexturedMesh, uvs) == 56, "64-bit targets");
+static_assert(offsetof(StrataTexturedMesh, texture) == 64, "64-bit targets");
+static_assert(offsetof(StrataTexturedMesh, flags) == 68, "64-bit targets");
+static_assert(sizeof(StrataTexturedMesh) == 72, "64-bit targets");
+#endif
+static_assert(STRATA_TEXTURE_MIPMAPS == 0x1u && STRATA_TEXTURE_CLAMP_U == 0x2u && STRATA_TEXTURE_CLAMP_V == 0x4u, "");
+static_assert(STRATA_MESH_UNLIT == 0x1u, "");
 static_assert(STRATA_ABI_VERSION == 1u, "ABI 1 callers must keep working: additions bump STRATA_ABI_MINOR");
 #if UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu
 static_assert(sizeof(StrataEngineDesc) == 48, "64-bit targets");
@@ -80,7 +90,7 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 6u);
+    CHECK(strata_abi_minor() >= 7u);
 }
 
 TEST(point_light_layout_is_queryable) {
@@ -139,6 +149,26 @@ TEST(solar_position_is_queryable_and_validated) {
     CHECK(strata_solar_position(0.0, 0.0, 0.0, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
     const float up[3] = {0, 1, 0};
     CHECK(strata_set_sun_direction(nullptr, up) == STRATA_ERROR_INVALID_ARGUMENT);
+}
+
+TEST(texture_calls_reject_bad_arguments_without_a_context) {
+    CHECK(strata_struct_size(STRATA_STRUCT_TEXTURED_MESH) == static_cast<int32_t>(sizeof(StrataTexturedMesh)));
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_TEXTURED_MESH, 3) ==
+          static_cast<int32_t>(offsetof(StrataTexturedMesh, flags)));
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_TEXTURED_MESH, 4) == -1);
+    const uint8_t texel[4] = {255, 255, 255, 255};
+    uint32_t id = 0;
+    CHECK(strata_create_texture_rgba8(nullptr, 1, 1, texel, 0, &id) == STRATA_ERROR_INVALID_ARGUMENT);
+    StrataEngine* engine = reinterpret_cast<StrataEngine*>(0x1);  // never dereferenced: pointers are checked first
+    CHECK(strata_create_texture_rgba8(engine, 1, 1, nullptr, 0, &id) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_create_texture_rgba8(engine, 1, 1, texel, 0, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(id == 0);
+    CHECK(strata_destroy_texture(nullptr, 1) == STRATA_ERROR_INVALID_ARGUMENT);
+    StrataTexturedMesh mesh{};
+    CHECK(strata_add_textured_mesh(nullptr, &mesh, &id) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_add_textured_mesh(engine, nullptr, &id) == STRATA_ERROR_INVALID_ARGUMENT);
+    const float identity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    CHECK(strata_set_mesh_transform(nullptr, 1, identity) == STRATA_ERROR_INVALID_ARGUMENT);
 }
 
 TEST(set_terrain_rejects_a_null_engine) {

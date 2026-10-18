@@ -40,6 +40,10 @@ struct TextureDesc {
     TextureFormat format = TextureFormat::RGBA8;
     bool depthCompare = false;  // sample as sampler2DShadow / sampler2DArrayShadow / samplerCubeArrayShadow
     bool nearest = false;       // nearest-texel filtering instead of linear
+    // 2D RGBA8 textures only: a full mip chain built from initialData and
+    // sampled trilinearly.
+    bool mipmaps = false;
+    bool repeatU = false, repeatV = false;  // wrap instead of clamping to the edge
     // 2D colour textures only: tightly packed texels, top row first as stored
     // (row 0 is v = 0). nullptr leaves the content undefined.
     const void* initialData = nullptr;

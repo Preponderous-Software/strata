@@ -9,8 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place.</summary>
-        public const uint Minor = 6;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes.</summary>
+        public const uint Minor = 7;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
@@ -24,7 +24,10 @@ namespace Strata.Interop {
             StructTerrainTile = 8, // ABI 1.3
             StructMesh = 9,        // ABI 1.4
             StructLineVertex = 10, StructPoint = 11, StructText = 12,  // ABI 1.5
-            StructSolarPosition = 13;  // ABI 1.6
+            StructSolarPosition = 13,  // ABI 1.6
+            StructTexturedMesh = 14;   // ABI 1.7
+        public const uint TextureMipmaps = 0x1u, TextureClampU = 0x2u, TextureClampV = 0x4u;  // ABI 1.7
+        public const uint MeshUnlit = 0x1u;  // ABI 1.7
 
         public const int MaxPointLights = 32;  // ABI 1.1
         public const uint PointLightCastShadows = 0x1u;  // ABI 1.2
@@ -189,6 +192,15 @@ namespace Strata.Interop {
         public float equation_of_time_minutes;
     }
 
+    /// <summary>StrataTexturedMesh (ABI 1.7): 72 bytes on 64-bit.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct StrataTexturedMesh {
+        public StrataMesh mesh;
+        public float* uvs;  // null or vertex_count (u, v) pairs
+        public uint texture;
+        public uint flags;
+    }
+
     public static unsafe class StrataNative {
         public const string Library = "strata";
 
@@ -235,6 +247,14 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_remove_mesh(IntPtr engine, uint id);
         /// <summary>ABI 1.4.</summary>
         [DllImport(Library)] public static extern int strata_clear_meshes(IntPtr engine);
+        /// <summary>ABI 1.7. rgba is width * height * 4 bytes, top row first. Writes the texture's id (never 0).</summary>
+        [DllImport(Library)] public static extern int strata_create_texture_rgba8(IntPtr engine, int width, int height, byte* rgba, uint flags, uint* id);
+        /// <summary>ABI 1.7.</summary>
+        [DllImport(Library)] public static extern int strata_destroy_texture(IntPtr engine, uint id);
+        /// <summary>ABI 1.7. Writes the new mesh's id (never 0).</summary>
+        [DllImport(Library)] public static extern int strata_add_textured_mesh(IntPtr engine, StrataTexturedMesh* mesh, uint* id);
+        /// <summary>ABI 1.7. model points at 16 floats, column-major; null restores the identity.</summary>
+        [DllImport(Library)] public static extern int strata_set_mesh_transform(IntPtr engine, uint id, float* model);
         [DllImport(Library)] public static extern int strata_begin_frame(IntPtr engine, StrataFrameDesc* desc);
         /// <summary>items points at count 44-byte records with the StrataRenderItem layout.</summary>
         [DllImport(Library)] public static extern int strata_submit_primitives(IntPtr engine, void* items, int count);

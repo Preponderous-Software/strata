@@ -246,6 +246,62 @@ inline const char* kPointShadowFragment =
     "    gl_FragDepth = length(vWorld - uLightPositionRange.xyz) / uLightPositionRange.w;\n"
     "}\n";
 
+// Static meshes (ABI 1.4, transformed and textured since 1.7): the terrain's
+// attributes plus a texture coordinate, a model matrix and the inverse
+// transpose of its upper 3x3 for normals (binding 3, one range per mesh).
+#define STRATA_MESH_BLOCK \
+    "layout(std140, binding = 3) uniform Mesh { mat4 uModel; mat4 uNormalMatrix; };\n"
+
+inline const char* kMeshVertex =
+    "#version 450 core\n"
+    "layout(location = 0) in vec3 aPosition;\n"
+    "layout(location = 1) in vec3 aNormal;\n"
+    "layout(location = 5) in vec3 aColor;\n"
+    "layout(location = 6) in vec2 aUv;\n" STRATA_FRAME_BLOCK STRATA_MESH_BLOCK
+    "out vec3 vNormal;\n"
+    "out vec4 vColorIn;\n"
+    "out vec2 vUv;\n"
+    "out vec3 vWorld;\n"
+    "out float vViewDepth;\n"
+    "void main() {\n"
+    "    vec4 world = uModel * vec4(aPosition, 1.0);\n"
+    "    vNormal = mat3(uNormalMatrix) * aNormal;\n"
+    "    vColorIn = vec4(aColor, 1.0);\n"
+    "    vUv = aUv;\n"
+    "    vWorld = world.xyz;\n"
+    "    vViewDepth = -(uView * world).z;\n"
+    "    gl_Position = uProjection * uView * world;\n"
+    "}\n";
+
+// STRATA_MESH_UNLIT: colour times texture, no lighting, no fog.
+inline const char* kMeshUnlitFragment =
+    "#version 450 core\n"
+    "in vec4 vColorIn;\n"
+    "in vec2 vUv;\n"
+    "layout(binding = 4) uniform sampler2D uAlbedo;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    fragColor = vec4(vColorIn.rgb * texture(uAlbedo, vUv).rgb, 1.0);\n"
+    "}\n";
+
+inline const char* kMeshShadowVertex =
+    "#version 450 core\n"
+    "layout(location = 0) in vec3 aPosition;\n"
+    "layout(std140, binding = 1) uniform ShadowPass { mat4 uLightViewProjection; };\n" STRATA_MESH_BLOCK
+    "void main() {\n"
+    "    gl_Position = uLightViewProjection * (uModel * vec4(aPosition, 1.0));\n"
+    "}\n";
+
+inline const char* kMeshPointShadowVertex =
+    "#version 450 core\n"
+    "layout(location = 0) in vec3 aPosition;\n" STRATA_POINT_SHADOW_BLOCK STRATA_MESH_BLOCK
+    "out vec3 vWorld;\n"
+    "void main() {\n"
+    "    vec4 world = uModel * vec4(aPosition, 1.0);\n"
+    "    vWorld = world.xyz;\n"
+    "    gl_Position = uFaceViewProjection * world;\n"
+    "}\n";
+
 // Sky: a fullscreen triangle at the far plane, coloured by view direction.
 inline const char* kSkyVertex =
     "#version 450 core\n"
@@ -387,6 +443,7 @@ inline const char* kTextFragment =
 #undef STRATA_FRAME_BLOCK
 #undef STRATA_POINT_LIGHT_BLOCK
 #undef STRATA_POINT_SHADOW_BLOCK
+#undef STRATA_MESH_BLOCK
 #undef STRATA_OVERLAY_BLOCK
 
 }  // namespace strata::render::shaders

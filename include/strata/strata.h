@@ -51,9 +51,13 @@
  *   1.5  unlit overlays (StrataLineVertex, StrataPoint, StrataText,
  *        strata_submit_lines/_points/_text) and STRATA_LIGHTING_SPACE
  *   1.6  a sun placed by date, time and place (StrataSolarPosition,
- *        strata_solar_position, strata_set_sun_direction) */
+ *        strata_solar_position, strata_set_sun_direction)
+ *   1.7  textures and textured, transformable meshes (StrataTexturedMesh,
+ *        strata_create_texture_rgba8, strata_destroy_texture,
+ *        strata_add_textured_mesh, strata_set_mesh_transform,
+ *        STRATA_MESH_UNLIT) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 6u
+#define STRATA_ABI_MINOR 7u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -273,6 +277,36 @@ typedef struct StrataMesh {
     float color[4];          /* linear RGBA used when colors is NULL */
 } StrataMesh;
 
+/* ---------------------------------------------------------------- textures */
+
+/* ABI 1.7. Textures are RGBA8 images a host uploads once and textured meshes
+ * sample. Texels are used as stored, in the same space as every other Strata
+ * colour (no sRGB decoding), and multiply the mesh's vertex colour; alpha is
+ * ignored (meshes are opaque). Rows run top to bottom, so v = 0 is the
+ * image's first row; u runs left to right. */
+#define STRATA_MAX_TEXTURES 256
+#define STRATA_MAX_TEXTURE_SIZE 8192 /* largest width or height */
+
+/* strata_create_texture_rgba8 flags. Wrapping is the default on both axes. */
+#define STRATA_TEXTURE_MIPMAPS 0x1u /* build a mip chain and filter trilinearly: for anything seen small or at a slant */
+#define STRATA_TEXTURE_CLAMP_U 0x2u /* clamp u to the edge instead of wrapping */
+#define STRATA_TEXTURE_CLAMP_V 0x4u /* clamp v to the edge instead of wrapping (a planet map's poles) */
+
+/* StrataTexturedMesh.flags. */
+#define STRATA_MESH_UNLIT 0x1u /* drawn as its colour times its texture, with no lighting or fog, and casting no
+                                  shadows: for things that glow, such as a star's surface */
+
+/* ABI 1.7. A static mesh (as strata_add_mesh) with texture coordinates and a
+ * texture. A sphere for a planet map is a latitude-longitude grid with u =
+ * longitude / 360 and v = (90 - latitude) / 180, with the seam's column of
+ * vertices duplicated at u = 0 and u = 1. 72 bytes on 64-bit targets. */
+typedef struct StrataTexturedMesh {
+    StrataMesh mesh;      /* positions, normals, colours and indices; colours multiply the texture */
+    const float* uvs;     /* NULL (every vertex at 0, 0) or vertex_count (u, v) pairs */
+    uint32_t texture;     /* 0 for none, or an id from strata_create_texture_rgba8 */
+    uint32_t flags;       /* STRATA_MESH_*; any other bit is rejected */
+} StrataTexturedMesh;
+
 /* ----------------------------------------------------------------- overlays */
 
 /* ABI 1.5. Overlays are drawn after the lit scene and the sky, unlit, with
@@ -392,7 +426,8 @@ enum {
     STRATA_STRUCT_LINE_VERTEX = 10, /* ABI 1.5 */
     STRATA_STRUCT_POINT = 11,       /* ABI 1.5 */
     STRATA_STRUCT_TEXT = 12,        /* ABI 1.5 */
-    STRATA_STRUCT_SOLAR_POSITION = 13 /* ABI 1.6 */
+    STRATA_STRUCT_SOLAR_POSITION = 13, /* ABI 1.6 */
+    STRATA_STRUCT_TEXTURED_MESH = 14   /* ABI 1.7 */
 };
 
 /* Field ids for strata_struct_field_offset(STRATA_STRUCT_RENDER_ITEM, ...). */
@@ -494,6 +529,31 @@ STRATA_API StrataStatus strata_add_mesh(StrataEngine* engine, const StrataMesh* 
 STRATA_API StrataStatus strata_remove_mesh(StrataEngine* engine, uint32_t id);
 /* ABI 1.4. Removes every mesh. */
 STRATA_API StrataStatus strata_clear_meshes(StrataEngine* engine);
+
+/* ABI 1.7. Uploads a width x height RGBA8 image (4 bytes per texel, rows top
+ * to bottom, tightly packed; copied during the call) and writes its id (never
+ * 0) to *out_id. Width and height are 1..STRATA_MAX_TEXTURE_SIZE; flags are
+ * STRATA_TEXTURE_*. At most STRATA_MAX_TEXTURES at once. Ids are not reused
+ * within an engine. */
+STRATA_API StrataStatus strata_create_texture_rgba8(StrataEngine* engine, int32_t width, int32_t height,
+                                                    const uint8_t* rgba, uint32_t flags, uint32_t* out_id);
+/* ABI 1.7. Frees a texture. Meshes that use it draw untextured from then on;
+ * an unknown id is STRATA_ERROR_INVALID_ARGUMENT. */
+STRATA_API StrataStatus strata_destroy_texture(StrataEngine* engine, uint32_t id);
+/* ABI 1.7. Adds a textured static mesh, exactly as strata_add_mesh does (the
+ * same limit, ids and validation), plus its uvs, texture and flags. The
+ * texture must exist when the mesh is added. */
+STRATA_API StrataStatus strata_add_textured_mesh(StrataEngine* engine, const StrataTexturedMesh* mesh,
+                                                 uint32_t* out_id);
+/* ABI 1.7. Sets a mesh's model matrix (16 floats, column-major), applied to
+ * its positions and, through the inverse transpose, its normals when it is
+ * drawn and when it casts shadows. Any mesh starts with the identity, so its
+ * positions are world space until this is called; NULL restores the identity.
+ * The matrix must be finite and invertible. Spinning a planet about a tilted
+ * axis is one call a frame: model = translate(centre) * rotate(tilt) *
+ * rotate(spin about +Y) * scale(radius), with the mesh built around the
+ * origin. Changing the matrix re-uploads nothing but the matrix. */
+STRATA_API StrataStatus strata_set_mesh_transform(StrataEngine* engine, uint32_t id, const float model[16]);
 
 /* A frame is begin_frame, any number of submits, end_frame, then present.
  * Submitted arrays are read during the call and never retained. */
