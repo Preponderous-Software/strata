@@ -1,1 +1,5 @@
-{}
+{
+  "_source": "CI run 39143289222 (ubuntu:24.04 container, GitHub-hosted runner), strata-save-bench min of reps",
+  "1000": {"save_ms": 27.78, "load_ms": 22.69, "async_stall_ms": 0.031, "delta_bytes": 56436, "peak_rss_mb": 51.2},
+  "10000": {"save_ms": 326.44, "load_ms": 228.92, "async_stall_ms": 0.216, "delta_bytes": 455227, "peak_rss_mb": 186.7}
+}
