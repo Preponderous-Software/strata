@@ -63,6 +63,23 @@ namespace Strata.Interop.Tests {
         }
 
         [Fact]
+        public void OverlayStructsMatchNative() {
+            Assert.Equal(28, Unsafe.SizeOf<StrataLineVertex>());
+            AssertLayout<StrataLineVertex>(StrataAbi.StructLineVertex, "position", "color");
+            Assert.Equal(40, Unsafe.SizeOf<StrataPoint>());
+            AssertLayout<StrataPoint>(StrataAbi.StructPoint, "position", "size_pixels", "world_diameter", "color", "flags");
+            AssertLayout<StrataText>(StrataAbi.StructText, "x", "y", "pixel_size", "flags", "color", "utf8");
+        }
+
+        [Fact]
+        public unsafe void OverlaySubmitsRejectANullEngine() {
+            var point = new StrataPoint { size_pixels = 2 };
+            Assert.Equal(1, StrataNative.strata_submit_points(IntPtr.Zero, &point, 1));  // STRATA_ERROR_INVALID_ARGUMENT
+            Assert.Equal(1, StrataNative.strata_submit_lines(IntPtr.Zero, null, 0));
+            Assert.Equal(1, StrataNative.strata_submit_text(IntPtr.Zero, null, 0));
+        }
+
+        [Fact]
         public unsafe void SetTerrainRejectsANullEngine() {
             Assert.Equal(1, StrataNative.strata_set_terrain(IntPtr.Zero, null));  // STRATA_ERROR_INVALID_ARGUMENT
         }

@@ -89,6 +89,24 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
         ok = ok && check(strata_begin_frame(engine, &scene.frame), "strata_begin_frame");
         ok = ok && check(strata_submit_primitives(engine, scene.items.data(), static_cast<int32_t>(scene.items.size())),
                          "strata_submit_primitives");
+        if (!scene.lines.empty()) {
+            ok = ok && check(strata_submit_lines(engine, scene.lines.data(), static_cast<int32_t>(scene.lines.size())),
+                             "strata_submit_lines");
+        }
+        if (!scene.points.empty()) {
+            ok = ok && check(strata_submit_points(engine, scene.points.data(),
+                                                  static_cast<int32_t>(scene.points.size())),
+                             "strata_submit_points");
+        }
+        if (!scene.texts.empty()) {
+            std::vector<StrataText> texts;
+            for (const auto& t : scene.texts) {
+                texts.push_back(t.text);
+                texts.back().utf8 = t.value.c_str();
+            }
+            ok = ok && check(strata_submit_text(engine, texts.data(), static_cast<int32_t>(texts.size())),
+                             "strata_submit_text");
+        }
         ok = ok && check(strata_end_frame(engine), "strata_end_frame");
     }
     if (ok) {

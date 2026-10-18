@@ -277,8 +277,116 @@ inline const char* kSkyFragment =
     "    fragColor = vec4(color, 1.0);\n"
     "}\n";
 
+// Overlays (ABI 1.5). Viewport size for pixel maths, binding 3.
+#define STRATA_OVERLAY_BLOCK \
+    "layout(std140, binding = 3) uniform OverlayViewport { vec4 uViewport; };  // w, h, 1/w, 1/h\n"
+
+inline const char* kLineVertex =
+    "#version 450 core\n"
+    "layout(location = 0) in vec3 aPosition;\n"
+    "layout(location = 1) in vec4 aColor;\n" STRATA_FRAME_BLOCK
+    "out vec4 vColor;\n"
+    "void main() {\n"
+    "    vColor = aColor;\n"
+    "    gl_Position = uProjection * uView * vec4(aPosition, 1.0);\n"
+    "}\n";
+
+inline const char* kLineFragment =
+    "#version 450 core\n"
+    "in vec4 vColor;\n"
+    "out vec4 fragColor;\n"
+    "void main() { fragColor = vColor; }\n";
+
+// Points: one camera-facing quad per instance, six vertices from gl_VertexID.
+// The diameter is max(size_pixels, projected world_diameter); the quad is one
+// pixel larger all round so the edge can be antialiased.
+inline const char* kPointVertex =
+    "#version 450 core\n"
+    "layout(location = 0) in vec3 iPosition;\n"
+    "layout(location = 1) in vec2 iSize;  // size_pixels, world_diameter\n"
+    "layout(location = 2) in vec4 iColor;\n" STRATA_FRAME_BLOCK STRATA_OVERLAY_BLOCK
+    "out vec4 vColor;\n"
+    "out vec2 vCorner;\n"
+    "out float vRadius;\n"
+    "const vec2 kCorners[6] = vec2[](vec2(-1, -1), vec2(1, -1), vec2(1, 1), vec2(-1, -1), vec2(1, 1), vec2(-1, 1));\n"
+    "void main() {\n"
+    "    vec4 clip = uProjection * uView * vec4(iPosition, 1.0);\n"
+    "    vec2 corner = kCorners[gl_VertexID];\n"
+    "    vCorner = corner;\n"
+    "    vColor = iColor;\n"
+    "    if (clip.w <= 0.0) {  // behind the eye\n"
+    "        vRadius = 0.0;\n"
+    "        gl_Position = vec4(2.0, 2.0, 0.0, 1.0);\n"
+    "        return;\n"
+    "    }\n"
+    "    float projected = iSize.y * uProjection[1][1] * 0.5 * uViewport.y / clip.w;\n"
+    "    float diameter = min(max(iSize.x, projected), 4.0 * max(uViewport.x, uViewport.y));\n"
+    "    vRadius = 0.5 * diameter;\n"
+    "    vec2 offset = corner * (vRadius + 1.0) * 2.0 * uViewport.zw;\n"
+    "    gl_Position = clip + vec4(offset * clip.w, 0.0, 0.0);\n"
+    "}\n";
+
+inline const char* kSolidPointFragment =
+    "#version 450 core\n"
+    "in vec4 vColor;\n"
+    "in vec2 vCorner;\n"
+    "in float vRadius;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    float r = length(vCorner) * (vRadius + 1.0);\n"
+    "    float a = clamp(vRadius + 0.5 - r, 0.0, 1.0);\n"
+    "    if (a <= 0.0) discard;\n"
+    "    fragColor = vec4(vColor.rgb, vColor.a * a);\n"
+    "}\n";
+
+inline const char* kSoftPointFragment =
+    "#version 450 core\n"
+    "in vec4 vColor;\n"
+    "in vec2 vCorner;\n"
+    "in float vRadius;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    float t = clamp(length(vCorner) * (vRadius + 1.0) / max(vRadius, 0.5), 0.0, 1.0);\n"
+    "    float a = (1.0 - t) * (1.0 - t);\n"
+    "    if (a <= 0.0) discard;\n"
+    "    fragColor = vec4(vColor.rgb, vColor.a * a);\n"
+    "}\n";
+
+// Text: one quad per glyph, in pixels with the origin at the top left. The
+// font atlas is read texel by texel, so whole-number scales stay sharp.
+inline const char* kTextVertex =
+    "#version 450 core\n"
+    "layout(location = 0) in vec4 iRect;  // x, y, size, glyph\n"
+    "layout(location = 1) in vec4 iColor;\n" STRATA_OVERLAY_BLOCK
+    "out vec4 vColor;\n"
+    "out vec2 vLocal;\n"
+    "flat out int vGlyph;\n"
+    "const vec2 kCorners[6] = vec2[](vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 0), vec2(1, 1), vec2(0, 1));\n"
+    "void main() {\n"
+    "    vec2 corner = kCorners[gl_VertexID];\n"
+    "    vec2 pixel = iRect.xy + corner * iRect.z;\n"
+    "    vColor = iColor;\n"
+    "    vLocal = corner * 8.0;\n"
+    "    vGlyph = int(iRect.w + 0.5);\n"
+    "    gl_Position = vec4(pixel.x * 2.0 * uViewport.z - 1.0, 1.0 - pixel.y * 2.0 * uViewport.w, 0.0, 1.0);\n"
+    "}\n";
+
+inline const char* kTextFragment =
+    "#version 450 core\n"
+    "in vec4 vColor;\n"
+    "in vec2 vLocal;\n"
+    "flat in int vGlyph;\n"
+    "layout(binding = 3) uniform sampler2D uFont;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    ivec2 texel = ivec2(vGlyph * 8 + min(int(vLocal.x), 7), min(int(vLocal.y), 7));\n"
+    "    if (texelFetch(uFont, texel, 0).r < 0.5) discard;\n"
+    "    fragColor = vColor;\n"
+    "}\n";
+
 #undef STRATA_FRAME_BLOCK
 #undef STRATA_POINT_LIGHT_BLOCK
 #undef STRATA_POINT_SHADOW_BLOCK
+#undef STRATA_OVERLAY_BLOCK
 
 }  // namespace strata::render::shaders

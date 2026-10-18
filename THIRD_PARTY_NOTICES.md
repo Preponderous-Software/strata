@@ -9,6 +9,7 @@ or are built from the following. Every licence here is permissive.
 | [glm](https://github.com/g-truc/glm) | 1.0.2 | MIT (or the Happy Bunny licence) | Maths, header-only. Fetched at configure time (pinned by SHA-256). |
 | [glad](https://github.com/Dav1dde/glad) | 2.0.8 generator output | MIT (generated code); Khronos headers Apache-2.0 / MIT | GL 4.5 core and EGL 1.5 loaders, in `third_party/glad`. |
 | [stb_image, stb_image_write](https://github.com/nothings/stb) | 2.30 / 1.16 | Public domain or MIT | PNG reading and writing, in `third_party/stb`. |
+| [font8x8](https://github.com/dhepper/font8x8) | commit 8e279d2 (`font8x8_basic.h`) | Public domain | The overlay text font, in `third_party/font8x8`; `src/render/font8x8.hpp` is generated from it. |
 
 ## SDL (zlib)
 
@@ -87,3 +88,13 @@ The Khronos headers under `third_party/glad/include/KHR` and
 ## stb (public domain or MIT)
 
 See the licence section at the end of `third_party/stb/stb_image.h`.
+
+## font8x8 (public domain)
+
+```
+8x8 monochrome bitmap fonts for rendering
+Author: Daniel Hepper <daniel@hepper.net>
+License: Public Domain
+
+Based on font8x8.h by Marcel Sondaar and the public domain IBM VGA fonts.
+```

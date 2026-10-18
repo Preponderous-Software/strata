@@ -13,6 +13,19 @@
   materials, not milestone M1.
 - Scene files take `mesh`, `vertices`, `vcolors` and `triangles` lines.
   `tools/gen_mesh_scene.py` writes the static-mesh goldens' world.
+- Overlays (ABI 1.5): `StrataLineVertex`, `StrataPoint` and `StrataText`
+  with `strata_submit_lines`, `strata_submit_points` and
+  `strata_submit_text`. Unlit, alpha-blended lines and round points
+  (fixed pixel size, true world size, or both; solid or a soft additive
+  glow), depth-tested against the scene, and screen-space text in the
+  public-domain font8x8 bitmap font, drawn in new `overlay` and `text`
+  passes after the sky.
+- `STRATA_LIGHTING_SPACE` (ABI 1.5): point lights over a flat ambient, with
+  no sun, moon, fog or sky, for scenes lit by a light inside them.
+- `GpuDevice`: line topology, alpha and additive blending, `drawArrays`, and
+  `R8` textures with initial data.
+- Scene files take `lighting space`, `line`, `circle`, `point` and `text`
+  lines. New goldens `o1_space_system` and `o1_overlays_sun`.
 
 ## 0.2.0
 

@@ -17,6 +17,11 @@
 //   triangles <i ...>             (indices, counter-clockwise seen from outside)
 //   include <file>                (relative to the including file)
 //   item <cube|capsule|cylinder|sphere> <px py pz> <sx sy sz> <r g b> [a]
+//   lighting space <ambient>                                         (ABI 1.5)
+//   line <ax ay az> <bx by bz> <r g b a>                             (ABI 1.5)
+//   circle <cx cy cz> <radius> <segments> <r g b a>  (line loop in the XZ plane)
+//   point <px py pz> <size_pixels> <world_diameter> <r g b a> [soft] (ABI 1.5)
+//   text <x> <y> <pixel_size> <r g b a> [shadow] : <text to the end of the line>
 #pragma once
 
 #include <string>
@@ -47,6 +52,13 @@ struct Scene {
     StrataLighting lighting{};
     StrataFrameDesc frame{};
     std::vector<StrataRenderItem> items;
+    std::vector<StrataLineVertex> lines;
+    std::vector<StrataPoint> points;
+    struct Text {
+        StrataText text{};  // utf8 is set from `value` when submitted
+        std::string value;
+    };
+    std::vector<Text> texts;
     std::vector<StrataPointLight> pointLights;
     bool hasTerrain = false;
     StrataTerrainTile terrain{};  // heights/colors point into the vectors below once loaded

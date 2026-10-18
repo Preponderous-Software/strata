@@ -95,6 +95,10 @@ void GLAD_API_PTR debugCallback(GLenum, GLenum type, GLuint, GLenum severity, GL
     logf(level, "GL: %s", message);
 }
 
+// Texture units Strata binds (0 unused, 1 cascades, 2 point shadows, 3 the
+// overlay font), saved and restored for a host context.
+constexpr int kHostTextureUnits = 4;
+
 struct HostState {
     GLint program = 0, vertexArray = 0, drawFramebuffer = 0, readFramebuffer = 0;
     GLint viewport[4] = {0, 0, 0, 0};
@@ -104,7 +108,10 @@ struct HostState {
     GLint depthFunc = GL_LESS, cullFaceMode = GL_BACK, frontFace = GL_CCW;
     GLfloat polygonOffsetFactor = 0, polygonOffsetUnits = 0;
     GLint activeTexture = GL_TEXTURE0;
-    GLint texture2D[3] = {0, 0, 0}, texture2DArray[3] = {0, 0, 0}, textureCubeArray[3] = {0, 0, 0};
+    GLint blendSrcRgb = GL_ONE, blendDstRgb = GL_ZERO, blendSrcAlpha = GL_ONE, blendDstAlpha = GL_ZERO;
+    GLint blendEquationRgb = GL_FUNC_ADD, blendEquationAlpha = GL_FUNC_ADD;
+    GLint texture2D[kHostTextureUnits] = {}, texture2DArray[kHostTextureUnits] = {},
+          textureCubeArray[kHostTextureUnits] = {};
     GLint uniformBuffers[3] = {0, 0, 0};
     GLint elementArrayBuffer = 0, arrayBuffer = 0;
 };
@@ -176,15 +183,25 @@ public:
         record.desc = desc;
         const bool cube = desc.cube && desc.layers > 0;
         const GLenum target = cube ? GL_TEXTURE_CUBE_MAP_ARRAY : desc.layers > 0 ? GL_TEXTURE_2D_ARRAY : GL_TEXTURE_2D;
-        const GLenum format = desc.format == TextureFormat::RGBA8 ? GL_RGBA8 : GL_DEPTH_COMPONENT32F;
+        const GLenum format = desc.format == TextureFormat::RGBA8 ? GL_RGBA8
+                              : desc.format == TextureFormat::R8 ? GL_R8
+                                                                 : GL_DEPTH_COMPONENT32F;
         glCreateTextures(target, 1, &record.name);
         if (desc.layers > 0) {
             glTextureStorage3D(record.name, 1, format, desc.width, desc.height, cube ? desc.layers * 6 : desc.layers);
         } else {
             glTextureStorage2D(record.name, 1, format, desc.width, desc.height);
         }
-        glTextureParameteri(record.name, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTextureParameteri(record.name, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        const GLint filter = desc.nearest ? GL_NEAREST : GL_LINEAR;
+        glTextureParameteri(record.name, GL_TEXTURE_MIN_FILTER, filter);
+        glTextureParameteri(record.name, GL_TEXTURE_MAG_FILTER, filter);
+        if (desc.initialData && desc.layers == 0 && desc.format != TextureFormat::Depth32F) {
+            const bool r8 = desc.format == TextureFormat::R8;
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            glTextureSubImage2D(record.name, 0, 0, 0, desc.width, desc.height, r8 ? GL_RED : GL_RGBA,
+                                GL_UNSIGNED_BYTE, desc.initialData);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        }
         glTextureParameteri(record.name, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTextureParameteri(record.name, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         if (cube) glTextureParameteri(record.name, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
@@ -343,6 +360,15 @@ public:
         } else {
             glDisable(GL_DEPTH_CLAMP);
         }
+        if (d.blend == BlendMode::None) {
+            glDisable(GL_BLEND);
+        } else {
+            glEnable(GL_BLEND);
+            glBlendEquation(GL_FUNC_ADD);
+            // Destination alpha is kept as it was: screenshots force it opaque.
+            glBlendFuncSeparate(GL_SRC_ALPHA, d.blend == BlendMode::Alpha ? GL_ONE_MINUS_SRC_ALPHA : GL_ONE, GL_ZERO,
+                                GL_ONE);
+        }
     }
 
     void bindVertexBuffer(uint32_t binding, BufferHandle buffer, size_t offset) override {
@@ -375,6 +401,14 @@ public:
             GL_TRIANGLES, static_cast<GLsizei>(draw.indexCount), GL_UNSIGNED_INT,
             reinterpret_cast<const void*>(static_cast<uintptr_t>(draw.firstIndex) * sizeof(uint32_t)),
             static_cast<GLsizei>(draw.instanceCount), draw.baseVertex, draw.baseInstance);
+    }
+
+    void drawArrays(const DrawArrays& draw) override {
+        if (draw.vertexCount == 0 || draw.instanceCount == 0) return;
+        const GLenum mode = current_ && current_->desc.topology == Topology::Lines ? GL_LINES : GL_TRIANGLES;
+        glDrawArraysInstancedBaseInstance(mode, static_cast<GLint>(draw.firstVertex),
+                                          static_cast<GLsizei>(draw.vertexCount),
+                                          static_cast<GLsizei>(draw.instanceCount), draw.baseInstance);
     }
 
     void drawFullscreenTriangle() override {
@@ -418,8 +452,14 @@ public:
         glGetIntegerv(GL_FRONT_FACE, &s.frontFace);
         glGetFloatv(GL_POLYGON_OFFSET_FACTOR, &s.polygonOffsetFactor);
         glGetFloatv(GL_POLYGON_OFFSET_UNITS, &s.polygonOffsetUnits);
+        glGetIntegerv(GL_BLEND_SRC_RGB, &s.blendSrcRgb);
+        glGetIntegerv(GL_BLEND_DST_RGB, &s.blendDstRgb);
+        glGetIntegerv(GL_BLEND_SRC_ALPHA, &s.blendSrcAlpha);
+        glGetIntegerv(GL_BLEND_DST_ALPHA, &s.blendDstAlpha);
+        glGetIntegerv(GL_BLEND_EQUATION_RGB, &s.blendEquationRgb);
+        glGetIntegerv(GL_BLEND_EQUATION_ALPHA, &s.blendEquationAlpha);
         glGetIntegerv(GL_ACTIVE_TEXTURE, &s.activeTexture);
-        for (int unit = 0; unit < 3; ++unit) {
+        for (int unit = 0; unit < kHostTextureUnits; ++unit) {
             glActiveTexture(GL_TEXTURE0 + unit);
             glGetIntegerv(GL_TEXTURE_BINDING_2D, &s.texture2D[unit]);
             glGetIntegerv(GL_TEXTURE_BINDING_2D_ARRAY, &s.texture2DArray[unit]);
@@ -451,7 +491,10 @@ public:
         glCullFace(static_cast<GLenum>(s.cullFaceMode));
         glFrontFace(static_cast<GLenum>(s.frontFace));
         glPolygonOffset(s.polygonOffsetFactor, s.polygonOffsetUnits);
-        for (int unit = 0; unit < 3; ++unit) {
+        glBlendFuncSeparate(static_cast<GLenum>(s.blendSrcRgb), static_cast<GLenum>(s.blendDstRgb),
+                            static_cast<GLenum>(s.blendSrcAlpha), static_cast<GLenum>(s.blendDstAlpha));
+        glBlendEquationSeparate(static_cast<GLenum>(s.blendEquationRgb), static_cast<GLenum>(s.blendEquationAlpha));
+        for (int unit = 0; unit < kHostTextureUnits; ++unit) {
             glActiveTexture(GL_TEXTURE0 + unit);
             glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(s.texture2D[unit]));
             glBindTexture(GL_TEXTURE_2D_ARRAY, static_cast<GLuint>(s.texture2DArray[unit]));

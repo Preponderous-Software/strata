@@ -4,6 +4,7 @@
 
 #include <array>
 #include <chrono>
+#include <memory>
 #include <cstdint>
 #include <vector>
 
@@ -11,6 +12,7 @@
 
 #include "platform/surface.hpp"
 #include "render/cascades.hpp"
+#include "render/overlay.hpp"
 #include "rhi/gpu_device.hpp"
 #include "strata/strata.h"
 
@@ -34,6 +36,9 @@ public:
 
     void beginFrame(const StrataFrameDesc& desc);
     void submit(const StrataRenderItem* items, size_t count);
+    void submitLines(const StrataLineVertex* vertices, size_t count);
+    void submitPoints(const StrataPoint* points, size_t count);
+    void submitText(const StrataText* texts, size_t count);
     void endFrame();
 
     const StrataFrameStats& stats() const { return stats_; }
@@ -118,6 +123,9 @@ private:
     size_t pointShadowUniformStride_ = 256;
     std::vector<int> pointShadowSlot_;  // per light: slot or -1
     int pointShadowCount_ = 0;
+
+    // Unlit lines, points and text (ABI 1.4), drawn after the sky.
+    std::unique_ptr<Overlay> overlay_;
 
     StrataCamera camera_{};
     StrataLighting lighting_{};

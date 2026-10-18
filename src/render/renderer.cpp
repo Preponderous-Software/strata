@@ -78,6 +78,7 @@ Renderer::Renderer(rhi::GpuDevice& device, platform::Surface& surface) : device_
 
     buildMeshes();
     buildPipelines();
+    overlay_ = std::make_unique<Overlay>(device_);
 
     frameUniforms_ = device_.createBuffer(sizeof(FrameUniforms), nullptr, true, "strata.frame-uniforms");
     const size_t alignment = device_.uniformBufferAlignment();
@@ -115,6 +116,7 @@ Renderer::Renderer(rhi::GpuDevice& device, platform::Surface& surface) : device_
 }
 
 Renderer::~Renderer() {
+    overlay_.reset();
     device_.destroy(meshVertices_);
     device_.destroy(meshIndices_);
     device_.destroy(instances_);
@@ -270,8 +272,14 @@ void Renderer::validateCamera(const StrataCamera& c) {
 }
 
 void Renderer::validateLighting(const StrataLighting& l) {
-    if (l.mode != STRATA_LIGHTING_LEGACY && l.mode != STRATA_LIGHTING_SUN) {
+    if (l.mode != STRATA_LIGHTING_LEGACY && l.mode != STRATA_LIGHTING_SUN && l.mode != STRATA_LIGHTING_SPACE) {
         fail(STRATA_ERROR_INVALID_ARGUMENT, "unknown lighting mode %d", l.mode);
+    }
+    if (l.mode == STRATA_LIGHTING_SPACE) {
+        if (!(l.legacy_ambient >= 0.0f && l.legacy_ambient <= 1.0f)) {
+            fail(STRATA_ERROR_INVALID_ARGUMENT, "space ambient (legacy_ambient) must be in [0, 1]");
+        }
+        return;
     }
     if (l.mode == STRATA_LIGHTING_LEGACY) {
         const glm::vec3 d(l.legacy_direction[0], l.legacy_direction[1], l.legacy_direction[2]);
@@ -448,6 +456,7 @@ void Renderer::beginFrame(const StrataFrameDesc& desc) {
     frameOpen_ = true;
     itemsRejected_ = 0;
     for (auto& list : perKind_) list.clear();
+    overlay_->clear();
 }
 
 void Renderer::submit(const StrataRenderItem* items, size_t count) {
@@ -460,6 +469,21 @@ void Renderer::submit(const StrataRenderItem* items, size_t count) {
         }
         perKind_[static_cast<size_t>(item.kind)].push_back(item);
     }
+}
+
+void Renderer::submitLines(const StrataLineVertex* vertices, size_t count) {
+    if (!frameOpen_) fail(STRATA_ERROR_INVALID_STATE, "submit_lines called outside begin_frame/end_frame");
+    overlay_->addLines(vertices, count);
+}
+
+void Renderer::submitPoints(const StrataPoint* points, size_t count) {
+    if (!frameOpen_) fail(STRATA_ERROR_INVALID_STATE, "submit_points called outside begin_frame/end_frame");
+    overlay_->addPoints(points, count);
+}
+
+void Renderer::submitText(const StrataText* texts, size_t count) {
+    if (!frameOpen_) fail(STRATA_ERROR_INVALID_STATE, "submit_text called outside begin_frame/end_frame");
+    overlay_->addText(texts, count);
 }
 
 void Renderer::ensureOffscreenTarget(int width, int height) {
@@ -540,6 +564,13 @@ void Renderer::writeFrameUniforms(int width, int height, const Cascades* cascade
     if (lighting_.mode == STRATA_LIGHTING_LEGACY) {
         u.light = glm::vec4(lighting_.legacy_direction[0], lighting_.legacy_direction[1],
                             lighting_.legacy_direction[2], lighting_.legacy_ambient);
+    } else if (lighting_.mode == STRATA_LIGHTING_SPACE) {
+        // The sun shader with no key light (zero colour, zero direction), a
+        // flat ambient from both hemispheres and fog off: point lights only.
+        const glm::vec3 ambient(lighting_.legacy_ambient);
+        u.skyAmbient = glm::vec4(ambient, 0.0f);
+        u.groundAmbient = glm::vec4(ambient, 0.0f);
+        u.zenith = glm::vec4(0.0f, 0.0f, 0.0f, camera_.far_plane);
     } else {
         const SkyState sky = evaluateSky(lighting_.time_of_day, lighting_.latitude_degrees);
         u.light = glm::vec4(sky.toLight, cascades ? sky.shadowStrength : 0.0f);
@@ -653,7 +684,7 @@ void Renderer::opaquePass(int width, int height) {
     device_.beginPass(pass);
     device_.bindPipeline(lighting_.mode == STRATA_LIGHTING_LEGACY ? legacyPipeline_ : sunPipeline_);
     device_.bindUniformBuffer(0, frameUniforms_, 0, sizeof(FrameUniforms));
-    if (lighting_.mode == STRATA_LIGHTING_SUN) {
+    if (lighting_.mode != STRATA_LIGHTING_LEGACY) {
         device_.bindTexture(1, shadowMaps_);
         device_.bindTexture(2, pointShadowMaps_);
         device_.bindUniformBuffer(2, pointLightUniforms_, 0, sizeof(PointLightUniforms));
@@ -709,6 +740,8 @@ void Renderer::endFrame() {
 
     Cascades cascades;
     const bool sun = lighting_.mode == STRATA_LIGHTING_SUN;
+    // SUN and SPACE share the lit shader, its shadow samplers and point lights.
+    const bool lit = lighting_.mode != STRATA_LIGHTING_LEGACY;
     bool shadows = false;
     if (sun && lighting_.cascade_count > 0) {
         const SkyState sky = evaluateSky(lighting_.time_of_day, lighting_.latitude_degrees);
@@ -729,18 +762,18 @@ void Renderer::endFrame() {
             cascades = computeCascades(input);
         }
     }
-    if (sun && !shadowMaps_) {
+    if (lit && !shadowMaps_) {
         // The sun shader always samples a shadow array; give it a tiny one.
         ensureShadowMaps(256, 1);
     }
     // Likewise a cube array, even with no shadowed point lights.
-    if (sun) ensurePointShadowMaps(std::max(pointShadowCount_, 1));
+    if (lit) ensurePointShadowMaps(std::max(pointShadowCount_, 1));
     writeFrameUniforms(width, height, shadows ? &cascades : nullptr);
-    if (sun) writePointLightUniforms();
+    if (lit) writePointLightUniforms();
 
     auto t = Clock::now();
     if (shadows) shadowPass(cascades);
-    if (sun && pointShadowCount_ > 0) pointShadowPass();
+    if (lit && pointShadowCount_ > 0) pointShadowPass();
     stats_.cpu_ms_shadow = msSince(t);
 
     t = Clock::now();
@@ -750,6 +783,9 @@ void Renderer::endFrame() {
     t = Clock::now();
     if (sun && (frame_.clear_flags & STRATA_CLEAR_SKY)) skyPass(width, height);
     stats_.cpu_ms_sky = msSince(t);
+
+    stats_.draw_calls += overlay_->drawWorld(offscreenTarget_, width, height, frameUniforms_, sizeof(FrameUniforms));
+    stats_.draw_calls += overlay_->drawText(offscreenTarget_, width, height);
 
     if (host) device_.restoreHostState();
     stats_.cpu_ms_frame = msSince(frameStart);

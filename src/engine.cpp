@@ -118,6 +118,21 @@ void Engine::submitPrimitives(const StrataRenderItem* items, size_t count) {
     impl_->renderer->submit(items, count);
 }
 
+void Engine::submitLines(const StrataLineVertex* vertices, size_t count) {
+    if (count > 0 && vertices == nullptr) fail(STRATA_ERROR_INVALID_ARGUMENT, "vertices is NULL with a non-zero count");
+    impl_->renderer->submitLines(vertices, count);
+}
+
+void Engine::submitPoints(const StrataPoint* points, size_t count) {
+    if (count > 0 && points == nullptr) fail(STRATA_ERROR_INVALID_ARGUMENT, "points is NULL with a non-zero count");
+    impl_->renderer->submitPoints(points, count);
+}
+
+void Engine::submitText(const StrataText* texts, size_t count) {
+    if (count > 0 && texts == nullptr) fail(STRATA_ERROR_INVALID_ARGUMENT, "texts is NULL with a non-zero count");
+    impl_->renderer->submitText(texts, count);
+}
+
 void Engine::endFrame() {
     impl_->renderer->endFrame();
     impl_->stats = impl_->renderer->stats();
@@ -172,6 +187,12 @@ StrataLighting lightingDefaults(int32_t mode) {
     l.shadow_distance = 150.0f;
     l.split_lambda = 0.6f;
     l.fog = 1;
+    if (mode == STRATA_LIGHTING_SPACE) {
+        // A faint fill so night sides are not pure black; the fields the
+        // mode ignores keep the SUN defaults.
+        l.legacy_ambient = 0.03f;
+        l.fog = 0;
+    }
     return l;
 }
 
