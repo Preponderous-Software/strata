@@ -1,0 +1,20 @@
+# ABI 1.7: textures. A test globe (hued checker, white caps, red prime
+# meridian; clamped in v) on a 48 x 24 latitude-longitude sphere, its
+# north pole tilted 23.44 degrees towards the camera (about +X) and spun -70
+# degrees about its own axis (prime meridian towards the camera) by a model
+# matrix, over a ground quad whose mipmapped checker repeats 24 times across
+# it (no shimmer in the distance). Sun lighting: the globe casts a shadow.
+size 640 360
+camera 0 7 18  0 3 0  50 0.3 300
+lighting sun 0.42 35  4 2048 120 0.6 1
+clear 0 0 0 1 sky
+texture globe globe 512 256 mipmaps
+texture ground checker 256 256 8 8  0.80 0.78 0.70  0.35 0.45 0.30 mipmaps
+mesh 1 1 1
+vertices -60 0 -60  60 0 -60  60 0 60  -60 0 60
+uvs 0 0  24 0  24 24  0 24
+triangles 0 2 1  0 3 2
+mesh_texture ground
+sphere_mesh 48 24  1 1 1
+mesh_texture globe
+mesh_transform 0 3.2 0  1 0 0  23.44  -70  3

@@ -1,5 +1,6 @@
-// Static triangle meshes (ABI 1.4), already in world space, turned into the
-// terrain's vertex format (position, normal, colour) at upload.
+// Static triangle meshes (ABI 1.4), turned into one vertex format (position,
+// normal, colour, texture coordinate) at upload. ABI 1.7 added the texture
+// coordinate and a model matrix, which the renderer applies when drawing.
 //
 // When the host gives no normals they are computed per vertex as the
 // area-weighted sum of the normals of the triangles that use it, each normal
@@ -18,7 +19,7 @@ constexpr int kMeshMinVertices = 3;
 constexpr int kMeshMaxVertices = STRATA_MAX_MESH_VERTICES;
 
 struct StaticMesh {
-    static constexpr int kFloatsPerVertex = 9;  // position xyz, normal xyz, colour rgb (as TerrainMesh)
+    static constexpr int kFloatsPerVertex = 11;  // position xyz, normal xyz, colour rgb, uv
     std::vector<float> vertices;
     std::vector<uint32_t> indices;
 
@@ -33,7 +34,8 @@ struct StaticMesh {
 // negative colour.
 void validateStaticMesh(const StrataMesh& mesh);
 
-// Validates, then builds the mesh.
-StaticMesh buildStaticMesh(const StrataMesh& mesh);
+// Validates, then builds the mesh. uvs is NULL (every vertex at 0, 0) or
+// vertex_count finite (u, v) pairs.
+StaticMesh buildStaticMesh(const StrataMesh& mesh, const float* uvs = nullptr);
 
 }  // namespace strata::render

@@ -84,6 +84,19 @@ namespace Strata.Interop.Tests {
         }
 
         [Fact]
+        public unsafe void TexturedMeshMatchesNative() {
+            if (IntPtr.Size == 8) Assert.Equal(72, Unsafe.SizeOf<StrataTexturedMesh>());
+            AssertLayout<StrataTexturedMesh>(StrataAbi.StructTexturedMesh, "mesh", "uvs", "texture", "flags");
+            byte* texel = stackalloc byte[4];
+            uint id = 0;
+            Assert.Equal(1, StrataNative.strata_create_texture_rgba8(IntPtr.Zero, 1, 1, texel, 0, &id));  // STRATA_ERROR_INVALID_ARGUMENT
+            Assert.Equal(1, StrataNative.strata_destroy_texture(IntPtr.Zero, 1));
+            var mesh = new StrataTexturedMesh();
+            Assert.Equal(1, StrataNative.strata_add_textured_mesh(IntPtr.Zero, &mesh, &id));
+            Assert.Equal(1, StrataNative.strata_set_mesh_transform(IntPtr.Zero, 1, null));
+        }
+
+        [Fact]
         public unsafe void OverlaySubmitsRejectANullEngine() {
             var point = new StrataPoint { size_pixels = 2 };
             Assert.Equal(1, StrataNative.strata_submit_points(IntPtr.Zero, &point, 1));  // STRATA_ERROR_INVALID_ARGUMENT

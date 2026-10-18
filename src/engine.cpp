@@ -107,6 +107,12 @@ void Engine::setTerrain(const StrataTerrainTile* tile) { impl_->renderer->setTer
 uint32_t Engine::addMesh(const StrataMesh& mesh) { return impl_->renderer->addMesh(mesh); }
 void Engine::removeMesh(uint32_t id) { impl_->renderer->removeMesh(id); }
 void Engine::clearMeshes() { impl_->renderer->clearMeshes(); }
+uint32_t Engine::createTextureRgba8(int32_t width, int32_t height, const uint8_t* rgba, uint32_t flags) {
+    return impl_->renderer->createTexture(width, height, rgba, flags);
+}
+void Engine::destroyTexture(uint32_t id) { impl_->renderer->destroyTexture(id); }
+uint32_t Engine::addTexturedMesh(const StrataTexturedMesh& mesh) { return impl_->renderer->addTexturedMesh(mesh); }
+void Engine::setMeshTransform(uint32_t id, const float* model) { impl_->renderer->setMeshTransform(id, model); }
 
 void Engine::setPointLights(const StrataPointLight* lights, size_t count) {
     if (count > 0 && lights == nullptr) fail(STRATA_ERROR_INVALID_ARGUMENT, "lights is NULL with a non-zero count");

@@ -59,9 +59,17 @@ void validateStaticMesh(const StrataMesh& m) {
     }
 }
 
-StaticMesh buildStaticMesh(const StrataMesh& m) {
+StaticMesh buildStaticMesh(const StrataMesh& m, const float* uvs) {
     validateStaticMesh(m);
     const size_t count = static_cast<size_t>(m.vertex_count);
+    if (uvs) {
+        for (size_t i = 0; i < count * 2; ++i) {
+            if (!std::isfinite(uvs[i])) {
+                fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: uv of vertex %lu is not finite",
+                     static_cast<unsigned long>(i / 2));
+            }
+        }
+    }
     auto position = [&](uint32_t v) { return glm::vec3(m.positions[v * 3], m.positions[v * 3 + 1], m.positions[v * 3 + 2]); };
 
     std::vector<glm::vec3> normals(count, glm::vec3(0.0f));
@@ -91,7 +99,8 @@ StaticMesh buildStaticMesh(const StrataMesh& m) {
         const float* rgb = m.colors ? m.colors + v * 3 : m.color;
         const float out[StaticMesh::kFloatsPerVertex] = {m.positions[v * 3], m.positions[v * 3 + 1], m.positions[v * 3 + 2],
                                                          normals[v].x,       normals[v].y,           normals[v].z,
-                                                         rgb[0],             rgb[1],                 rgb[2]};
+                                                         rgb[0],             rgb[1],                 rgb[2],
+                                                         uvs ? uvs[v * 2] : 0.0f, uvs ? uvs[v * 2 + 1] : 0.0f};
         mesh.vertices.insert(mesh.vertices.end(), out, out + StaticMesh::kFloatsPerVertex);
     }
     mesh.indices.assign(m.indices, m.indices + m.index_count);

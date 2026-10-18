@@ -1,6 +1,7 @@
 // OpenGL 4.5 core backend for GpuDevice, using direct state access.
 #include <glad/gl.h>
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -96,8 +97,10 @@ void GLAD_API_PTR debugCallback(GLenum, GLenum type, GLuint, GLenum severity, GL
 }
 
 // Texture units Strata binds (0 unused, 1 cascades, 2 point shadows, 3 the
-// overlay font), saved and restored for a host context.
-constexpr int kHostTextureUnits = 4;
+// overlay font, 4 a mesh's texture), saved and restored for a host context.
+constexpr int kHostTextureUnits = 5;
+// Uniform buffer slots Strata binds (0 frame, 1 pass, 2 point lights, 3 mesh).
+constexpr int kHostUniformSlots = 4;
 
 struct HostState {
     GLint program = 0, vertexArray = 0, drawFramebuffer = 0, readFramebuffer = 0;
@@ -112,7 +115,7 @@ struct HostState {
     GLint blendEquationRgb = GL_FUNC_ADD, blendEquationAlpha = GL_FUNC_ADD;
     GLint texture2D[kHostTextureUnits] = {}, texture2DArray[kHostTextureUnits] = {},
           textureCubeArray[kHostTextureUnits] = {};
-    GLint uniformBuffers[3] = {0, 0, 0};
+    GLint uniformBuffers[kHostUniformSlots] = {};
     GLint elementArrayBuffer = 0, arrayBuffer = 0;
 };
 
@@ -186,14 +189,20 @@ public:
         const GLenum format = desc.format == TextureFormat::RGBA8 ? GL_RGBA8
                               : desc.format == TextureFormat::R8 ? GL_R8
                                                                  : GL_DEPTH_COMPONENT32F;
+        const bool mipmaps = desc.mipmaps && desc.layers == 0 && desc.format == TextureFormat::RGBA8;
+        GLsizei levels = 1;
+        if (mipmaps) {
+            for (int size = std::max(desc.width, desc.height); size > 1; size /= 2) ++levels;
+        }
         glCreateTextures(target, 1, &record.name);
         if (desc.layers > 0) {
             glTextureStorage3D(record.name, 1, format, desc.width, desc.height, cube ? desc.layers * 6 : desc.layers);
         } else {
-            glTextureStorage2D(record.name, 1, format, desc.width, desc.height);
+            glTextureStorage2D(record.name, levels, format, desc.width, desc.height);
         }
         const GLint filter = desc.nearest ? GL_NEAREST : GL_LINEAR;
-        glTextureParameteri(record.name, GL_TEXTURE_MIN_FILTER, filter);
+        glTextureParameteri(record.name, GL_TEXTURE_MIN_FILTER,
+                            mipmaps ? (desc.nearest ? GL_NEAREST_MIPMAP_LINEAR : GL_LINEAR_MIPMAP_LINEAR) : filter);
         glTextureParameteri(record.name, GL_TEXTURE_MAG_FILTER, filter);
         if (desc.initialData && desc.layers == 0 && desc.format != TextureFormat::Depth32F) {
             const bool r8 = desc.format == TextureFormat::R8;
@@ -202,8 +211,9 @@ public:
                                 GL_UNSIGNED_BYTE, desc.initialData);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
         }
-        glTextureParameteri(record.name, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTextureParameteri(record.name, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        if (mipmaps && desc.initialData) glGenerateTextureMipmap(record.name);
+        glTextureParameteri(record.name, GL_TEXTURE_WRAP_S, desc.repeatU ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+        glTextureParameteri(record.name, GL_TEXTURE_WRAP_T, desc.repeatV ? GL_REPEAT : GL_CLAMP_TO_EDGE);
         if (cube) glTextureParameteri(record.name, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
         if (desc.depthCompare) {
             glTextureParameteri(record.name, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
@@ -465,7 +475,7 @@ public:
             glGetIntegerv(GL_TEXTURE_BINDING_2D_ARRAY, &s.texture2DArray[unit]);
             glGetIntegerv(GL_TEXTURE_BINDING_CUBE_MAP_ARRAY, &s.textureCubeArray[unit]);
         }
-        for (int slot = 0; slot < 3; ++slot) {
+        for (int slot = 0; slot < kHostUniformSlots; ++slot) {
             glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, static_cast<GLuint>(slot), &s.uniformBuffers[slot]);
         }
         glActiveTexture(static_cast<GLenum>(s.activeTexture));
@@ -500,7 +510,7 @@ public:
             glBindTexture(GL_TEXTURE_2D_ARRAY, static_cast<GLuint>(s.texture2DArray[unit]));
             glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, static_cast<GLuint>(s.textureCubeArray[unit]));
         }
-        for (int slot = 0; slot < 3; ++slot) {
+        for (int slot = 0; slot < kHostUniformSlots; ++slot) {
             glBindBufferBase(GL_UNIFORM_BUFFER, static_cast<GLuint>(slot), static_cast<GLuint>(s.uniformBuffers[slot]));
         }
         glActiveTexture(static_cast<GLenum>(s.activeTexture));

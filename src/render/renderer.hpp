@@ -5,6 +5,8 @@
 #include <array>
 #include <chrono>
 #include <memory>
+#include <string>
+#include <utility>
 #include <cstdint>
 #include <vector>
 
@@ -35,8 +37,13 @@ public:
     void setPointLights(const StrataPointLight* lights, size_t count);
     void setTerrain(const StrataTerrainTile* tile);
     uint32_t addMesh(const StrataMesh& mesh);
+    uint32_t addTexturedMesh(const StrataTexturedMesh& mesh);  // ABI 1.7
+    void setMeshTransform(uint32_t id, const float* model);    // ABI 1.7; nullptr = identity
     void removeMesh(uint32_t id);
     void clearMeshes();
+    // ABI 1.7.
+    uint32_t createTexture(int32_t width, int32_t height, const uint8_t* rgba, uint32_t flags);
+    void destroyTexture(uint32_t id);
 
     void beginFrame(const StrataFrameDesc& desc);
     void submit(const StrataRenderItem* items, size_t count);
@@ -67,9 +74,14 @@ private:
     void writePointLightUniforms();
     void drawPrimitives(bool forShadow);
     void drawTerrain();
-    // Draws the terrain and every static mesh with whichever terrain-format
-    // pipeline the caller picks (nothing is bound when there are none).
-    void drawWorldMeshes(rhi::PipelineHandle pipeline);
+    // Draws the terrain with one pipeline and the static meshes with another
+    // (nothing is bound when there are none). Shadow passes skip unlit meshes;
+    // the opaque pass draws them with unlitPipeline.
+    enum class MeshPass { Shadow, Opaque };
+    void drawWorldMeshes(rhi::PipelineHandle terrainPipeline, rhi::PipelineHandle meshPipeline, MeshPass pass,
+                         rhi::PipelineHandle unlitPipeline = {});
+    void writeMeshUniforms();
+    uint32_t addMeshEntry(const StrataMesh& mesh, const float* uvs, uint32_t texture, uint32_t flags);
     void shadowPass(const Cascades& cascades);
     void ensurePointShadowMaps(int cubes);
     void pointShadowPass();
@@ -100,14 +112,28 @@ private:
     rhi::PipelineHandle terrainLegacyPipeline_, terrainSunPipeline_, terrainShadowPipeline_,
         terrainPointShadowPipeline_;
 
-    // Static meshes (ABI 1.4): the terrain's vertex format and pipelines.
+    // Static meshes (ABI 1.4; textures, model matrices and unlit in 1.7).
     struct MeshEntry {
         uint32_t id = 0;
         rhi::BufferHandle vertices, indices;
         uint32_t indexCount = 0;
+        glm::mat4 model{1.0f};
+        uint32_t texture = 0;  // texture id; 0 or a destroyed id draws white
+        uint32_t flags = 0;    // STRATA_MESH_*
     };
     std::vector<MeshEntry> meshes_;
     uint32_t nextMeshId_ = 1;
+    rhi::PipelineHandle meshLegacyPipeline_, meshSunPipeline_, meshUnlitPipeline_, meshShadowPipeline_,
+        meshPointShadowPipeline_;
+    std::string meshLegacyFragment_, meshSunFragment_;  // kept alive for the pipeline descriptions
+    rhi::BufferHandle meshUniforms_;
+    size_t meshUniformStride_ = 256;
+
+    // Textures (ABI 1.7) by id, and the 1 x 1 white texture untextured meshes sample.
+    std::vector<std::pair<uint32_t, rhi::TextureHandle>> textures_;
+    uint32_t nextTextureId_ = 1;
+    rhi::TextureHandle whiteTexture_;
+    rhi::TextureHandle textureFor(uint32_t id) const;
 
     // Headless surfaces draw here instead of a default framebuffer.
     rhi::TextureHandle offscreenColor_, offscreenDepth_;

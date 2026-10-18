@@ -56,9 +56,33 @@ static_assert(sizeof(PointLightUniforms) == 16 + 2 * 16 * STRATA_MAX_POINT_LIGHT
               "PointLightUniforms must match the std140 PointLights block");
 
 constexpr uint32_t kInstanceStride = sizeof(StrataRenderItem);
+
+// std140 mirror of the Mesh block in shaders.hpp.
+struct MeshUniforms {
+    glm::mat4 model;
+    glm::mat4 normalMatrix;  // inverse transpose of model's upper 3x3, in a mat4
+};
 static_assert(kInstanceStride == 44, "StrataRenderItem must stay 44 bytes (Beyond Nations' RenderItem)");
 
 bool finite(float v) { return std::isfinite(v); }
+
+// A lit fragment shader for static meshes: the same shader with its vColor
+// input renamed and replaced by the vertex colour times the mesh's texture
+// (unit 4), so lighting, shadows and fog stay one piece of GLSL.
+std::string withAlbedo(const char* fragment) {
+    std::string s = fragment;
+    auto replaceOnce = [&s](const std::string& from, const std::string& to) {
+        const auto at = s.find(from);
+        if (at == std::string::npos || s.find(from, at + 1) != std::string::npos) {
+            fail(STRATA_ERROR_INTERNAL, "mesh shader: '%s' must occur exactly once", from.c_str());
+        }
+        s.replace(at, from.size(), to);
+    };
+    replaceOnce("in vec4 vColor;\n",
+                "in vec4 vColorIn;\nin vec2 vUv;\nlayout(binding = 4) uniform sampler2D uAlbedo;\nvec4 vColor;\n");
+    replaceOnce("void main() {\n", "void main() {\n    vColor = vColorIn * vec4(texture(uAlbedo, vUv).rgb, 1.0);\n");
+    return s;
+}
 
 bool allFinite(const float* values, size_t count) {
     for (size_t i = 0; i < count; ++i) {
@@ -90,6 +114,17 @@ Renderer::Renderer(rhi::GpuDevice& device, platform::Surface& surface) : device_
     pointShadowUniforms_ = device_.createBuffer(pointShadowUniformStride_ * 6 * STRATA_MAX_SHADOWED_POINT_LIGHTS,
                                                 nullptr, true, "strata.point-shadow-uniforms");
     instances_ = device_.createBuffer(1024 * kInstanceStride, nullptr, true, "strata.instances");
+    meshUniformStride_ = ((sizeof(MeshUniforms) + alignment - 1) / alignment) * alignment;
+    meshUniforms_ = device_.createBuffer(meshUniformStride_ * STRATA_MAX_MESHES, nullptr, true, "strata.mesh-uniforms");
+    {
+        const uint8_t white[4] = {255, 255, 255, 255};
+        rhi::TextureDesc desc;
+        desc.width = 1;
+        desc.height = 1;
+        desc.initialData = white;
+        desc.debugName = "strata.white";
+        whiteTexture_ = device_.createTexture(desc);
+    }
 
     // BN's constants until the host says otherwise.
     lighting_.mode = STRATA_LIGHTING_LEGACY;
@@ -128,12 +163,21 @@ Renderer::~Renderer() {
     device_.destroy(pointShadowMaps_);
     device_.destroy(pointShadowPipeline_);
     clearMeshes();
+    for (auto& t : textures_) device_.destroy(t.second);
+    textures_.clear();
+    device_.destroy(whiteTexture_);
+    device_.destroy(meshUniforms_);
     device_.destroy(terrainVertices_);
     device_.destroy(terrainIndices_);
     device_.destroy(terrainLegacyPipeline_);
     device_.destroy(terrainSunPipeline_);
     device_.destroy(terrainShadowPipeline_);
     device_.destroy(terrainPointShadowPipeline_);
+    device_.destroy(meshLegacyPipeline_);
+    device_.destroy(meshSunPipeline_);
+    device_.destroy(meshUnlitPipeline_);
+    device_.destroy(meshShadowPipeline_);
+    device_.destroy(meshPointShadowPipeline_);
     for (auto target : shadowTargets_) device_.destroy(target);
     device_.destroy(shadowMaps_);
     device_.destroy(offscreenTarget_);
@@ -237,6 +281,32 @@ void Renderer::buildPipelines() {
     terrain.fragmentSource = shaders::kSunFragment;
     terrainSunPipeline_ = device_.createPipeline(terrain);
 
+    // Static meshes: the terrain's attributes plus a uv, a model matrix and a
+    // texture, through the same fragment shaders with the colour multiplied
+    // by the texture first.
+    const std::vector<VertexBufferLayout> meshBuffers = {{0, StaticMesh::kFloatsPerVertex * sizeof(float), false}};
+    const std::vector<VertexAttribute> meshAttributes = {
+        {0, 0, 3, AttribType::Float, 0},
+        {1, 0, 3, AttribType::Float, 3 * sizeof(float)},
+        {5, 0, 3, AttribType::Float, 6 * sizeof(float)},
+        {6, 0, 2, AttribType::Float, 9 * sizeof(float)},
+    };
+    meshLegacyFragment_ = withAlbedo(shaders::kLegacyFragment);
+    meshSunFragment_ = withAlbedo(shaders::kSunFragment);
+    PipelineDesc mesh = terrain;
+    mesh.name = "opaque.mesh.legacy";
+    mesh.vertexSource = shaders::kMeshVertex;
+    mesh.fragmentSource = meshLegacyFragment_.c_str();
+    mesh.buffers = meshBuffers;
+    mesh.attributes = meshAttributes;
+    meshLegacyPipeline_ = device_.createPipeline(mesh);
+    mesh.name = "opaque.mesh.sun";
+    mesh.fragmentSource = meshSunFragment_.c_str();
+    meshSunPipeline_ = device_.createPipeline(mesh);
+    mesh.name = "opaque.mesh.unlit";
+    mesh.fragmentSource = shaders::kMeshUnlitFragment;
+    meshUnlitPipeline_ = device_.createPipeline(mesh);
+
     PipelineDesc terrainShadow = shadow;
     terrainShadow.name = "shadow.terrain";
     terrainShadow.vertexSource = shaders::kTerrainShadowVertex;
@@ -250,6 +320,17 @@ void Renderer::buildPipelines() {
     terrainPointShadow.buffers = terrainBuffers;
     terrainPointShadow.attributes = {terrainAttributes[0]};
     terrainPointShadowPipeline_ = device_.createPipeline(terrainPointShadow);
+
+    PipelineDesc meshShadow = terrainShadow;
+    meshShadow.name = "shadow.mesh";
+    meshShadow.vertexSource = shaders::kMeshShadowVertex;
+    meshShadow.buffers = meshBuffers;
+    meshShadowPipeline_ = device_.createPipeline(meshShadow);
+    PipelineDesc meshPointShadow = terrainPointShadow;
+    meshPointShadow.name = "point_shadow.mesh";
+    meshPointShadow.vertexSource = shaders::kMeshPointShadowVertex;
+    meshPointShadow.buffers = meshBuffers;
+    meshPointShadowPipeline_ = device_.createPipeline(meshPointShadow);
 
     PipelineDesc sky;
     sky.name = "sky";
@@ -376,22 +457,113 @@ void Renderer::setTerrain(const StrataTerrainTile* tile) {
     terrainIndexCount_ = static_cast<uint32_t>(mesh.indices.size());
 }
 
-uint32_t Renderer::addMesh(const StrataMesh& m) {
+uint32_t Renderer::addMesh(const StrataMesh& m) { return addMeshEntry(m, nullptr, 0, 0); }
+
+uint32_t Renderer::addTexturedMesh(const StrataTexturedMesh& m) {
+    if (m.flags & ~static_cast<uint32_t>(STRATA_MESH_UNLIT)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: unknown flags 0x%x", m.flags);
+    }
+    if (m.texture != 0 && !textureFor(m.texture)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: no texture with id %u", m.texture);
+    }
+    return addMeshEntry(m.mesh, m.uvs, m.texture, m.flags);
+}
+
+uint32_t Renderer::addMeshEntry(const StrataMesh& m, const float* uvs, uint32_t texture, uint32_t flags) {
     if (meshes_.size() >= static_cast<size_t>(STRATA_MAX_MESHES)) {
         fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: the scene already holds STRATA_MAX_MESHES (%d) meshes",
              STRATA_MAX_MESHES);
     }
     if (nextMeshId_ == 0) fail(STRATA_ERROR_INVALID_STATE, "mesh: ids exhausted");
-    const StaticMesh mesh = buildStaticMesh(m);  // validates first; throws before anything changes
+    const StaticMesh mesh = buildStaticMesh(m, uvs);  // validates first; throws before anything changes
     MeshEntry entry;
     entry.vertices = device_.createBuffer(mesh.vertices.size() * sizeof(float), mesh.vertices.data(), false,
                                           "strata.mesh-vertices");
     entry.indices = device_.createBuffer(mesh.indices.size() * sizeof(uint32_t), mesh.indices.data(), false,
                                          "strata.mesh-indices");
     entry.indexCount = static_cast<uint32_t>(mesh.indices.size());
+    entry.texture = texture;
+    entry.flags = flags;
     entry.id = nextMeshId_++;
     meshes_.push_back(entry);
     return entry.id;
+}
+
+void Renderer::setMeshTransform(uint32_t id, const float* model) {
+    for (auto& entry : meshes_) {
+        if (entry.id != id) continue;
+        if (model == nullptr) {
+            entry.model = glm::mat4(1.0f);
+            return;
+        }
+        for (int i = 0; i < 16; ++i) {
+            if (!std::isfinite(model[i])) fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh transform: element %d is not finite", i);
+        }
+        const glm::mat4 m = glm::make_mat4(model);
+        const float det = glm::determinant(glm::mat3(m));
+        if (!(std::fabs(det) > 1e-12f) || !std::isfinite(det)) {
+            fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh transform: the upper 3x3 is not invertible");
+        }
+        entry.model = m;
+        return;
+    }
+    fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: no mesh with id %u", id);
+}
+
+rhi::TextureHandle Renderer::textureFor(uint32_t id) const {
+    for (const auto& t : textures_) {
+        if (t.first == id) return t.second;
+    }
+    return {};
+}
+
+uint32_t Renderer::createTexture(int32_t width, int32_t height, const uint8_t* rgba, uint32_t flags) {
+    const uint32_t known = STRATA_TEXTURE_MIPMAPS | STRATA_TEXTURE_CLAMP_U | STRATA_TEXTURE_CLAMP_V;
+    if (flags & ~known) fail(STRATA_ERROR_INVALID_ARGUMENT, "texture: unknown flags 0x%x", flags);
+    if (width < 1 || height < 1 || width > STRATA_MAX_TEXTURE_SIZE || height > STRATA_MAX_TEXTURE_SIZE) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "texture: width and height must be 1..%d (got %d x %d)",
+             STRATA_MAX_TEXTURE_SIZE, width, height);
+    }
+    if (!rgba) fail(STRATA_ERROR_INVALID_ARGUMENT, "texture: rgba is NULL");
+    if (textures_.size() >= static_cast<size_t>(STRATA_MAX_TEXTURES)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "texture: the engine already holds STRATA_MAX_TEXTURES (%d) textures",
+             STRATA_MAX_TEXTURES);
+    }
+    if (nextTextureId_ == 0) fail(STRATA_ERROR_INVALID_STATE, "texture: ids exhausted");
+    rhi::TextureDesc desc;
+    desc.width = width;
+    desc.height = height;
+    desc.initialData = rgba;
+    desc.mipmaps = (flags & STRATA_TEXTURE_MIPMAPS) != 0;
+    desc.repeatU = (flags & STRATA_TEXTURE_CLAMP_U) == 0;
+    desc.repeatV = (flags & STRATA_TEXTURE_CLAMP_V) == 0;
+    desc.debugName = "strata.mesh-texture";
+    const rhi::TextureHandle texture = device_.createTexture(desc);
+    const uint32_t id = nextTextureId_++;
+    textures_.emplace_back(id, texture);
+    return id;
+}
+
+void Renderer::destroyTexture(uint32_t id) {
+    for (auto it = textures_.begin(); it != textures_.end(); ++it) {
+        if (it->first != id) continue;
+        device_.destroy(it->second);
+        textures_.erase(it);
+        return;
+    }
+    fail(STRATA_ERROR_INVALID_ARGUMENT, "texture: no texture with id %u", id);
+}
+
+void Renderer::writeMeshUniforms() {
+    if (meshes_.empty()) return;
+    std::vector<uint8_t> bytes(meshUniformStride_ * meshes_.size(), 0);
+    for (size_t i = 0; i < meshes_.size(); ++i) {
+        MeshUniforms u;
+        u.model = meshes_[i].model;
+        u.normalMatrix = glm::mat4(glm::transpose(glm::inverse(glm::mat3(meshes_[i].model))));
+        std::memcpy(bytes.data() + i * meshUniformStride_, &u, sizeof u);
+    }
+    device_.updateBuffer(meshUniforms_, 0, bytes.size(), bytes.data());
 }
 
 void Renderer::removeMesh(uint32_t id) {
@@ -462,7 +634,7 @@ void Renderer::pointShadowPass() {
             device_.bindPipeline(pointShadowPipeline_);
             device_.bindUniformBuffer(1, pointShadowUniforms_, layer * pointShadowUniformStride_, sizeof u);
             drawPrimitives(true);
-            drawWorldMeshes(terrainPointShadowPipeline_);
+            drawWorldMeshes(terrainPointShadowPipeline_, meshPointShadowPipeline_, MeshPass::Shadow);
             device_.endPass();
         }
     }
@@ -655,17 +827,36 @@ void Renderer::drawTerrain() {
     ++stats_.draw_calls;
 }
 
-void Renderer::drawWorldMeshes(rhi::PipelineHandle pipeline) {
-    if (terrainIndexCount_ == 0 && meshes_.empty()) return;
-    device_.bindPipeline(pipeline);
-    drawTerrain();
-    for (const auto& entry : meshes_) {
-        device_.bindVertexBuffer(0, entry.vertices, 0);
-        device_.bindIndexBuffer(entry.indices);
-        rhi::DrawIndexed draw;
-        draw.indexCount = entry.indexCount;
-        device_.drawIndexed(draw);
-        ++stats_.draw_calls;
+void Renderer::drawWorldMeshes(rhi::PipelineHandle terrainPipeline, rhi::PipelineHandle meshPipeline, MeshPass pass,
+                               rhi::PipelineHandle unlitPipeline) {
+    if (terrainIndexCount_ > 0) {
+        device_.bindPipeline(terrainPipeline);
+        drawTerrain();
+    }
+    if (meshes_.empty()) return;
+    // Lit meshes first, then (opaque pass only) unlit ones; shadows skip unlit.
+    for (int unlit = 0; unlit < 2; ++unlit) {
+        if (unlit && pass == MeshPass::Shadow) break;
+        bool bound = false;
+        for (size_t i = 0; i < meshes_.size(); ++i) {
+            const MeshEntry& entry = meshes_[i];
+            if (((entry.flags & STRATA_MESH_UNLIT) != 0) != (unlit != 0)) continue;
+            if (!bound) {
+                device_.bindPipeline(unlit ? unlitPipeline : meshPipeline);
+                bound = true;
+            }
+            device_.bindUniformBuffer(3, meshUniforms_, i * meshUniformStride_, sizeof(MeshUniforms));
+            if (pass == MeshPass::Opaque) {
+                const rhi::TextureHandle texture = textureFor(entry.texture);
+                device_.bindTexture(4, texture ? texture : whiteTexture_);
+            }
+            device_.bindVertexBuffer(0, entry.vertices, 0);
+            device_.bindIndexBuffer(entry.indices);
+            rhi::DrawIndexed draw;
+            draw.indexCount = entry.indexCount;
+            device_.drawIndexed(draw);
+            ++stats_.draw_calls;
+        }
     }
 }
 
@@ -684,7 +875,7 @@ void Renderer::shadowPass(const Cascades& cascades) {
         device_.bindPipeline(shadowPipeline_);
         device_.bindUniformBuffer(1, shadowUniforms_, index * shadowUniformStride_, sizeof(glm::mat4));
         drawPrimitives(true);
-        drawWorldMeshes(terrainShadowPipeline_);
+        drawWorldMeshes(terrainShadowPipeline_, meshShadowPipeline_, MeshPass::Shadow);
         device_.endPass();
     }
     stats_.shadow_cascades = cascades.count;
@@ -708,7 +899,9 @@ void Renderer::opaquePass(int width, int height) {
         device_.bindUniformBuffer(2, pointLightUniforms_, 0, sizeof(PointLightUniforms));
     }
     drawPrimitives(false);
-    drawWorldMeshes(lighting_.mode == STRATA_LIGHTING_LEGACY ? terrainLegacyPipeline_ : terrainSunPipeline_);
+    const bool legacy = lighting_.mode == STRATA_LIGHTING_LEGACY;
+    drawWorldMeshes(legacy ? terrainLegacyPipeline_ : terrainSunPipeline_, legacy ? meshLegacyPipeline_ : meshSunPipeline_,
+                    MeshPass::Opaque, meshUnlitPipeline_);
     device_.endPass();
 }
 
@@ -755,6 +948,7 @@ void Renderer::endFrame() {
         ensureOffscreenTarget(width, height);
     }
     uploadInstances();
+    writeMeshUniforms();
 
     Cascades cascades;
     const bool sun = lighting_.mode == STRATA_LIGHTING_SUN;

@@ -42,6 +42,65 @@ long long daysFromCivil(long long y, unsigned m, unsigned d) {
     return era * 146097 + static_cast<long long>(doe) - 719468;
 }
 
+uint8_t toByte(float v) { return static_cast<uint8_t>(std::lround(std::fmin(std::fmax(v, 0.0f), 1.0f) * 255.0f)); }
+
+// A test planet map: a checker of twelve hued columns by six rows, white polar
+// caps and a red column at the prime meridian (u = 0), so spin and tilt show.
+void fillGlobe(Scene::Texture& t) {
+    for (int y = 0; y < t.height; ++y) {
+        const float v = (static_cast<float>(y) + 0.5f) / static_cast<float>(t.height);
+        const float latitude = 90.0f - v * 180.0f;
+        for (int x = 0; x < t.width; ++x) {
+            const float u = (static_cast<float>(x) + 0.5f) / static_cast<float>(t.width);
+            float r, g, b;
+            const int column = static_cast<int>(u * 12.0f), row = static_cast<int>(v * 6.0f);
+            const bool dark = ((column + row) & 1) != 0;
+            const float hue = static_cast<float>(column % 4) / 4.0f;  // blue, green, teal, sand
+            const float palette[4][3] = {{0.15f, 0.35f, 0.80f}, {0.25f, 0.60f, 0.25f}, {0.15f, 0.60f, 0.60f},
+                                         {0.80f, 0.70f, 0.45f}};
+            const float* c = palette[static_cast<int>(hue * 4.0f)];
+            const float k = dark ? 0.6f : 1.0f;
+            r = c[0] * k;
+            g = c[1] * k;
+            b = c[2] * k;
+            if (std::fabs(latitude) > 70.0f) r = g = b = 0.95f;
+            if (u < 1.0f / 48.0f) {
+                r = 0.9f;
+                g = 0.1f;
+                b = 0.1f;
+            }
+            uint8_t* px = &t.rgba[(static_cast<size_t>(y) * static_cast<size_t>(t.width) + static_cast<size_t>(x)) * 4];
+            px[0] = toByte(r);
+            px[1] = toByte(g);
+            px[2] = toByte(b);
+            px[3] = 255;
+        }
+    }
+}
+
+// Column-major 4x4 product a * b.
+void multiply(const float* a, const float* b, float* out) {
+    float r[16];
+    for (int c = 0; c < 4; ++c)
+        for (int row = 0; row < 4; ++row) {
+            float sum = 0.0f;
+            for (int k = 0; k < 4; ++k) sum += a[k * 4 + row] * b[c * 4 + k];
+            r[c * 4 + row] = sum;
+        }
+    std::memcpy(out, r, sizeof r);
+}
+
+// Rotation by `degrees` about a unit axis (Rodrigues), column-major.
+void rotation(const float axis[3], float degrees, float* out) {
+    const float a = degrees * 3.14159265358979f / 180.0f, c = std::cos(a), s = std::sin(a), t = 1.0f - c;
+    const float x = axis[0], y = axis[1], z = axis[2];
+    const float m[16] = {t * x * x + c,     t * x * y + s * z, t * x * z - s * y, 0,
+                         t * x * y - s * z, t * y * y + c,     t * y * z + s * x, 0,
+                         t * x * z + s * y, t * y * z - s * x, t * z * z + c,     0,
+                         0,                 0,                 0,                 1};
+    std::memcpy(out, m, sizeof m);
+}
+
 void parse(const std::string& path, Scene& scene, int depth) {
     if (depth > 8) bad(path, "includes nest too deeply");
     std::ifstream file(path);
@@ -163,6 +222,108 @@ void parse(const std::string& path, Scene& scene, int depth) {
             uint32_t v;
             while (in >> v) scene.meshes.back().indices.push_back(v);
             if (!in.eof()) bad(where, "expected indices after 'triangles'");
+        } else if (word == "texture") {
+            Scene::Texture t;
+            std::string kind;
+            read(in, t.name, where, "texture name");
+            read(in, kind, where, "texture kind");
+            read(in, t.width, where, "width");
+            read(in, t.height, where, "height");
+            if (t.width < 1 || t.height < 1 || t.width > 4096 || t.height > 4096) bad(where, "texture size out of range");
+            t.rgba.assign(static_cast<size_t>(t.width) * static_cast<size_t>(t.height) * 4, 255);
+            if (kind == "checker") {
+                int cu = 0, cv = 0;
+                float a[3], b[3];
+                read(in, cu, where, "cells u");
+                read(in, cv, where, "cells v");
+                for (float& v : a) read(in, v, where, "first colour");
+                for (float& v : b) read(in, v, where, "second colour");
+                if (cu < 1 || cv < 1) bad(where, "checker cells must be positive");
+                for (int y = 0; y < t.height; ++y)
+                    for (int x = 0; x < t.width; ++x) {
+                        const bool odd = (((x * cu) / t.width + (y * cv) / t.height) & 1) != 0;
+                        const float* c = odd ? b : a;
+                        uint8_t* px = &t.rgba[(static_cast<size_t>(y) * static_cast<size_t>(t.width) +
+                                               static_cast<size_t>(x)) * 4];
+                        for (int i = 0; i < 3; ++i) px[i] = toByte(c[i]);
+                    }
+            } else if (kind == "globe") {
+                fillGlobe(t);
+                t.flags |= STRATA_TEXTURE_CLAMP_V;
+            } else {
+                bad(where, "unknown texture kind '" + kind + "'");
+            }
+            std::string option;
+            while (in >> option) {
+                if (option == "mipmaps") t.flags |= STRATA_TEXTURE_MIPMAPS;
+                else if (option == "clamp_v") t.flags |= STRATA_TEXTURE_CLAMP_V;
+                else bad(where, "unknown texture option '" + option + "'");
+            }
+            scene.textures.push_back(std::move(t));
+        } else if (word == "sphere_mesh") {
+            int slices = 0, stacks = 0;
+            SceneMesh mesh;
+            read(in, slices, where, "slices");
+            read(in, stacks, where, "stacks");
+            for (int i = 0; i < 3; ++i) read(in, mesh.color[i], where, "colour");
+            if (slices < 3 || stacks < 2) bad(where, "a sphere needs at least 3 slices and 2 stacks");
+            for (int j = 0; j <= stacks; ++j) {
+                const float v = static_cast<float>(j) / static_cast<float>(stacks);
+                const float lat = (0.5f - v) * 3.14159265358979f;
+                for (int i = 0; i <= slices; ++i) {
+                    const float u = static_cast<float>(i) / static_cast<float>(slices);
+                    const float lon = u * 2.0f * 3.14159265358979f;
+                    // u is longitude, east from +X towards -Z (counter-clockwise seen from
+                    // the +Y pole, so a positive spin about +Y turns the planet prograde);
+                    // v = 0 is the north pole, as an equirectangular map's top row.
+                    const float x = std::cos(lat) * std::cos(lon), y = std::sin(lat), z = -std::cos(lat) * std::sin(lon);
+                    mesh.positions.insert(mesh.positions.end(), {x, y, z});
+                    mesh.uvs.insert(mesh.uvs.end(), {u, v});
+                }
+            }
+            const uint32_t row = static_cast<uint32_t>(slices + 1);
+            for (uint32_t j = 0; j < static_cast<uint32_t>(stacks); ++j)
+                for (uint32_t i = 0; i < static_cast<uint32_t>(slices); ++i) {
+                    const uint32_t a = j * row + i, b = a + 1, c = a + row, d = c + 1;
+                    // Counter-clockwise seen from outside.
+                    mesh.indices.insert(mesh.indices.end(), {a, c, b, b, c, d});
+                }
+            scene.meshes.push_back(std::move(mesh));
+        } else if (word == "uvs") {
+            if (scene.meshes.empty()) bad(where, "'uvs' before 'mesh'");
+            float v;
+            while (in >> v) scene.meshes.back().uvs.push_back(v);
+            if (!in.eof()) bad(where, "expected numbers after 'uvs'");
+        } else if (word == "mesh_texture") {
+            if (scene.meshes.empty()) bad(where, "'mesh_texture' before 'mesh'");
+            read(in, scene.meshes.back().texture, where, "texture name");
+        } else if (word == "mesh_unlit") {
+            if (scene.meshes.empty()) bad(where, "'mesh_unlit' before 'mesh'");
+            scene.meshes.back().unlit = true;
+        } else if (word == "mesh_transform") {
+            if (scene.meshes.empty()) bad(where, "'mesh_transform' before 'mesh'");
+            float t[3], axis[3], tilt = 0, spin = 0, scale = 1;
+            for (float& v : t) read(in, v, where, "translation");
+            for (float& v : axis) read(in, v, where, "tilt axis");
+            read(in, tilt, where, "tilt degrees");
+            read(in, spin, where, "spin degrees");
+            read(in, scale, where, "scale");
+            const float length = std::sqrt(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
+            if (!(length > 0.0f)) bad(where, "the tilt axis must be non-zero");
+            for (float& v : axis) v /= length;
+            const float up[3] = {0, 1, 0};
+            float tiltM[16], spinM[16], m[16];
+            rotation(axis, tilt, tiltM);
+            rotation(up, spin, spinM);
+            multiply(tiltM, spinM, m);
+            const float scaleTranslate[16] = {scale, 0, 0, 0, 0, scale, 0, 0, 0, 0, scale, 0, 0, 0, 0, 1};
+            multiply(m, scaleTranslate, m);
+            m[12] = t[0];
+            m[13] = t[1];
+            m[14] = t[2];
+            SceneMesh& mesh = scene.meshes.back();
+            std::memcpy(mesh.transform, m, sizeof m);
+            mesh.hasTransform = true;
         } else if (word == "include") {
             std::string other;
             read(in, other, where, "file name");
@@ -277,6 +438,10 @@ Scene loadScene(const std::string& path) {
     }
     for (const SceneMesh& mesh : scene.meshes) {
         if (mesh.positions.size() % 3 != 0) bad(path, "a mesh's vertex values are not a multiple of 3");
+        if (!mesh.uvs.empty() && mesh.uvs.size() * 3 != mesh.positions.size() * 2) {
+            bad(path, "a mesh has " + std::to_string(mesh.uvs.size()) + " uv values, expected " +
+                          std::to_string(mesh.positions.size() / 3 * 2));
+        }
         if (!mesh.colors.empty() && mesh.colors.size() != mesh.positions.size()) {
             bad(path, "a mesh has " + std::to_string(mesh.colors.size()) + " colour values, expected " +
                           std::to_string(mesh.positions.size()));

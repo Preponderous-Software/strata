@@ -18,6 +18,7 @@
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "image/compare.hpp"
@@ -80,10 +81,35 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
         tile.colors = scene.terrainColors.empty() ? nullptr : scene.terrainColors.data();
         ok = ok && check(strata_set_terrain(engine, &tile), "strata_set_terrain");
     }
+    std::vector<std::pair<std::string, uint32_t>> textures;
+    for (const auto& t : scene.textures) {
+        uint32_t id = 0;
+        ok = ok && check(strata_create_texture_rgba8(engine, t.width, t.height, t.rgba.data(), t.flags, &id),
+                         "strata_create_texture_rgba8");
+        textures.emplace_back(t.name, id);
+    }
     for (const auto& mesh : scene.meshes) {
         const StrataMesh view = mesh.view();
         uint32_t id = 0;
-        ok = ok && check(strata_add_mesh(engine, &view, &id), "strata_add_mesh");
+        if (mesh.textured()) {
+            StrataTexturedMesh textured{};
+            textured.mesh = view;
+            textured.uvs = mesh.uvs.empty() ? nullptr : mesh.uvs.data();
+            for (const auto& t : textures) {
+                if (t.first == mesh.texture) textured.texture = t.second;
+            }
+            if (!mesh.texture.empty() && textured.texture == 0) {
+                std::fprintf(stderr, "unknown texture '%s'\n", mesh.texture.c_str());
+                ok = false;
+            }
+            textured.flags = mesh.unlit ? STRATA_MESH_UNLIT : 0u;
+            ok = ok && check(strata_add_textured_mesh(engine, &textured, &id), "strata_add_textured_mesh");
+        } else {
+            ok = ok && check(strata_add_mesh(engine, &view, &id), "strata_add_mesh");
+        }
+        if (ok && mesh.hasTransform) {
+            ok = check(strata_set_mesh_transform(engine, id, mesh.transform), "strata_set_mesh_transform");
+        }
     }
     if (!scene.pointLights.empty()) {
         ok = ok && check(strata_set_point_lights(engine, scene.pointLights.data(),

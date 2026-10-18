@@ -145,3 +145,29 @@ TEST(static_mesh_rejects_bad_meshes_naming_the_field) {
     bad.color[1] = nan;
     CHECK(rejects(bad, "color must be finite"));
 }
+
+// ABI 1.7: texture coordinates ride along in the last two floats.
+TEST(static_mesh_carries_uvs) {
+    const std::vector<float> uvs = {0, 0, 0, 1, 1, 0, 1, 1};
+    const StaticMesh m = buildStaticMesh(mesh(kQuad, kQuadIndices), uvs.data());
+    CHECK(StaticMesh::kFloatsPerVertex == 11);
+    for (int v = 0; v < 4; ++v) {
+        const float* p = &m.vertices[static_cast<size_t>(v) * StaticMesh::kFloatsPerVertex + 9];
+        CHECK(p[0] == uvs[static_cast<size_t>(v) * 2]);
+        CHECK(p[1] == uvs[static_cast<size_t>(v) * 2 + 1]);
+    }
+    const StaticMesh none = buildStaticMesh(mesh(kQuad, kQuadIndices));
+    CHECK(none.vertices[9] == 0.0f && none.vertices[10] == 0.0f);
+}
+
+TEST(static_mesh_rejects_non_finite_uvs) {
+    std::vector<float> uvs = {0, 0, 0, 1, 1, 0, 1, 1};
+    uvs[5] = std::numeric_limits<float>::quiet_NaN();
+    bool threw = false;
+    try {
+        buildStaticMesh(mesh(kQuad, kQuadIndices), uvs.data());
+    } catch (const strata::Error& e) {
+        threw = e.status() == STRATA_ERROR_INVALID_ARGUMENT && std::strstr(e.what(), "uv of vertex 2") != nullptr;
+    }
+    CHECK(threw);
+}

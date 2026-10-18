@@ -11,6 +11,22 @@
 - Scene files take `sun date <YYYY-MM-DD> <HH:MM> <utc_offset> <lat> <lon>`.
   New goldens `sun_june_noon`, `sun_december_noon` and
   `sun_december_afternoon`.
+- Textures and textured, transformable meshes (ABI 1.7):
+  `strata_create_texture_rgba8` (RGBA8, optional mip chain with trilinear
+  filtering, wrap or clamp per axis) and `strata_destroy_texture`;
+  `StrataTexturedMesh` and `strata_add_textured_mesh` (a static mesh with
+  uvs, a texture that multiplies its colour, and `STRATA_MESH_UNLIT` for
+  emissive surfaces that ignore lights and fog and cast no shadow); and
+  `strata_set_mesh_transform`, a per-mesh model matrix (normals through its
+  inverse transpose) applied in the opaque and shadow passes, so a planet
+  spins about a tilted axis with one call a frame and no re-upload.
+- `GpuDevice` textures gain mip chains and repeat wrapping. Static meshes
+  now have their own pipelines (a uv per vertex, a model matrix in uniform
+  binding 3, the texture on unit 4); untextured meshes sample a white texel
+  and draw exactly as before.
+- Scene files take `texture`, `sphere_mesh`, `uvs`, `mesh_texture`,
+  `mesh_unlit` and `mesh_transform`. New goldens `tex_globe_sun` and
+  `tex_space_planets`.
 
 ## 0.3.0
 

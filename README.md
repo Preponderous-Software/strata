@@ -23,6 +23,10 @@
     <td align="center"><img src="tests/golden/sun_june_noon/linux-llvmpipe.png" width="200" alt="The village at noon on the June solstice at 40 degrees north: short shadows"><br>June noon, 40° N</td>
     <td align="center"><img src="tests/golden/sun_december_noon/linux-llvmpipe.png" width="200" alt="The village at noon on the December solstice at 40 degrees north: long shadows"><br>December noon, 40° N</td>
   </tr>
+  <tr>
+    <td align="center"><img src="tests/golden/tex_globe_sun/linux-llvmpipe.png" width="200" alt="A textured test globe with a tilted axis over a mipmapped checker ground"><br>textures (ABI 1.7)</td>
+    <td align="center"><img src="tests/golden/tex_space_planets/linux-llvmpipe.png" width="200" alt="An unlit textured star lighting three textured globes with different axial tilts"><br>tilted, textured planets</td>
+  </tr>
 </table>
 
 Every image above, apart from the animation, is a golden image that CI
@@ -73,6 +77,7 @@ compatible, and every ABI 1.0 host still works.
 | Static meshes *(ABI 1.4)* | Up to 256 host-built indexed triangle meshes in world space with per-vertex colour, drawn and shadowed like the terrain | `mesh_static_morning`, `mesh_static_night_lamp` |
 | O1 *(ABI 1.5)* | Unlit overlays (lines, round points, screen text in a public-domain 8×8 font) and a space lighting mode lit only by point lights | `o1_space_system`, `o1_overlays_sun` |
 | Seasonal sun *(ABI 1.6, unreleased)* | The sun placed from a real date, time, latitude and longitude (NOAA solar position), alongside the time-of-day sun | `sun_june_noon`, `sun_december_noon`, `sun_december_afternoon` |
+| Textures *(ABI 1.7, unreleased)* | RGBA8 textures with mip maps, textured meshes (planet maps on latitude-longitude spheres), unlit emissive meshes, and a model matrix per mesh for spinning about a tilted axis | `tex_globe_sun`, `tex_space_planets` |
 
 Next come streaming and larger terrain (T2–T4), meshes and materials (M1–M4),
 and optional OpenUSD modules (`STRATA_WITH_USD`, off by default).
