@@ -1,0 +1,9 @@
+# The OpenUSD build Strata's USD modules are tested against. Changing any line
+# changes the artifact key, so CI builds and publishes a new prebuilt once.
+OPENUSD_TAG=v26.08
+OPENUSD_COMMIT=ee47c679abde5b467a7b6a41f3b2285564a4222e
+# RFC 0019 §11 minimal configuration (no imaging, no Python).
+OPENUSD_FLAGS=--no-python --no-imaging --no-usdview --no-tools --no-tests --no-examples --no-tutorials --no-docs --no-materialx --no-alembic --no-draco --no-openvdb --no-embree --no-vulkan --no-usdValidation --onetbb --build-shared
+# Toolchain: the same pinned Ubuntu image as Strata's other Linux CI jobs (GCC 13, CMake 3.28).
+OPENUSD_IMAGE=ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
+OPENUSD_TOOLCHAIN=ubuntu24.04-gcc13
