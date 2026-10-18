@@ -80,6 +80,16 @@ void parse(const std::string& path, Scene& scene, int depth) {
                 if (sky != "sky") bad(where, "expected 'sky' or nothing after the clear colour");
                 scene.frame.clear_flags |= STRATA_CLEAR_SKY;
             }
+        } else if (word == "light") {
+            std::string type;
+            read(in, type, where, "light type");
+            if (type != "point") bad(where, "unknown light type '" + type + "' (expected 'point')");
+            StrataPointLight light{};
+            for (float& v : light.position) read(in, v, where, "position");
+            read(in, light.range, where, "range");
+            for (float& v : light.color) read(in, v, where, "colour");
+            read(in, light.intensity, where, "intensity");
+            scene.pointLights.push_back(light);
         } else if (word == "include") {
             std::string other;
             read(in, other, where, "file name");

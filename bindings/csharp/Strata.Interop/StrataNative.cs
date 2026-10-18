@@ -1,4 +1,4 @@
-// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1).
+// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.1).
 // Copyright (c) 2026 Daniel McCoy Stephenson. MIT licence; see LICENSE.
 using System;
 using System.IO;
@@ -9,6 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights.</summary>
+        public const uint Minor = 1;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
@@ -16,7 +18,10 @@ namespace Strata.Interop {
         public const uint ClearColor = 1u << 0, ClearDepth = 1u << 1, ClearSky = 1u << 2;
 
         public const int StructRenderItem = 0, StructEngineDesc = 1, StructCamera = 2, StructLighting = 3,
-            StructFrameDesc = 4, StructFrameStats = 5, StructEvent = 6;
+            StructFrameDesc = 4, StructFrameStats = 5, StructEvent = 6,
+            StructPointLight = 7;  // ABI 1.1
+
+        public const int MaxPointLights = 32;  // ABI 1.1
 
         public const int Ok = 0;
     }
@@ -100,6 +105,16 @@ namespace Strata.Interop {
         public fixed byte text[32];
     }
 
+    /// <summary>StrataPointLight (ABI 1.1): 36 bytes.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct StrataPointLight {
+        public fixed float position[3];
+        public float range;
+        public fixed float color[3];
+        public float intensity;
+        public uint flags;
+    }
+
     public static unsafe class StrataNative {
         public const string Library = "strata";
 
@@ -118,6 +133,8 @@ namespace Strata.Interop {
 
         [DllImport(Library)] public static extern uint strata_abi_version();
         [DllImport(Library)] public static extern IntPtr strata_version_string();
+        /// <summary>ABI 1.1. Absent from 1.0 libraries (EntryPointNotFoundException means minor 0).</summary>
+        [DllImport(Library)] public static extern uint strata_abi_minor();
         [DllImport(Library)] public static extern int strata_struct_size(int structId);
         [DllImport(Library)] public static extern int strata_struct_field_offset(int structId, int fieldId);
         [DllImport(Library)] public static extern IntPtr strata_last_error();
@@ -130,6 +147,8 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_set_camera(IntPtr engine, StrataCamera* camera);
         [DllImport(Library)] public static extern int strata_lighting_defaults(int mode, StrataLighting* lighting);
         [DllImport(Library)] public static extern int strata_set_lighting(IntPtr engine, StrataLighting* lighting);
+        /// <summary>ABI 1.1.</summary>
+        [DllImport(Library)] public static extern int strata_set_point_lights(IntPtr engine, StrataPointLight* lights, int count);
         [DllImport(Library)] public static extern int strata_begin_frame(IntPtr engine, StrataFrameDesc* desc);
         /// <summary>items points at count 44-byte records with the StrataRenderItem layout.</summary>
         [DllImport(Library)] public static extern int strata_submit_primitives(IntPtr engine, void* items, int count);

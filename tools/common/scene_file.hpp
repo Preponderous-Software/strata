@@ -7,6 +7,7 @@
 //   lighting legacy <dir x y z> <ambient>
 //   lighting sun <time_of_day> <latitude> <cascades> <map_size> <shadow_distance> <lambda> <fog 0|1>
 //   clear <r> <g> <b> <a> [sky]
+//   light point <px py pz> <range> <r g b> <intensity>
 //   include <file>                (relative to the including file)
 //   item <cube|capsule|cylinder|sphere> <px py pz> <sx sy sz> <r g b> [a]
 #pragma once
@@ -29,6 +30,7 @@ struct Scene {
     StrataLighting lighting{};
     StrataFrameDesc frame{};
     std::vector<StrataRenderItem> items;
+    std::vector<StrataPointLight> pointLights;
 };
 
 // Throws std::runtime_error with "file:line: message" on a malformed scene.

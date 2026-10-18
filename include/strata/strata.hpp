@@ -60,6 +60,9 @@ public:
 
     void setCamera(const StrataCamera& camera);
     void setLighting(const StrataLighting& lighting);
+    // Replaces the point lights (copied). count 0 removes them; at most
+    // STRATA_MAX_POINT_LIGHTS. Validates every light before changing any.
+    void setPointLights(const StrataPointLight* lights, size_t count);
 
     void beginFrame(const StrataFrameDesc& desc);
     void submitPrimitives(const StrataRenderItem* items, size_t count);

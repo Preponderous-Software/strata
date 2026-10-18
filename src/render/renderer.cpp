@@ -8,6 +8,7 @@
 
 #include "core/error.hpp"
 #include "core/log.hpp"
+#include "render/lights.hpp"
 #include "render/pass_list.hpp"
 #include "render/primitive_mesh.hpp"
 #include "render/shaders.hpp"
@@ -43,6 +44,15 @@ struct FrameUniforms {
 };
 static_assert(sizeof(FrameUniforms) == 640, "FrameUniforms must match the std140 Frame block");
 
+// std140 mirror of the PointLights block in shaders.hpp.
+struct PointLightUniforms {
+    glm::ivec4 info;
+    glm::vec4 positionRange[STRATA_MAX_POINT_LIGHTS];
+    glm::vec4 color[STRATA_MAX_POINT_LIGHTS];
+};
+static_assert(sizeof(PointLightUniforms) == 16 + 2 * 16 * STRATA_MAX_POINT_LIGHTS,
+              "PointLightUniforms must match the std140 PointLights block");
+
 constexpr uint32_t kInstanceStride = sizeof(StrataRenderItem);
 static_assert(kInstanceStride == 44, "StrataRenderItem must stay 44 bytes (Beyond Nations' RenderItem)");
 
@@ -71,6 +81,8 @@ Renderer::Renderer(rhi::GpuDevice& device, platform::Surface& surface) : device_
     const size_t alignment = device_.uniformBufferAlignment();
     shadowUniformStride_ = ((sizeof(glm::mat4) + alignment - 1) / alignment) * alignment;
     shadowUniforms_ = device_.createBuffer(shadowUniformStride_ * kMaxCascades, nullptr, true, "strata.shadow-uniforms");
+    pointLightUniforms_ =
+        device_.createBuffer(sizeof(PointLightUniforms), nullptr, true, "strata.point-light-uniforms");
     instances_ = device_.createBuffer(1024 * kInstanceStride, nullptr, true, "strata.instances");
 
     // BN's constants until the host says otherwise.
@@ -103,6 +115,7 @@ Renderer::~Renderer() {
     device_.destroy(instances_);
     device_.destroy(frameUniforms_);
     device_.destroy(shadowUniforms_);
+    device_.destroy(pointLightUniforms_);
     for (auto target : shadowTargets_) device_.destroy(target);
     device_.destroy(shadowMaps_);
     device_.destroy(offscreenTarget_);
@@ -247,6 +260,11 @@ void Renderer::setLighting(const StrataLighting& lighting) {
     }
 }
 
+void Renderer::setPointLights(const StrataPointLight* lights, size_t count) {
+    validatePointLights(lights, count);
+    pointLights_.assign(lights, lights + count);
+}
+
 void Renderer::beginFrame(const StrataFrameDesc& desc) {
     if (frameOpen_) fail(STRATA_ERROR_INVALID_STATE, "begin_frame called twice without end_frame");
     frame_ = desc;
@@ -369,6 +387,17 @@ void Renderer::writeFrameUniforms(int width, int height, const Cascades* cascade
     device_.updateBuffer(frameUniforms_, 0, sizeof u, &u);
 }
 
+void Renderer::writePointLightUniforms() {
+    PointLightUniforms u{};
+    u.info = glm::ivec4(static_cast<int>(pointLights_.size()), 0, 0, 0);
+    for (size_t i = 0; i < pointLights_.size(); ++i) {
+        const StrataPointLight& l = pointLights_[i];
+        u.positionRange[i] = glm::vec4(l.position[0], l.position[1], l.position[2], l.range);
+        u.color[i] = glm::vec4(glm::vec3(l.color[0], l.color[1], l.color[2]) * l.intensity, 0.0f);
+    }
+    device_.updateBuffer(pointLightUniforms_, 0, sizeof u, &u);
+}
+
 void Renderer::drawPrimitives(bool forShadow) {
     (void)forShadow;
     device_.bindVertexBuffer(0, meshVertices_, 0);
@@ -422,6 +451,7 @@ void Renderer::opaquePass(int width, int height) {
     device_.bindUniformBuffer(0, frameUniforms_, 0, sizeof(FrameUniforms));
     if (lighting_.mode == STRATA_LIGHTING_SUN) {
         device_.bindTexture(1, shadowMaps_);
+        device_.bindUniformBuffer(2, pointLightUniforms_, 0, sizeof(PointLightUniforms));
     }
     drawPrimitives(false);
     device_.endPass();
@@ -498,6 +528,7 @@ void Renderer::endFrame() {
         ensureShadowMaps(256, 1);
     }
     writeFrameUniforms(width, height, shadows ? &cascades : nullptr);
+    if (sun) writePointLightUniforms();
 
     auto t = Clock::now();
     if (shadows) shadowPass(cascades);

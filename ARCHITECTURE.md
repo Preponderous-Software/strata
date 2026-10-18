@@ -33,10 +33,14 @@ to write one.
 
 ## The C ABI
 
-- **Versioned.** `STRATA_ABI_VERSION` is 1. A host passes the version it was
-  built against in `StrataEngineDesc.abi_version`, and also passes
-  `struct_size`. `strata_create` refuses a mismatch with
-  `STRATA_ERROR_ABI_MISMATCH`.
+- **Versioned.** `STRATA_ABI_VERSION` (the major version) is 1. A host passes
+  the version it was built against in `StrataEngineDesc.abi_version`, and also
+  passes `struct_size`. `strata_create` refuses a mismatch with
+  `STRATA_ERROR_ABI_MISMATCH`. Compatible additions (a new function, a new
+  struct with its own id, a new enum or flag value) bump `STRATA_ABI_MINOR`
+  instead, so every ABI 1 host keeps working. A host that uses an addition
+  checks `strata_abi_minor()` at run time; `strata.h` names the minor each
+  addition arrived in (1.1: point lights).
 - **Layouts are checkable.** `strata_struct_size(id)` and
   `strata_struct_field_offset(id, field)` report every boundary struct. The C++
   unit tests `static_assert` the layouts. The C# tests
@@ -69,7 +73,7 @@ SDL3 window.
 
 A host-context engine records the GL state it is about to change: program,
 VAO, framebuffers, viewport, depth/cull/blend/scissor/offset/clamp enables,
-masks, and texture and uniform-buffer bindings on units 0–1. It restores them
+masks, texture bindings on units 0–1 and uniform-buffer bindings on slots 0–2. It restores them
 after each frame and readback, so the host's own renderers (ImGui, labels)
 keep working.
 
@@ -82,7 +86,7 @@ the list is logged:
 
 ```text
 shadow:   instances, camera, lighting -> shadow_map
-opaque:   instances, camera, lighting, shadow_map -> color, depth
+opaque:   instances, camera, lighting, point_lights, shadow_map -> color, depth
 sky:      camera, lighting, depth -> color
 readback: color -> pixels
 ```
@@ -142,7 +146,23 @@ renderer. The C# harness reproduces the C++ golden with zero differing pixels.
   all come from the same time-of-day curve.
 - **L1** is the same path with `cascade_count = 1`.
 
-**Later:** point lights (L3) and shadowed point lights (L4).
+### Point lights (L3)
+
+- `strata_set_point_lights` replaces the scene's point lights with a copy of
+  up to 32 `StrataPointLight`s (position, range, linear colour, intensity).
+  They persist until the next call. Every light is validated before any is
+  replaced.
+- They shade `STRATA_LIGHTING_SUN` scenes only, in the opaque pass: Lambert
+  diffuse, added to the key light and ambient, before fog. Legacy lighting is
+  untouched, so it stays pixel-identical with Beyond Nations' renderer.
+- Falloff, with x = distance / range: `intensity · w² / (1 + 16x²)`, where
+  `w = clamp(1 − x⁴, 0, 1)` (`src/render/lights.cpp`, mirrored in the shader).
+  The shape depends only on x, so a pool of light looks the same at any world
+  scale; it reaches exactly zero at the range.
+- The lights live in a 1 KiB uniform block (binding 2), so a frame with lights
+  costs no extra draws.
+
+**Later:** shadowed point lights (L4).
 
 ## Optional modules
 

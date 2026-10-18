@@ -25,6 +25,15 @@ namespace strata::render::shaders {
     "    ivec4 uShadowInfo;    // x cascades (0 = off), y map size\n"              \
     "};\n"
 
+// std140 block of point lights (binding 2); mirrored by PointLightUniforms in
+// renderer.cpp. Colour is premultiplied by intensity.
+#define STRATA_POINT_LIGHT_BLOCK                                                   \
+    "layout(std140, binding = 2) uniform PointLights {\n"                          \
+    "    ivec4 uPointInfo;              // x light count\n"                         \
+    "    vec4 uPointPositionRange[32];  // xyz position, w range\n"                 \
+    "    vec4 uPointColor[32];          // rgb colour * intensity\n"                \
+    "};\n"
+
 // Instanced primitives. The vertex maths is Beyond Nations'
 // InstancedPrimitiveShader term for term (scale then translate, normal
 // divided by the squared scale, projection * view * world) so the legacy
@@ -73,7 +82,7 @@ inline const char* kSunFragment =
     "in vec4 vColor;\n"
     "in vec3 vWorld;\n"
     "in float vViewDepth;\n" STRATA_FRAME_BLOCK
-    "layout(binding = 1) uniform sampler2DArrayShadow uShadowMap;\n"
+    "layout(binding = 1) uniform sampler2DArrayShadow uShadowMap;\n" STRATA_POINT_LIGHT_BLOCK
     "out vec4 fragColor;\n"
     "float sampleCascade(int cascade, vec3 world, vec3 normal) {\n"
     "    // Normal offset: push the lookup off the surface by a texel or so.\n"
@@ -107,13 +116,28 @@ inline const char* kSunFragment =
     "    }\n"
     "    return s;\n"
     "}\n"
+    "// Point lights: the falloff of render/lights.cpp, Lambert diffuse.\n"
+    "vec3 pointLights(vec3 world, vec3 normal) {\n"
+    "    vec3 sum = vec3(0.0);\n"
+    "    for (int i = 0; i < uPointInfo.x; ++i) {\n"
+    "        vec3 toPoint = uPointPositionRange[i].xyz - world;\n"
+    "        float d = length(toPoint);\n"
+    "        float r = d / uPointPositionRange[i].w;\n"
+    "        float r2 = r * r;\n"
+    "        float window = clamp(1.0 - r2 * r2, 0.0, 1.0);\n"
+    "        float falloff = window * window / (1.0 + 16.0 * r2);\n"
+    "        float ndl = max(dot(normal, toPoint / max(d, 1e-4)), 0.0);\n"
+    "        sum += uPointColor[i].rgb * (falloff * ndl);\n"
+    "    }\n"
+    "    return sum;\n"
+    "}\n"
     "void main() {\n"
     "    vec3 normal = normalize(vNormal);\n"
     "    vec3 toLight = uLight.xyz;\n"
     "    float ndl = max(dot(normal, toLight), 0.0);\n"
     "    float shadow = ndl > 0.0 ? mix(1.0, shadowFactor(vWorld, normal), uLight.w) : 1.0;\n"
     "    vec3 ambient = mix(uGroundAmbient.rgb, uSkyAmbient.rgb, normal.y * 0.5 + 0.5);\n"
-    "    vec3 color = vColor.rgb * (ambient + uLightColor.rgb * ndl * shadow);\n"
+    "    vec3 color = vColor.rgb * (ambient + uLightColor.rgb * ndl * shadow + pointLights(vWorld, normal));\n"
     "    if (uSkyAmbient.w > 0.5) {\n"
     "        float d = length(vWorld - uEye.xyz);\n"
     "        float f = clamp((d - uFogColor.w) / max(uZenith.w - uFogColor.w, 1e-3), 0.0, 1.0);\n"
@@ -169,5 +193,6 @@ inline const char* kSkyFragment =
     "}\n";
 
 #undef STRATA_FRAME_BLOCK
+#undef STRATA_POINT_LIGHT_BLOCK
 
 }  // namespace strata::render::shaders

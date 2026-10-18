@@ -93,6 +93,10 @@ const int32_t kEventFields[] = {
     STRATA_OFFSET(StrataEvent, repeat), STRATA_OFFSET(StrataEvent, button),   STRATA_OFFSET(StrataEvent, width),
     STRATA_OFFSET(StrataEvent, height), STRATA_OFFSET(StrataEvent, x),        STRATA_OFFSET(StrataEvent, y),
     STRATA_OFFSET(StrataEvent, dx),     STRATA_OFFSET(StrataEvent, dy),       STRATA_OFFSET(StrataEvent, text)};
+const int32_t kPointLightFields[] = {
+    STRATA_OFFSET(StrataPointLight, position), STRATA_OFFSET(StrataPointLight, range),
+    STRATA_OFFSET(StrataPointLight, color),    STRATA_OFFSET(StrataPointLight, intensity),
+    STRATA_OFFSET(StrataPointLight, flags)};
 
 #define STRATA_TABLE(type, fields) \
     FieldTable { static_cast<int32_t>(sizeof(type)), fields, static_cast<int32_t>(sizeof(fields) / sizeof(fields[0])) }
@@ -102,7 +106,7 @@ const FieldTable* fieldTable(int32_t structId) {
         STRATA_TABLE(StrataRenderItem, kRenderItemFields), STRATA_TABLE(StrataEngineDesc, kEngineDescFields),
         STRATA_TABLE(StrataCamera, kCameraFields),         STRATA_TABLE(StrataLighting, kLightingFields),
         STRATA_TABLE(StrataFrameDesc, kFrameDescFields),   STRATA_TABLE(StrataFrameStats, kFrameStatsFields),
-        STRATA_TABLE(StrataEvent, kEventFields)};
+        STRATA_TABLE(StrataEvent, kEventFields),           STRATA_TABLE(StrataPointLight, kPointLightFields)};
     if (structId < 0 || structId >= static_cast<int32_t>(sizeof tables / sizeof tables[0])) return nullptr;
     return &tables[structId];
 }
@@ -112,6 +116,8 @@ const FieldTable* fieldTable(int32_t structId) {
 extern "C" {
 
 uint32_t strata_abi_version(void) { return STRATA_ABI_VERSION; }
+
+uint32_t strata_abi_minor(void) { return STRATA_ABI_MINOR; }
 
 const char* strata_version_string(void) { return STRATA_VERSION_STRING; }
 
@@ -230,6 +236,13 @@ StrataStatus strata_lighting_defaults(int32_t mode, StrataLighting* out) {
 StrataStatus strata_set_lighting(StrataEngine* engine, const StrataLighting* lighting) {
     if (!engine || !lighting) return invalid("engine and lighting must not be NULL");
     return guard([&] { engine->engine->setLighting(*lighting); });
+}
+
+StrataStatus strata_set_point_lights(StrataEngine* engine, const StrataPointLight* lights, int32_t count) {
+    if (!engine) return invalid("engine is NULL");
+    if (count < 0) return invalid("count is negative");
+    if (count > 0 && !lights) return invalid("lights is NULL with a non-zero count");
+    return guard([&] { engine->engine->setPointLights(lights, static_cast<size_t>(count)); });
 }
 
 StrataStatus strata_begin_frame(StrataEngine* engine, const StrataFrameDesc* desc) {

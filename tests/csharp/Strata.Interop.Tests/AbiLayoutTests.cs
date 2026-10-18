@@ -31,6 +31,23 @@ namespace Strata.Interop.Tests {
         }
 
         [Fact]
+        public void AbiMinorIsAtLeastTheOneTheseDeclarationsCover() {
+            Assert.True(StrataNative.strata_abi_minor() >= StrataAbi.Minor);
+        }
+
+        [Fact]
+        public void PointLightIs36BytesAndMatchesNative() {
+            Assert.Equal(36, Unsafe.SizeOf<StrataPointLight>());
+            AssertLayout<StrataPointLight>(StrataAbi.StructPointLight, "position", "range", "color", "intensity", "flags");
+        }
+
+        [Fact]
+        public unsafe void SetPointLightsRejectsANullEngine() {
+            var light = new StrataPointLight { range = 5, intensity = 1 };
+            Assert.Equal(1, StrataNative.strata_set_point_lights(IntPtr.Zero, &light, 1));  // STRATA_ERROR_INVALID_ARGUMENT
+        }
+
+        [Fact]
         public void RenderItemIs44BytesAndMatchesNative() {
             Assert.Equal(44, Unsafe.SizeOf<StrataRenderItem>());
             AssertLayout<StrataRenderItem>(StrataAbi.StructRenderItem, "kind", "position", "scale", "color");
