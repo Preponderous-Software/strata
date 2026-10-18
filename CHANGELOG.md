@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
+
+Lighting milestones L3–L4 and terrain milestone T1 from RFC 0020. Every ABI
+addition is compatible: `STRATA_ABI_VERSION` stays 1 and the new
+`STRATA_ABI_MINOR` is 3.
 
 - Point lights (milestone L3, ABI 1.1): `StrataPointLight` and
   `strata_set_point_lights`, up to 32 unshadowed lights with a range-windowed
