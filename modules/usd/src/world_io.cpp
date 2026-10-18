@@ -353,19 +353,22 @@ bool readManifest(const SdfLayerRefPtr& layer, Manifest& m, std::string* err) {
         auto it = d.find(k);
         return it == d.end() ? VtValue() : it->second;
     };
-    if (!get("eng:formatVersion").IsHolding<int>() || !get("eng:gameId").IsHolding<std::string>() ||
-        !get("eng:gameSchemaVersion").IsHolding<int>() || !get("eng:baseHash").IsHolding<std::string>() ||
-        !get("eng:mods").IsHolding<VtStringArray>() || !get("eng:tick").IsHolding<int64_t>()) {
+    // Bind each value to a named VtValue: UncheckedGet on a temporary takes
+    // VtValue's move path, which GCC 13 flags as maybe-uninitialized.
+    const VtValue format = get("eng:formatVersion"), game = get("eng:gameId"), schema = get("eng:gameSchemaVersion"),
+                  base = get("eng:baseHash"), mods = get("eng:mods"), tick = get("eng:tick");
+    if (!format.IsHolding<int>() || !game.IsHolding<std::string>() || !schema.IsHolding<int>() ||
+        !base.IsHolding<std::string>() || !mods.IsHolding<VtStringArray>() || !tick.IsHolding<int64_t>()) {
         setErr(err, "no valid save manifest in " + layer->GetIdentifier());
         return false;
     }
-    m.formatVersion = get("eng:formatVersion").UncheckedGet<int>();
-    m.gameId = get("eng:gameId").UncheckedGet<std::string>();
-    m.gameSchemaVersion = get("eng:gameSchemaVersion").UncheckedGet<int>();
-    m.baseHash = get("eng:baseHash").UncheckedGet<std::string>();
-    const auto& mods = get("eng:mods").UncheckedGet<VtStringArray>();
-    m.mods.assign(mods.begin(), mods.end());
-    m.tick = get("eng:tick").UncheckedGet<int64_t>();
+    m.formatVersion = format.UncheckedGet<int>();
+    m.gameId = game.UncheckedGet<std::string>();
+    m.gameSchemaVersion = schema.UncheckedGet<int>();
+    m.baseHash = base.UncheckedGet<std::string>();
+    const auto& list = mods.UncheckedGet<VtStringArray>();
+    m.mods.assign(list.begin(), list.end());
+    m.tick = tick.UncheckedGet<int64_t>();
     return true;
 }
 
