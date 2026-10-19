@@ -23,7 +23,12 @@ if(STRATA_WITH_SDL)
     set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
     set(SDL_TRAY OFF CACHE BOOL "" FORCE)
     set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
-    set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
+    if(EMSCRIPTEN)
+        # SDL's Emscripten video driver makes WebGL contexts through its GLES path.
+        set(SDL_OPENGLES ON CACHE BOOL "" FORCE)
+    else()
+        set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
+    endif()
     set(SDL_WAYLAND OFF CACHE BOOL "" FORCE)
     set(SDL_X11_XTEST OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(SDL3

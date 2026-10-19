@@ -1,4 +1,6 @@
+#if !defined(__EMSCRIPTEN__)
 #include <glad/gl.h>
+#endif
 
 #include <chrono>
 #include <cmath>
@@ -18,10 +20,12 @@
 namespace strata {
 namespace {
 
+#if !defined(__EMSCRIPTEN__)
 GLADapiproc loadThroughSurface(void* user, const char* name) {
     auto* surface = static_cast<platform::Surface*>(user);
     return reinterpret_cast<GLADapiproc>(surface->procAddress(name));
 }
+#endif
 
 }  // namespace
 
@@ -59,20 +63,43 @@ std::unique_ptr<Engine> Engine::create(const EngineDesc& desc) {
     raw.title = desc.title.c_str();
     raw.get_proc_address = desc.getProcAddress;
     raw.get_proc_address_user = desc.getProcAddressUser;
-    impl->surface = platform::createSurface(raw);
+    const platform::GlApi api = platform::requestedGlApi();
+    impl->surface = platform::createSurface(raw, api);
+    const bool debug = (desc.flags & STRATA_FLAG_DEBUG_CONTEXT) != 0;
 
-    const int version = gladLoadGLUserPtr(loadThroughSurface, impl->surface.get());
-    if (version == 0) {
-        fail(STRATA_ERROR_GPU, "could not load OpenGL entry points through the %s surface", impl->surface->kind());
-    }
-    const int major = GLAD_VERSION_MAJOR(version), minor = GLAD_VERSION_MINOR(version);
-    if (major < 4 || (major == 4 && minor < 5)) {
-        fail(STRATA_ERROR_GPU, "Strata needs OpenGL 4.5 core; this context is %d.%d", major, minor);
-    }
-
-    impl->device = rhi::createGl45Device((desc.flags & STRATA_FLAG_DEBUG_CONTEXT) != 0);
+#if defined(__EMSCRIPTEN__)
+    // Emscripten's WebGL 2 bindings need no loader.
+    impl->device = rhi::createGles3Device(debug);
     impl->gpuDescription = impl->device->description();
-    logf(LogLevel::Info, "%s surface, GL %d.%d: %s", impl->surface->kind(), major, minor, impl->gpuDescription.c_str());
+    logf(LogLevel::Info, "%s surface, WebGL 2: %s", impl->surface->kind(), impl->gpuDescription.c_str());
+#else
+    if (api == platform::GlApi::Gles3) {
+        const int version = gladLoadGLES2UserPtr(loadThroughSurface, impl->surface.get());
+        if (version == 0) {
+            fail(STRATA_ERROR_GPU, "could not load OpenGL ES entry points through the %s surface",
+                 impl->surface->kind());
+        }
+        const int major = GLAD_VERSION_MAJOR(version), minor = GLAD_VERSION_MINOR(version);
+        if (major < 3) fail(STRATA_ERROR_GPU, "Strata's GLES device needs OpenGL ES 3.0; this context is %d.%d", major, minor);
+        impl->device = rhi::createGles3Device(debug);
+        impl->gpuDescription = impl->device->description();
+        logf(LogLevel::Info, "%s surface, GLES %d.%d: %s", impl->surface->kind(), major, minor,
+             impl->gpuDescription.c_str());
+    } else {
+        const int version = gladLoadGLUserPtr(loadThroughSurface, impl->surface.get());
+        if (version == 0) {
+            fail(STRATA_ERROR_GPU, "could not load OpenGL entry points through the %s surface", impl->surface->kind());
+        }
+        const int major = GLAD_VERSION_MAJOR(version), minor = GLAD_VERSION_MINOR(version);
+        if (major < 4 || (major == 4 && minor < 5)) {
+            fail(STRATA_ERROR_GPU, "Strata needs OpenGL 4.5 core; this context is %d.%d", major, minor);
+        }
+        impl->device = rhi::createGl45Device(debug);
+        impl->gpuDescription = impl->device->description();
+        logf(LogLevel::Info, "%s surface, GL %d.%d: %s", impl->surface->kind(), major, minor,
+             impl->gpuDescription.c_str());
+    }
+#endif
     impl->renderer = std::make_unique<render::Renderer>(*impl->device, *impl->surface);
     return std::unique_ptr<Engine>(new Engine(std::move(impl)));
 }

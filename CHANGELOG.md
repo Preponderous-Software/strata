@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- Strata runs in the browser (WebGL 2). A second `GpuDevice` backend,
+  OpenGL ES 3.0 (`src/rhi/gles3_device.cpp`), draws every pass: the GL 4.5
+  shaders are rewritten to GLSL ES 3.00 when pipelines are created, cube map
+  arrays become one cube map per shadowed light, base vertex/instance fold
+  into attribute offsets, and depth clamp uses `EXT_depth_clamp` or a shader
+  fallback. The C ABI is unchanged (no new functions; ABI stays 1.7). Desktop
+  builds still default to OpenGL 4.5 and its goldens are unchanged.
+- Emscripten builds (`emcmake cmake ...`, emsdk 6.0.11 in CI): SDL3's
+  Emscripten driver for the canvas and input, `libstrata.a` (engine + SDL3 in
+  one archive), C++ exceptions compiled as `-fwasm-exceptions` by default
+  (`STRATA_WASM_EXCEPTIONS`), and `strata-golden` as a web page. See
+  [docs/WEB.md](docs/WEB.md), including notes for .NET `browser-wasm` hosts.
+- `examples/village-day`: the L2 village through a day, from the C ABI only;
+  an SDL3 window natively, a canvas in the browser. README animation of it
+  running in headless Chromium (`tools/make_web_media.py`).
+- The desktop library can run the GLES device too: `STRATA_GL_API=gles3`
+  selects it on an OpenGL ES 3.0 context (EGL or SDL3), and
+  `STRATA_GLES_NO_DEPTH_CLAMP=1` forces the depth clamp fallback. CI draws
+  the desktop goldens through it on llvmpipe (0 pixels over ΔE 4 on all 22).
+- CI job `build-web`: builds with Emscripten, runs the unit tests under Node,
+  checks `libstrata.a` defines the C ABI, and draws every golden scene in
+  headless Chromium (Playwright 1.61.1, SwiftShader) against new
+  `web-swiftshader.png` goldens, with and without `EXT_depth_clamp`, and
+  against the desktop goldens at the default tolerance. Releases gain a
+  `strata-<version>-wasm32-emscripten.tar.gz` asset.
+- glad is regenerated with OpenGL ES 3.0 merged into `glad/gl.h`.
+  `GpuDevice` gains `createIndexBuffer` (WebGL fixes a buffer's kind at its
+  first binding).
+
 - Seasonal sun (ABI 1.6): `StrataSolarPosition`, `strata_solar_position`
   (the sun's direction, elevation, azimuth, declination, hour angle and
   equation of time for a UTC moment, latitude and longitude, from NOAA's solar

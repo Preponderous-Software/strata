@@ -1,5 +1,5 @@
-// The platform layer: where a GL 4.5 core context comes from, where input
-// comes from, and where finished frames go.
+// The platform layer: where a GL context comes from (GL 4.5 core, or GLES 3.0
+// for WebGL 2), where input comes from, and where finished frames go.
 //
 // Three implementations sit behind one interface:
 //   SdlSurface   an SDL3 window with its own context (games, Xvfb fallback)
@@ -14,6 +14,18 @@
 #include "strata/strata.h"
 
 namespace strata::platform {
+
+// Which GL a surface creates (or, for a host context, which GL the host made).
+enum class GlApi {
+    Gl45,   // desktop OpenGL 4.5 core: the default
+    Gles3,  // OpenGL ES 3.0: always under Emscripten (WebGL 2); natively when
+            // the environment sets STRATA_GL_API=gles3 (tests, and GLES-only
+            // devices)
+};
+
+// The API this process asks for. Throws strata::Error on an unknown
+// STRATA_GL_API value.
+GlApi requestedGlApi();
 
 class Surface {
 public:
@@ -43,14 +55,14 @@ public:
 };
 
 // Picks the implementation for desc->surface. Throws strata::Error.
-std::unique_ptr<Surface> createSurface(const StrataEngineDesc& desc);
+std::unique_ptr<Surface> createSurface(const StrataEngineDesc& desc, GlApi api);
 
 std::unique_ptr<Surface> createHostSurface(const StrataEngineDesc& desc);
 #if defined(STRATA_HAVE_SDL)
-std::unique_ptr<Surface> createSdlSurface(const StrataEngineDesc& desc);
+std::unique_ptr<Surface> createSdlSurface(const StrataEngineDesc& desc, GlApi api);
 #endif
 #if defined(STRATA_HAVE_EGL)
-std::unique_ptr<Surface> createEglSurface(const StrataEngineDesc& desc);
+std::unique_ptr<Surface> createEglSurface(const StrataEngineDesc& desc, GlApi api);
 #endif
 
 }  // namespace strata::platform

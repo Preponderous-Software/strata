@@ -12,8 +12,15 @@ tests/scenes/_<anything>.scene               an include, not a test
 tests/golden/<name>/<platform>.png           the expected image
 ```
 
-`<platform>` is `linux-llvmpipe`, the CI configuration. Its Mesa version is
-pinned through a dated Ubuntu archive snapshot (see `.github/workflows/ci.yml`).
+`<platform>` is one of:
+
+| Platform | Drawn by | Pinned by |
+|---|---|---|
+| `linux-llvmpipe` | the GL 4.5 device on Mesa llvmpipe (EGL headless and an SDL3 window under Xvfb), and the GLES 3.0 device on the same Mesa (`STRATA_GL_API=gles3`) | a dated Ubuntu archive snapshot (see `.github/workflows/ci.yml`) |
+| `web-swiftshader` | the Emscripten build in headless Chromium, WebGL 2 on SwiftShader (`tests/web/run_goldens.cjs`) | the Playwright version (`PLAYWRIGHT_VERSION` in CI), which fixes Chromium |
+
+The browser build is also checked against `linux-llvmpipe` at the default
+tolerance, so it cannot drift from the desktop. See [WEB.md](WEB.md).
 
 The scene format is documented at the top of `tools/common/scene_file.hpp`.
 The C# harness reads the same files, so `bn_primitives_legacy` is checked twice:
@@ -42,6 +49,8 @@ Alpha is ignored.
 | C# harness (System.Numerics, depth 0..1 projection) vs C++ golden (glm, depth −1..1) | 0 |
 | SDL3 window under Xvfb vs headless EGL golden | 2–6 of 230,400 (≤ 0.003 %) |
 | Goldens blessed on Mesa 21.2.6 (LLVM 12) vs CI's pinned Mesa 25.2.8 (LLVM 20) | 0 (max ΔE 0.66) |
+| GLES 3.0 device vs the GL 4.5 goldens, same Mesa (with and without `EXT_depth_clamp`) | 0 (max ΔE 0.51) |
+| Chromium/SwiftShader (WebGL 2) vs the llvmpipe goldens | 10–254 of 230,400 (0.004–0.11 %), polygon edges |
 
 The tolerance therefore leaves more than 100× headroom over the noise
 measured between surfaces. It is still small enough that a missing object or a

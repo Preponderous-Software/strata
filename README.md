@@ -53,7 +53,9 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 - **Platform:** SDL3 for the window, the GL context and input. A headless EGL
   surface renders with no window and no X server, which is how CI runs.
 - **Renderer:** OpenGL 4.5 core with direct state access. It sits behind a thin
-  internal device interface (`GpuDevice`) and runs a fixed list of passes.
+  internal device interface (`GpuDevice`) and runs a fixed list of passes. A
+  second device, OpenGL ES 3.0, runs the same passes on WebGL 2, so Strata
+  also runs in a browser (see [Running in the browser](#running-in-the-browser)).
 - **Two front doors:** a C++ API (`include/strata/strata.hpp`) for C++ games,
   and a versioned C ABI (`include/strata/strata.h`) that C# reaches through
   P/Invoke.
@@ -128,6 +130,33 @@ LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe Xvfb :99 -screen 0 1024x768x24 &
 DISPLAY=:99 ./build/strata-golden check tests/scenes tests/golden build/golden-out --surface window
 ```
 
+## Running in the browser
+
+<p align="center">
+  <img src="docs/media/browser-day-cycle.gif" width="620" alt="The Strata village-day demo in a web page in headless Chromium: the village from dawn through noon and dusk to night, with cascaded sun shadows, the sky changing colour, and a campfire and lamps lighting the houses after dark. A clock and frame counter are drawn in the top-left corner.">
+</p>
+
+Strata builds with Emscripten and draws through WebGL 2, with the same C ABI.
+Every render path works there: cascaded sun shadows, point lights and their
+cube shadow maps, terrain, static and textured meshes, overlays and the sky.
+The animation above is the browser demo, `examples/village-day`, captured in
+headless Chromium. Chromium was drawing with SwiftShader, its software WebGL on
+the CPU, so the frame counter says nothing about speed on a GPU.
+
+```sh
+source /path/to/emsdk/emsdk_env.sh               # emsdk 6.0.11 in CI
+emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+cmake --build build-web -j8
+cd build-web && python3 -m http.server 8000      # open /strata-village-day.html
+```
+
+The build makes `libstrata.a` (the engine and SDL3 in one archive) to link into
+your own page, the demo, and a web page of the golden-image checker. CI draws
+every golden scene in headless Chromium and compares the result with both a
+browser golden set and the desktop goldens. Desktop builds keep OpenGL 4.5 as
+the default. [docs/WEB.md](docs/WEB.md) covers linking, surfaces, the frame
+loop, what WebGL 2 emulates and how, and notes for .NET `browser-wasm` hosts.
+
 ## Using it from C#
 
 `bindings/csharp/Strata.Interop` declares the C ABI for P/Invoke.
@@ -158,6 +187,8 @@ the GL state it touched.
   PR conventions.
 - [docs/GOLDEN_IMAGES.md](docs/GOLDEN_IMAGES.md): how images are compared, and
   the tolerances.
+- [docs/WEB.md](docs/WEB.md): building for the browser (Emscripten, WebGL 2),
+  linking `libstrata.a`, and what differs from the desktop.
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): dependency licences.
 
 ## Licence

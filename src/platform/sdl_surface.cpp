@@ -1,4 +1,5 @@
-// SDL3 window with its own OpenGL 4.5 core context.
+// SDL3 window with its own OpenGL 4.5 core context, or an OpenGL ES 3.0 one
+// (under Emscripten: a WebGL 2 context on the page's canvas).
 #include <SDL3/SDL.h>
 
 #include <cstring>
@@ -16,21 +17,31 @@ public:
 
     // Separate from the constructor so that a failure part-way still runs the
     // destructor and releases whatever was created.
-    void init(const StrataEngineDesc& desc) {
+    void init(const StrataEngineDesc& desc, GlApi api) {
         if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
             fail(STRATA_ERROR_PLATFORM, "SDL_InitSubSystem(VIDEO) failed: %s", SDL_GetError());
         }
         videoInitialised_ = true;
 
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        const bool gles = api == GlApi::Gles3;
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, gles ? 3 : 4);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, gles ? 0 : 5);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
+                            gles ? SDL_GL_CONTEXT_PROFILE_ES : SDL_GL_CONTEXT_PROFILE_CORE);
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
         SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
         SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
         SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+#if defined(__EMSCRIPTEN__)
+        // An opaque canvas: with alpha the page would show through wherever
+        // blending left destination alpha below one. No multisampling, so the
+        // browser draws the same pixels as the golden images.
+        SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 0);
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
+#else
         SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+#endif
         if (desc.flags & STRATA_FLAG_DEBUG_CONTEXT) {
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
         }
@@ -46,12 +57,16 @@ public:
         }
         context_ = SDL_GL_CreateContext(window_);
         if (!context_) {
-            fail(STRATA_ERROR_PLATFORM, "could not create an OpenGL 4.5 core context: %s", SDL_GetError());
+            fail(STRATA_ERROR_PLATFORM, "could not create an %s context: %s",
+                 gles ? "OpenGL ES 3.0 (WebGL 2)" : "OpenGL 4.5 core", SDL_GetError());
         }
         if (!SDL_GL_MakeCurrent(window_, context_)) {
             fail(STRATA_ERROR_PLATFORM, "SDL_GL_MakeCurrent failed: %s", SDL_GetError());
         }
+#if !defined(__EMSCRIPTEN__)
+        // In a browser the page's main loop paces frames (requestAnimationFrame).
         SDL_GL_SetSwapInterval((desc.flags & STRATA_FLAG_VSYNC) ? 1 : 0);
+#endif
         // Text entry (names, console commands) arrives as TEXT_INPUT events.
         SDL_StartTextInput(window_);
         logf(LogLevel::Info, "window surface: SDL %d.%d.%d, video driver %s", SDL_VERSIONNUM_MAJOR(SDL_GetVersion()),
@@ -146,9 +161,9 @@ private:
 
 }  // namespace
 
-std::unique_ptr<Surface> createSdlSurface(const StrataEngineDesc& desc) {
+std::unique_ptr<Surface> createSdlSurface(const StrataEngineDesc& desc, GlApi api) {
     auto surface = std::make_unique<SdlSurface>();
-    surface->init(desc);
+    surface->init(desc, api);
     return surface;
 }
 

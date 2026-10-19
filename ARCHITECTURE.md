@@ -10,8 +10,8 @@ is built now. Where the RFC plans more, that is called out as **later**.
                                             v
   platform/            rhi/                 render/                     image/
   Surface: SDL3        GpuDevice: GL 4.5    Renderer + fixed pass list  PNG I/O, Delta E
-  window, EGL          DSA backend          primitives, sun, cascades   comparison
-  headless, host ctx
+  window, EGL          DSA, or GLES 3.0     primitives, sun, cascades   comparison
+  headless, host ctx   (WebGL 2)
 ```
 
 ## Layers
@@ -22,15 +22,16 @@ is built now. Where the RFC plans more, that is called out as **later**.
 | `src/capi.cpp` | The C shim: argument checks, exception to status, thread-local error text, the struct layout tables | no |
 | `src/engine.cpp` | `strata::Engine`: creates the surface, loads GL with glad, owns the device and the renderer | only to load it |
 | `src/platform/` | `Surface` and its three implementations: `SdlSurface`, `EglSurface`, `HostSurface` | context creation only |
-| `src/rhi/` | `GpuDevice`, the interface the passes draw through, and its GL 4.5 DSA backend | **yes, only here** |
+| `src/rhi/` | `GpuDevice`, the interface the passes draw through; its GL 4.5 DSA backend and its GLES 3.0 / WebGL 2 backend, with the GLSL 4.50 to GLSL ES 3.00 rewrite (see [docs/WEB.md](docs/WEB.md)) | **yes, only here** |
 | `src/render/` | Primitive meshes, sun and sky model, cascade maths, pass list, `Renderer` | no: draws through `GpuDevice` |
 | `src/image/` | PNG reading and writing (stb), golden-image comparison | no |
 | `tools/` | `strata-golden`, `strata-imgcmp`, the scene-file parser | no |
 | `modules/sim/` | Deterministic simulation building blocks: seeded RNG, entity-component registry, 2D fields with diffusion, fixed-step clock, state hash, colormaps. C++ only (`strata::sim`), not in the C ABI | no |
 
-`render/` never calls GL directly. Everything goes through `GpuDevice`, so a
-later backend would not mean rewriting the passes. Strata does **not** promise
-to write one.
+`render/` never calls GL directly. Everything goes through `GpuDevice`, which
+is how the GLES 3.0 backend (WebGL 2 in a browser) draws the same passes as the
+GL 4.5 one. The desktop uses GL 4.5 unless `STRATA_GL_API=gles3` is set;
+Emscripten builds always use GLES 3.0.
 
 ## The C ABI
 
@@ -66,17 +67,18 @@ to write one.
 
 | Surface | Context from | Draws into | Used by |
 |---|---|---|---|
-| `STRATA_SURFACE_WINDOW` | SDL3 (`SDL_GL_CreateContext`, 4.5 core) | the window's back buffer | games; CI's Xvfb check |
+| `STRATA_SURFACE_WINDOW` | SDL3 (`SDL_GL_CreateContext`, 4.5 core; GLES 3.0 / WebGL 2 under Emscripten) | the window's back buffer (the canvas in a browser) | games; CI's Xvfb check; the browser demo |
 | `STRATA_SURFACE_HEADLESS` | EGL. Display: `EGL_MESA_platform_surfaceless`, else `EGL_EXT_platform_device`, else default; no surface | an offscreen RGBA8 + depth target | golden images, CI |
 | `STRATA_SURFACE_HOST_CONTEXT` | whatever is current; GL loaded through the host's `get_proc_address` | the host's bound framebuffer | Beyond Nations phase B1 (inside Silk.NET's window) |
 
-On platforms without EGL (Windows), a headless request falls back to a hidden
-SDL3 window.
+On platforms without EGL (Windows, browsers), a headless request falls back to
+a hidden SDL3 window.
 
 A host-context engine records the GL state it is about to change: program,
 VAO, framebuffers, viewport, depth/cull/blend/scissor/offset/clamp enables,
-masks, texture bindings on units 0–2 (2D, 2D array and cube-map array) and
-uniform-buffer bindings on slots 0–2. It restores them
+masks, texture bindings on units 0–4 (2D, 2D array and cube-map array; on
+GLES, units 0–7 and cube maps) and uniform-buffer bindings on slots 0–3. It
+restores them
 after each frame and readback, so the host's own renderers (ImGui, labels)
 keep working.
 

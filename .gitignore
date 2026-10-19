@@ -6,3 +6,4 @@ obj/
 .vs/
 .vscode/
 .idea/
+node_modules/

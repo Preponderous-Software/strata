@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strata village day</title>
+<style>
+  :root { color-scheme: dark; --bg: #101318; --fg: #e8e6e1; --muted: #9aa0a8; --accent: #e8a24a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 992px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 4px 0 2px; }
+  p { margin: 0 0 12px; color: var(--muted); }
+  .frame { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 6px;
+           overflow: hidden; }
+  /* SDL sizes the canvas in CSS pixels; let it follow the page instead. */
+  canvas#canvas { display: block; width: 100% !important; height: 100% !important; outline: none; }
+  #status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted);
+            pointer-events: none; text-align: center; padding: 16px; }
+  #status.error { color: #ff8a80; }
+  code { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Strata: a village day in WebGL 2</h1>
+  <p>The Strata engine's L2 village, compiled with Emscripten: four cascaded sun shadows, the analytic sky,
+     fog, and after dusk a campfire with a cube shadow map and two lamps. <code>Space</code> pauses, <code>&larr;</code>/<code>&rarr;</code> scrub the clock and
+     <code>&uarr;</code>/<code>&darr;</code> change its speed.</p>
+  <div class="frame">
+    <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+    <div id="status">Loading...</div>
+  </div>
+</main>
+<script>
+  const status = document.getElementById('status');
+  function fail(text) { status.textContent = text; status.className = 'error'; status.style.display = 'grid'; }
+  if (!document.createElement('canvas').getContext('webgl2')) {
+    fail('This browser has no WebGL 2, which Strata needs in a browser.');
+  }
+  var Module = {
+    canvas: document.getElementById('canvas'),
+    print: (text) => console.log(text),
+    printErr: (text) => console.warn(text),
+    setStatus: (text) => { if (text) status.textContent = text; },
+    onRuntimeInitialized: () => { status.style.display = 'none'; window.strataReady = true; },
+    onAbort: (what) => fail('Strata stopped: ' + what),
+  };
+  window.addEventListener('error', (e) => fail('Error: ' + e.message));
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>
