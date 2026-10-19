@@ -2,9 +2,10 @@
 //
 // It names the handful of things the passes need -- buffers, textures,
 // render targets, pipelines and indexed instanced draws -- and nothing more.
-// OpenGL 4.5 with direct state access is the only backend. The interface
-// exists so that the passes never touch GL directly, which keeps a later
-// backend possible without rewriting them; it is not a promise to write one.
+// Two backends implement it: OpenGL 4.5 with direct state access (the
+// default on the desktop) and OpenGL ES 3.0 (WebGL 2 in a browser, and Mesa's
+// GLES natively so it can be tested). The passes never touch GL directly, so
+// both draw the same frame from the same pass code.
 //
 // Handles are small typed integers; 0 is "none". Target 0 is the surface's
 // default framebuffer.
@@ -133,7 +134,11 @@ public:
     virtual size_t uniformBufferAlignment() const = 0;
 
     // Resources. Creation failures throw strata::Error.
+    // Vertex and uniform data.
     virtual BufferHandle createBuffer(size_t bytes, const void* initial, bool dynamic, const char* debugName) = 0;
+    // 32-bit indices, static. Separate because WebGL fixes, the first time a
+    // buffer is bound, whether it holds indices or anything else.
+    virtual BufferHandle createIndexBuffer(size_t bytes, const void* initial, const char* debugName) = 0;
     // Replaces the buffer's storage with `bytes` of undefined content.
     virtual void resizeBuffer(BufferHandle buffer, size_t bytes) = 0;
     virtual size_t bufferSize(BufferHandle buffer) const = 0;
@@ -150,7 +155,7 @@ public:
     virtual void beginPass(const PassDesc& desc) = 0;
     virtual void bindPipeline(PipelineHandle pipeline) = 0;
     virtual void bindVertexBuffer(uint32_t binding, BufferHandle buffer, size_t offset) = 0;
-    virtual void bindIndexBuffer(BufferHandle buffer) = 0;  // 32-bit indices
+    virtual void bindIndexBuffer(BufferHandle buffer) = 0;  // from createIndexBuffer
     virtual void bindUniformBuffer(uint32_t slot, BufferHandle buffer, size_t offset, size_t bytes) = 0;
     virtual void bindTexture(uint32_t unit, TextureHandle texture) = 0;
     virtual void drawIndexed(const DrawIndexed& draw) = 0;
@@ -171,5 +176,9 @@ public:
 
 // Expects a current GL 4.5 core context whose entry points glad has loaded.
 std::unique_ptr<GpuDevice> createGl45Device(bool debugOutput);
+
+// Expects a current OpenGL ES 3.0 (or WebGL 2) context; natively, glad's GLES
+// entry points must be loaded. See gles3_device.cpp for what it emulates.
+std::unique_ptr<GpuDevice> createGles3Device(bool debugOutput);
 
 }  // namespace strata::rhi

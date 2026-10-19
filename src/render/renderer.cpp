@@ -202,7 +202,7 @@ void Renderer::buildMeshes() {
         indices.insert(indices.end(), mesh.indices.begin(), mesh.indices.end());
     }
     meshVertices_ = device_.createBuffer(vertices.size() * sizeof(float), vertices.data(), false, "strata.primitive-vertices");
-    meshIndices_ = device_.createBuffer(indices.size() * sizeof(uint32_t), indices.data(), false, "strata.primitive-indices");
+    meshIndices_ = device_.createIndexBuffer(indices.size() * sizeof(uint32_t), indices.data(), "strata.primitive-indices");
 }
 
 void Renderer::buildPipelines() {
@@ -448,8 +448,8 @@ void Renderer::setTerrain(const StrataTerrainTile* tile) {
     const TerrainMesh mesh = buildTerrainMesh(*tile);  // validates first; throws before anything changes
     const rhi::BufferHandle vertices = device_.createBuffer(mesh.vertices.size() * sizeof(float),
                                                             mesh.vertices.data(), false, "strata.terrain-vertices");
-    const rhi::BufferHandle indices = device_.createBuffer(mesh.indices.size() * sizeof(uint32_t),
-                                                           mesh.indices.data(), false, "strata.terrain-indices");
+    const rhi::BufferHandle indices = device_.createIndexBuffer(mesh.indices.size() * sizeof(uint32_t),
+                                                                mesh.indices.data(), "strata.terrain-indices");
     device_.destroy(terrainVertices_);
     device_.destroy(terrainIndices_);
     terrainVertices_ = vertices;
@@ -479,8 +479,8 @@ uint32_t Renderer::addMeshEntry(const StrataMesh& m, const float* uvs, uint32_t 
     MeshEntry entry;
     entry.vertices = device_.createBuffer(mesh.vertices.size() * sizeof(float), mesh.vertices.data(), false,
                                           "strata.mesh-vertices");
-    entry.indices = device_.createBuffer(mesh.indices.size() * sizeof(uint32_t), mesh.indices.data(), false,
-                                         "strata.mesh-indices");
+    entry.indices = device_.createIndexBuffer(mesh.indices.size() * sizeof(uint32_t), mesh.indices.data(),
+                                              "strata.mesh-indices");
     entry.indexCount = static_cast<uint32_t>(mesh.indices.size());
     entry.texture = texture;
     entry.flags = flags;

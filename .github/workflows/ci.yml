@@ -110,6 +110,16 @@ jobs:
           sleep 2
           DISPLAY=:99 LD_LIBRARY_PATH=dist/lib dist/bin/strata-golden check tests/scenes tests/golden golden-out/window --surface window
 
+      - name: Golden images (GLES 3.0 device, the WebGL 2 backend, on llvmpipe)
+        run: |
+          # The device browsers use, run natively against the desktop goldens:
+          # once with EXT_depth_clamp and once with the shader fallback that
+          # browsers without it get.
+          STRATA_GL_API=gles3 LD_LIBRARY_PATH=dist/lib \
+            dist/bin/strata-golden check tests/scenes tests/golden golden-out/gles3
+          STRATA_GL_API=gles3 STRATA_GLES_NO_DEPTH_CLAMP=1 LD_LIBRARY_PATH=dist/lib \
+            dist/bin/strata-golden check tests/scenes tests/golden golden-out/gles3-no-depth-clamp
+
       - name: C# ABI layout tests
         env:
           STRATA_NATIVE_DIR: ${{ github.workspace }}/dist/lib
@@ -160,6 +170,94 @@ jobs:
       - name: Golden images under sanitizers
         run: build/strata-golden check tests/scenes tests/golden golden-out
 
+  # Emscripten (WebGL 2): build the static libraries, the browser goldens
+  # page and the demo, run the unit tests under Node, then draw every golden
+  # scene in headless Chromium on SwiftShader (software WebGL 2) and compare
+  # with the web goldens. emsdk and Playwright (hence Chromium and its
+  # SwiftShader) are pinned, so the browser draws the same pixels every run.
+  build-web:
+    name: Build (Emscripten, WebGL 2) and browser goldens
+    runs-on: ubuntu-24.04
+    env:
+      EMSDK_VERSION: "6.0.11"
+      PLAYWRIGHT_VERSION: "1.61.1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install emsdk
+        run: |
+          git clone --depth 1 --branch "$EMSDK_VERSION" https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install "$EMSDK_VERSION"
+          "$RUNNER_TEMP/emsdk/emsdk" activate "$EMSDK_VERSION"
+
+      - name: Configure
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          emcc --version | head -1
+          emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release -DSTRATA_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          cmake --build build-web -j4
+
+      - name: Unit tests (Node)
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          ctest --test-dir build-web --output-on-failure
+
+      - name: Check libstrata.a
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          # The one archive a consumer links must define the whole C ABI.
+          grep -o 'STRATA_API [^(]*(' include/strata/strata.h | grep -o 'strata_[a-z0-9_]*' | sort -u > abi.txt
+          emnm --defined-only build-web/libstrata.a 2>/dev/null | awk '$2 == "T" {print $3}' | grep '^strata_' | sort -u > defined.txt
+          if ! comm -23 abi.txt defined.txt | tee missing.txt | grep -q .; then
+            echo "libstrata.a defines all $(wc -l < abi.txt) C ABI functions"
+          else
+            echo "::error::libstrata.a is missing C ABI functions"; cat missing.txt; exit 1
+          fi
+
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --prefix tests/web "playwright@$PLAYWRIGHT_VERSION"
+          npx --prefix tests/web playwright install --with-deps chromium
+
+      - name: Golden images in Chromium (WebGL 2, SwiftShader)
+        run: node tests/web/run_goldens.cjs build-web golden-out/web --platform web-swiftshader
+
+      - name: Golden images in Chromium, depth clamp fallback
+        env:
+          STRATA_WEB_ENV: STRATA_GLES_NO_DEPTH_CLAMP=1
+        run: node tests/web/run_goldens.cjs build-web golden-out/web-no-depth-clamp --platform web-swiftshader
+
+      - name: Browser against the desktop goldens (default tolerance)
+        run: node tests/web/run_goldens.cjs build-web golden-out/web-vs-desktop --platform linux-llvmpipe
+
+      - name: Stage web build
+        if: always()
+        run: |
+          mkdir -p dist-web/lib dist-web/include/strata dist-web/demo
+          cp build-web/libstrata.a dist-web/lib/ || true
+          cp include/strata/strata.h dist-web/include/strata/
+          cp build-web/strata-village-day.html build-web/strata-village-day.js build-web/strata-village-day.wasm \
+            build-web/strata-village-day.data dist-web/demo/ || true
+          cp LICENSE THIRD_PARTY_NOTICES.md docs/WEB.md dist-web/
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strata-web
+          path: dist-web/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: golden-out-web
+          path: golden-out/
+          if-no-files-found: ignore
+
   build-windows:
     name: Build (Windows, MSVC)
     runs-on: windows-2022
@@ -187,7 +285,7 @@ jobs:
   release:
     name: Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-linux, golden-linux, sanitize, build-windows]
+    needs: [build-linux, golden-linux, sanitize, build-web, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -201,12 +299,18 @@ jobs:
         with:
           name: strata-win-x64
           path: windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: strata-web
+          path: web
       - name: Package
         run: |
           version="${GITHUB_REF_NAME#v}"
           mkdir -p assets
           tar -C linux -czf "assets/strata-${version}-linux-x64.tar.gz" .
           (cd windows && zip -qr "../assets/strata-${version}-win-x64.zip" .)
+          # Emscripten 6.0.11, -fwasm-exceptions: see docs/WEB.md before linking it.
+          tar -C web -czf "assets/strata-${version}-wasm32-emscripten.tar.gz" .
           # Bare libraries too, so a consumer can fetch exactly one file and
           # check it against SHA256SUMS.
           cp -L linux/lib/libstrata.so "assets/libstrata-${version}-linux-x64.so"

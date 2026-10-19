@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>strata-golden (WebGL 2)</title>
+<style>body { margin: 0; background: #000; } canvas { display: block; }</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+  // strata-golden compiled with Emscripten. The command line comes from the
+  // query string (?arg=check&arg=/scenes&...); the scenes and goldens are
+  // packaged at /scenes and /golden, and tests/web/run_goldens.cjs reads what
+  // the run wrote back out of the in-memory file system.
+  const query = new URLSearchParams(location.search);
+  var Module = {
+    canvas: document.getElementById('canvas'),
+    arguments: query.getAll('arg'),
+    print: (text) => console.log(text),
+    printErr: (text) => console.log(text),
+    // ?env=NAME=VALUE sets an environment variable for the run (for one,
+    // STRATA_GLES_NO_DEPTH_CLAMP=1 tests the depth clamp fallback).
+    preRun: [() => {
+      for (const pair of query.getAll('env')) {
+        const at = pair.indexOf('=');
+        Module.ENV[pair.slice(0, at)] = pair.slice(at + 1);
+      }
+    }],
+    onExit: (code) => { window.strataExit = code; },
+    onAbort: (what) => { window.strataExit = 'abort: ' + what; },
+  };
+  // Every PNG under `dir`, as [path, base64] pairs.
+  window.strataReadPngs = (dir) => {
+    const out = [];
+    const walk = (path) => {
+      for (const name of Module.FS.readdir(path)) {
+        if (name === '.' || name === '..') continue;
+        const full = path + '/' + name;
+        if (Module.FS.isDir(Module.FS.stat(full).mode)) { walk(full); continue; }
+        if (!name.endsWith('.png')) continue;
+        const bytes = Module.FS.readFile(full);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        out.push([full, btoa(binary)]);
+      }
+    };
+    try { walk(dir); } catch (e) { /* the directory was never made */ }
+    return out;
+  };
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

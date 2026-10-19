@@ -1,4 +1,5 @@
-// Headless OpenGL 4.5 core through EGL, with no window and no X server.
+// Headless OpenGL 4.5 core (or OpenGL ES 3.0, for testing the WebGL 2 device
+// natively) through EGL, with no window and no X server.
 //
 // libEGL is opened at run time by glad's loader, so libstrata has no link-time
 // dependency on it: a desktop install that never asks for a headless surface
@@ -37,7 +38,8 @@ class EglSurface final : public Surface {
 public:
     EglSurface() = default;
 
-    void init(const StrataEngineDesc& desc) {
+    void init(const StrataEngineDesc& desc, GlApi api) {
+        gles_ = api == GlApi::Gles3;
         width_ = desc.width;
         height_ = desc.height;
 
@@ -78,25 +80,30 @@ public:
         // Reload now that the display's version and extensions are known.
         gladLoaderLoadEGL(display_);
 
-        if (!eglBindAPI(EGL_OPENGL_API)) {
-            fail(STRATA_ERROR_PLATFORM, "this EGL cannot bind desktop OpenGL");
+        if (!eglBindAPI(gles_ ? EGL_OPENGL_ES_API : EGL_OPENGL_API)) {
+            fail(STRATA_ERROR_PLATFORM, "this EGL cannot bind %s", gles_ ? "OpenGL ES" : "desktop OpenGL");
         }
 
         EGLConfig config = chooseConfig();
 
-        std::vector<EGLint> contextAttribs = {
-            EGL_CONTEXT_MAJOR_VERSION, 4,
-            EGL_CONTEXT_MINOR_VERSION, 5,
-            EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
-        };
+        std::vector<EGLint> contextAttribs;
+        if (gles_) {
+            contextAttribs = {EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 0};
+        } else {
+            contextAttribs = {
+                EGL_CONTEXT_MAJOR_VERSION, 4,
+                EGL_CONTEXT_MINOR_VERSION, 5,
+                EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+            };
+        }
         if (desc.flags & STRATA_FLAG_DEBUG_CONTEXT) {
             contextAttribs.insert(contextAttribs.end(), {EGL_CONTEXT_OPENGL_DEBUG, EGL_TRUE});
         }
         contextAttribs.push_back(EGL_NONE);
         context_ = eglCreateContext(display_, config, EGL_NO_CONTEXT, contextAttribs.data());
         if (context_ == EGL_NO_CONTEXT) {
-            fail(STRATA_ERROR_PLATFORM, "could not create an OpenGL 4.5 core context through EGL (0x%x)",
-                 static_cast<unsigned>(eglGetError()));
+            fail(STRATA_ERROR_PLATFORM, "could not create an %s context through EGL (0x%x)",
+                 gles_ ? "OpenGL ES 3.0" : "OpenGL 4.5 core", static_cast<unsigned>(eglGetError()));
         }
         if (!eglMakeCurrent(display_, EGL_NO_SURFACE, EGL_NO_SURFACE, context_)) {
             fail(STRATA_ERROR_PLATFORM, "eglMakeCurrent without a surface failed (0x%x)",
@@ -146,16 +153,18 @@ private:
         // then for anything at all.
         const EGLint surfaceTypes[] = {EGL_PBUFFER_BIT, EGL_DONT_CARE};
         for (EGLint surfaceType : surfaceTypes) {
-            const EGLint attribs[] = {EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT, EGL_SURFACE_TYPE, surfaceType, EGL_NONE};
+            const EGLint attribs[] = {EGL_RENDERABLE_TYPE, gles_ ? EGL_OPENGL_ES3_BIT : EGL_OPENGL_BIT,
+                                      EGL_SURFACE_TYPE, surfaceType, EGL_NONE};
             EGLConfig config = nullptr;
             EGLint count = 0;
             if (eglChooseConfig(display_, attribs, &config, 1, &count) && count > 0) {
                 return config;
             }
         }
-        fail(STRATA_ERROR_PLATFORM, "no EGL config can render desktop OpenGL");
+        fail(STRATA_ERROR_PLATFORM, "no EGL config can render %s", gles_ ? "OpenGL ES 3" : "desktop OpenGL");
     }
 
+    bool gles_ = false;
     EGLDisplay display_ = EGL_NO_DISPLAY;
     EGLContext context_ = EGL_NO_CONTEXT;
     bool loaderLoaded_ = false;
@@ -166,9 +175,9 @@ private:
 
 }  // namespace
 
-std::unique_ptr<Surface> createEglSurface(const StrataEngineDesc& desc) {
+std::unique_ptr<Surface> createEglSurface(const StrataEngineDesc& desc, GlApi api) {
     auto surface = std::make_unique<EglSurface>();
-    surface->init(desc);
+    surface->init(desc, api);
     return surface;
 }
 

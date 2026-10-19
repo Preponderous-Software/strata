@@ -163,6 +163,10 @@ public:
         return BufferHandle{buffers_.add(record)};
     }
 
+    BufferHandle createIndexBuffer(size_t bytes, const void* initial, const char* debugName) override {
+        return createBuffer(bytes, initial, false, debugName);
+    }
+
     void resizeBuffer(BufferHandle buffer, size_t bytes) override {
         BufferRecord& record = buffers_.get(buffer.value);
         glNamedBufferData(record.name, static_cast<GLsizeiptr>(bytes), nullptr,
