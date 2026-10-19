@@ -16,5 +16,5 @@ else
   toolchain="$OPENUSD_TOOLCHAIN"
   script="$here/build-openusd.sh"
 fi
-hash="$(cat "$here/openusd.lock" "$script" | sha256sum | cut -c1-12)"
+hash="$(cat "$here/openusd.lock" "$script" | tr -d '\r' | sha256sum | cut -c1-12)"
 echo "openusd-${OPENUSD_TAG}-${toolchain}-${hash}"
