@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- The USD and save modules build and pass their tests on Windows (MSVC).
+  `modules/save` gains `fs_win32.cpp` (MoveFileExW with write-through,
+  FlushFileBuffers, LockFileEx; UTF-8 paths converted to UTF-16), selected
+  instead of `fs_posix.cpp` on Windows. The `--crash` suite (fork, setrlimit,
+  SIGKILL) stays POSIX-only and reports itself skipped on Windows. CI builds a
+  Windows OpenUSD prebuilt once (`key.sh windows`,
+  `build-openusd-windows.sh`) and publishes it as a release asset beside the
+  Linux one.
 - Seasonal sun (ABI 1.6): `StrataSolarPosition`, `strata_solar_position`
   (the sun's direction, elevation, azimuth, declination, hour angle and
   equation of time for a UTC moment, latitude and longitude, from NOAA's solar

@@ -3,9 +3,9 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <limits>
 #include <stdexcept>
-#include <sys/stat.h>
 
 #include <pxr/base/tf/errorMark.h>
 #include <pxr/base/vt/array.h>
@@ -41,8 +41,8 @@ std::string tfErrors(const TfErrorMark& m) {
 }
 
 bool fileExists(const std::string& p) {
-    struct stat st;
-    return ::stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+    std::error_code ec;
+    return std::filesystem::is_regular_file(std::filesystem::u8path(p), ec);
 }
 
 std::string chunkName(int cx, int cy) {

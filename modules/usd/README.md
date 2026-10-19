@@ -43,6 +43,14 @@ so the engine is tested without any real game's code:
 Never run corruption probes without the memory cap: a flipped size field can
 make the crate reader try to allocate about 150 GB.
 
+On Windows the fast suite runs unchanged; `--crash` needs fork and
+`setrlimit`, so it prints that it was skipped. The Windows backend
+(`modules/save/src/fs_win32.cpp`) renames with
+`MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`, so there is
+no separate directory flush. Windows cannot rename or delete a file that is
+still open or memory-mapped, which is why every stage over a save file is
+released before the file is committed or pruned.
+
 ## OpenUSD
 
 OpenUSD is pinned in [`openusd/openusd.lock`](openusd/openusd.lock) (tag, commit,
@@ -53,6 +61,13 @@ build script, then takes the prebuilt install from the Actions cache, or else
 from this repository's release asset of the same name. Only a new key builds
 OpenUSD, once, and publishes it as a pre-release asset named after the key.
 Games' CI (for example steading's) downloads the same asset.
+
+Windows has its own key and asset: `key.sh windows` hashes the lock and
+`build-openusd-windows.sh` (MSVC 14.3 on `windows-2022`, run from Git Bash after
+`vcvars64.bat`), and the `openusd-windows` job fetches or builds it the same way.
+At run time OpenUSD finds its plugins relative to its own DLLs
+(`lib/usd/plugInfo.json`), so put `<prefix>\lib` and `<prefix>\bin` on `PATH`;
+do not copy the DLLs beside the executable.
 
 To build locally against your own OpenUSD install:
 
