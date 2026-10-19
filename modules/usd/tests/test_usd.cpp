@@ -2,6 +2,7 @@
 // hydrate's refusal of malformed input.
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <string>
 
@@ -73,8 +74,10 @@ static size_t primSpecs(const pxr::SdfLayerRefPtr& l) {
 }
 
 int main(int argc, char** argv) {
-    out = argc > 1 ? argv[1] : "/tmp/strata-usd-tests";
-    if (std::system(("rm -rf '" + out + "' && mkdir -p '" + out + "'").c_str()) != 0) std::fprintf(stderr, "shell command failed\n");
+    out = argc > 1 ? argv[1] : (std::filesystem::temp_directory_path() / "strata-usd-tests").u8string();
+    std::error_code ec;
+    std::filesystem::remove_all(std::filesystem::u8path(out), ec);
+    std::filesystem::create_directories(std::filesystem::u8path(out), ec);
     std::printf("- full layer round trip, ragged chunks\n");
     const World base = sample();
     CHECK(usd::writeFull(base)->Export(out + "/base.usdc"));

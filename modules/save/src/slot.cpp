@@ -5,7 +5,13 @@
 #include <cstdio>
 #include <set>
 #include <sstream>
+#ifdef _WIN32
+#include <process.h>
+#define STRATA_GETPID ::_getpid
+#else
 #include <unistd.h>
+#define STRATA_GETPID ::getpid
+#endif
 
 #include <pxr/base/tf/errorMark.h>
 #include <pxr/usd/sdf/layer.h>
@@ -202,7 +208,7 @@ bool Slot::commitFile(const SdfLayerRefPtr& layer, const std::string& prefix, co
                       const std::vector<std::string>& composeWith, const SaveOptions& opt, std::string& name,
                       std::string& sha, uint64_t& size, SaveResult* stats, std::string* err) {
     const std::string tmp =
-        fs::join(dir_, ".tmp-" + std::to_string(::getpid()) + "-" + std::to_string(++tmpCounter_) + ".usdc");
+        fs::join(dir_, ".tmp-" + std::to_string(STRATA_GETPID()) + "-" + std::to_string(++tmpCounter_) + ".usdc");
     auto t0 = Clock::now();
     {
         TfErrorMark mark;

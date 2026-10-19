@@ -8,14 +8,40 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <string>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <psapi.h>
+#else
 #include <sys/resource.h>
+#endif
 
 #include "../tests/toy_game.h"
 #include "strata/save/sha256.h"
 #include "strata/save/slot.h"
 
 using namespace strata;
+
+namespace {
+
+double peakRssMb() {
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS pmc{};
+    if (!::GetProcessMemoryInfo(::GetCurrentProcess(), &pmc, sizeof pmc)) return 0.0;
+    return static_cast<double>(pmc.PeakWorkingSetSize) / (1024.0 * 1024.0);
+#else
+    return ru.ru_maxrss / 1024.0;  // KiB on Linux
+#endif
+}
+
+}  // namespace
 
 int main(int argc, char** argv) {
     if (argc < 5) {
@@ -25,7 +51,9 @@ int main(int argc, char** argv) {
     const std::string dir = argv[1];
     const int agents = std::atoi(argv[2]), grid = std::atoi(argv[3]), ticks = std::atoi(argv[4]);
     const int reps = argc > 5 ? std::max(1, std::atoi(argv[5])) : 5;
-    if (std::system(("rm -rf '" + dir + "' && mkdir -p '" + dir + "'").c_str()) != 0) std::fprintf(stderr, "shell command failed\n");
+    std::error_code ec;
+    std::filesystem::remove_all(std::filesystem::u8path(dir), ec);
+    std::filesystem::create_directories(std::filesystem::u8path(dir), ec);
     std::string err;
     auto slot = save::Slot::open(dir, toy::saveSchema(2), toy::layers(), &err);
     if (!slot) {
@@ -111,6 +139,6 @@ int main(int argc, char** argv) {
                 "\"peak_rss_mb\":%.1f,\"calib_ms\":%.2f,\"round_trip\":\"%s\"}\n",
                 agents, grid, ticks, reps, totalMs, exportMs, verifyMs, commitMs, stallMs, asyncMs, loadMs, composeMs,
                 hydrateMs, static_cast<unsigned long long>(baseBytes), static_cast<unsigned long long>(deltaBytes),
-                ru.ru_maxrss / 1024.0, calibMs, exact ? "EXACT" : "MISMATCH");
+                peakRssMb(), calibMs, exact ? "EXACT" : "MISMATCH");
     return exact ? 0 : 1;
 }

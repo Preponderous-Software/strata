@@ -4,9 +4,14 @@
 
 find_package(Threads REQUIRED)
 
+if(WIN32)
+    set(STRATA_SAVE_FS src/fs_win32.cpp)
+else()
+    set(STRATA_SAVE_FS src/fs_posix.cpp)
+endif()
 add_library(strata_save STATIC
     src/sha256.cpp
-    src/fs_posix.cpp
+    ${STRATA_SAVE_FS}
     src/slot.cpp)
 target_include_directories(strata_save PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(strata_save PUBLIC strata_usd Threads::Threads)
