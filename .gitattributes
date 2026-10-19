@@ -1,0 +1,5 @@
+# Shell scripts and the OpenUSD pin stay LF on every checkout: bash cannot run
+# CRLF scripts, and key.sh hashes these bytes into the prebuilt's key, which
+# must be the same on Linux, on Windows runners and in Windows checkouts.
+*.sh text eol=lf
+modules/usd/openusd/** text eol=lf
