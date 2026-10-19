@@ -1,6 +1,4 @@
-// POSIX implementation (Linux, macOS). A Windows implementation
-// (MoveFileExW with MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-// FlushFileBuffers, LockFileEx) is still to be written.
+// POSIX implementation (Linux, macOS). Windows is fs_win32.cpp.
 #include "strata/save/fs.h"
 
 #include <algorithm>
@@ -103,17 +101,20 @@ std::string join(const std::string& d, const std::string& n) {
 }
 
 DirLock::DirLock(const std::string& dir) {
-    fd_ = ::open(join(dir, "LOCK").c_str(), O_RDWR | O_CREAT, 0644);
-    if (fd_ >= 0 && ::flock(fd_, LOCK_EX | LOCK_NB) != 0) {
-        ::close(fd_);
-        fd_ = -1;
+    const int fd = ::open(join(dir, "LOCK").c_str(), O_RDWR | O_CREAT, 0644);
+    if (fd < 0) return;
+    if (::flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        ::close(fd);
+        return;
     }
+    handle_ = fd;
 }
 
 DirLock::~DirLock() {
-    if (fd_ >= 0) {
-        ::flock(fd_, LOCK_UN);
-        ::close(fd_);
+    if (handle_ >= 0) {
+        const int fd = static_cast<int>(handle_);
+        ::flock(fd, LOCK_UN);
+        ::close(fd);
     }
 }
 

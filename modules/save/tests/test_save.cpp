@@ -12,14 +12,16 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <limits>
 #include <sstream>
 #include <string>
+#ifndef _WIN32
 #include <sys/resource.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
 
 #include <pxr/base/vt/dictionary.h>
 #include <pxr/usd/sdf/layer.h>
@@ -51,7 +53,9 @@ void writeAll(const std::string& p, const std::string& s) {
 }
 std::string freshDir(const std::string& name) {
     const std::string d = root + "/" + name;
-    if (std::system(("rm -rf '" + d + "' && mkdir -p '" + d + "'").c_str()) != 0) std::fprintf(stderr, "shell command failed\n");
+    std::error_code ec;
+    std::filesystem::remove_all(std::filesystem::u8path(d), ec);
+    std::filesystem::create_directories(std::filesystem::u8path(d), ec);
     return d;
 }
 std::vector<std::string> saveFiles(const std::string& dir) {
@@ -650,6 +654,8 @@ void testLockAndPrune() {
 
 // ---- crash suite -------------------------------------------------------------
 
+#ifndef _WIN32
+// The crash suite forks capped children and SIGKILLs writers; POSIX only.
 void testBitFlipProbe() {
     SECTION("single-bit flips: with SHA-256 every one is rejected (probes capped at 4 GB)");
     const std::string dir = freshDir("bitflip");
@@ -771,15 +777,22 @@ void testKill9() {
     CHECK(exact == kills);
 }
 
+#endif  // _WIN32
+
 }  // namespace
 
 int main(int argc, char** argv) {
-    root = argc > 1 ? argv[1] : "/tmp/strata-save-tests";
+    root = argc > 1 ? argv[1] : (std::filesystem::temp_directory_path() / "strata-save-tests").u8string();
     const bool crash = argc > 2 && std::string(argv[2]) == "--crash";
-    if (std::system(("mkdir -p '" + root + "'").c_str()) != 0) std::fprintf(stderr, "shell command failed\n");
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::u8path(root), ec);
     if (crash) {
+#ifdef _WIN32
+        std::printf("crash suite (fork, setrlimit, SIGKILL) skipped on Windows\n");
+#else
         testBitFlipProbe();
         testKill9();
+#endif
     } else {
         testSha256();
         testHead();
