@@ -5,6 +5,7 @@ name: USD modules
 # modules/usd/openusd/openusd.lock + build-openusd.sh, first from the Actions
 # cache, then from this repository's release assets. Only when neither has the
 # key (a new pin) is OpenUSD built, once, and published as a release asset.
+# Windows has the same pair of jobs with its own key (key.sh windows).
 
 on:
   push:
@@ -168,3 +169,134 @@ jobs:
           name: save-bench
           path: results.jsonl
           if-no-files-found: ignore
+
+  # Windows: the same fetch-or-build-once scheme with its own key
+  # (key.sh windows, build-openusd-windows.sh, MSVC on windows-2022).
+  openusd-windows:
+    name: OpenUSD prebuilt, Windows (fetch, or build once)
+    runs-on: windows-2022
+    timeout-minutes: 240
+    permissions:
+      contents: write  # publish a newly built prebuilt as a release asset
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Artifact key
+        id: key
+        run: echo "key=$(bash modules/usd/openusd/key.sh windows)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore from the Actions cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: openusd-dist
+          key: ${{ steps.key.outputs.key }}
+
+      - name: Fetch the release asset
+        id: fetch
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          KEY: ${{ steps.key.outputs.key }}
+        run: |
+          mkdir -p openusd-dist
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${KEY}/${KEY}.tar.gz"
+          if curl -fsSL -o "openusd-dist/${KEY}.tar.gz" "$url"; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "Fetched $url"
+          else
+            rm -f "openusd-dist/${KEY}.tar.gz"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No release asset for ${KEY}; it will be built once."
+          fi
+
+      - name: Build OpenUSD (new pin only)
+        if: steps.cache.outputs.cache-hit != 'true' && steps.fetch.outputs.found != 'true'
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
+          "C:\Program Files\Git\bin\bash.exe" modules/usd/openusd/build-openusd-windows.sh openusd-dist %NUMBER_OF_PROCESSORS%
+
+      - name: Publish the prebuilt as a release asset
+        if: >-
+          steps.cache.outputs.cache-hit != 'true' && steps.fetch.outputs.found != 'true' &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          KEY: ${{ steps.key.outputs.key }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          if curl -fsS -o /dev/null -H "Authorization: Bearer $GH_TOKEN" "$api/releases/tags/${KEY}"; then
+            echo "Release ${KEY} already exists (another run published it)"; exit 0
+          fi
+          body=$(python -c 'import json,os; k=os.environ["KEY"]; print(json.dumps({"tag_name": k, "name": k, "target_commitish": os.environ["GITHUB_SHA"], "prerelease": True, "make_latest": "false", "body": "Prebuilt OpenUSD install (Windows x64, MSVC) for Strata CI and Windows builds of Strata games (modules/usd/openusd/openusd.lock). Put lib and bin on PATH at run time. Not an engine release. Licences are in share/licenses/."}))')
+          id=$(curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+                 "$api/releases" -d "$body" | python -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/gzip" \
+            --data-binary @"openusd-dist/${KEY}.tar.gz" \
+            "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${id}/assets?name=${KEY}.tar.gz" > /dev/null
+          echo "Published ${KEY}"
+
+      - name: Check the prebuilt
+        env:
+          KEY: ${{ steps.key.outputs.key }}
+        run: |
+          ls -la openusd-dist
+          sha256sum "openusd-dist/${KEY}.tar.gz"
+          tar -tzf "openusd-dist/${KEY}.tar.gz" > contents.txt
+          for f in pxrConfig.cmake lib/usd_usd.lib lib/usd_usd.dll bin/tbb12.dll lib/cmake/TBB/TBBConfig.cmake; do
+            grep -qx "${KEY}/$f" contents.txt || { echo "::error::prebuilt lacks $f"; exit 1; }
+          done
+
+  modules-windows:
+    name: USD + save modules, Windows (tests, bench)
+    needs: openusd-windows
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      KEY: ${{ needs.openusd-windows.outputs.key }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore the OpenUSD prebuilt
+        uses: actions/cache/restore@v4
+        with:
+          path: openusd-dist
+          key: ${{ env.KEY }}
+          fail-on-cache-miss: true
+
+      - name: Unpack OpenUSD
+        run: |
+          mkdir -p /c/openusd
+          tar -C /c/openusd -xzf "openusd-dist/${KEY}.tar.gz"
+          cat "/c/openusd/${KEY}/openusd.lock"
+          # OpenUSD finds its plugins next to its DLLs: put them on PATH, never copy them.
+          echo "C:\\openusd\\${KEY}\\lib" >> "$GITHUB_PATH"
+          echo "C:\\openusd\\${KEY}\\bin" >> "$GITHUB_PATH"
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DSTRATA_WARNINGS_AS_ERRORS=ON \
+            -DSTRATA_WITH_USD=ON -DSTRATA_WITH_SDL=OFF -DSTRATA_WITH_EGL=OFF -DSTRATA_BUILD_TOOLS=OFF \
+            -DCMAKE_PREFIX_PATH="C:/openusd/${KEY}"
+
+      - name: Build
+        run: cmake --build build --config Release --target strata-usd-tests strata-save-tests strata-save-bench --parallel 4
+
+      - name: USD module tests
+        run: ctest --test-dir build -C Release -R '^strata-usd-tests$' --output-on-failure
+
+      - name: Save-core tests
+        run: ctest --test-dir build -C Release -R '^strata-save-tests$' --output-on-failure
+
+      - name: Benchmark (no gate on Windows; the baseline is Linux)
+        run: |
+          build/modules/save/Release/strata-save-bench.exe "$RUNNER_TEMP/bench1k" 1000 64 300 3 2>/dev/null | tee results.jsonl
+          grep -q '"round_trip":"EXACT"' results.jsonl

@@ -28,10 +28,10 @@ public:
     ~DirLock();
     DirLock(const DirLock&) = delete;
     DirLock& operator=(const DirLock&) = delete;
-    bool held() const { return fd_ >= 0; }
+    bool held() const { return handle_ >= 0; }
 
 private:
-    int fd_ = -1;
+    std::intptr_t handle_ = -1;  // fd (POSIX) or HANDLE (Windows)
 };
 
 }  // namespace strata::save::fs

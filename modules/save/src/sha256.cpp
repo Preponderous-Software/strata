@@ -2,6 +2,9 @@
 
 #include <cstdio>
 #include <cstring>
+#ifdef _WIN32
+#include <filesystem>
+#endif
 
 namespace strata::save {
 
@@ -124,7 +127,12 @@ std::string sha256Hex(const void* data, size_t n) {
 std::string sha256Hex(const std::string& s) { return sha256Hex(s.data(), s.size()); }
 
 bool sha256File(const std::string& path, std::string& hex, uint64_t* size) {
+#ifdef _WIN32
+    std::FILE* f = nullptr;
+    if (::_wfopen_s(&f, std::filesystem::u8path(path).c_str(), L"rb") != 0) f = nullptr;  // UTF-8 path
+#else
     std::FILE* f = std::fopen(path.c_str(), "rb");
+#endif
     if (!f) return false;
     Sha256 h;
     uint8_t buf[1 << 16];

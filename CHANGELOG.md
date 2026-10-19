@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- The USD and save modules build and pass their tests on Windows (MSVC).
+  `modules/save` gains `fs_win32.cpp` (MoveFileExW with write-through,
+  FlushFileBuffers, LockFileEx; UTF-8 paths converted to UTF-16), selected
+  instead of `fs_posix.cpp` on Windows. The `--crash` suite (fork, setrlimit,
+  SIGKILL) stays POSIX-only and reports itself skipped on Windows. CI builds a
+  Windows OpenUSD prebuilt once (`key.sh windows`,
+  `build-openusd-windows.sh`) and publishes it as a release asset beside the
+  Linux one.
 - Strata runs in the browser (WebGL 2). A second `GpuDevice` backend,
   OpenGL ES 3.0 (`src/rhi/gles3_device.cpp`), draws every pass: the GL 4.5
   shaders are rewritten to GLSL ES 3.00 when pipelines are created, cube map
