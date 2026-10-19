@@ -288,7 +288,7 @@ jobs:
             -DCMAKE_PREFIX_PATH="C:/openusd/${KEY}"
 
       - name: Build
-        run: cmake --build build --config Release --target strata-usd-tests strata-save-tests strata-save-bench -- /m:4
+        run: cmake --build build --config Release --target strata-usd-tests strata-save-tests strata-save-bench --parallel 4
 
       - name: USD module tests
         run: ctest --test-dir build -C Release -R '^strata-usd-tests$' --output-on-failure
