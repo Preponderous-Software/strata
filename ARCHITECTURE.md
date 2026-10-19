@@ -43,7 +43,9 @@ Emscripten builds always use GLES 3.0.
   instead, so every ABI 1 host keeps working. A host that uses an addition
   checks `strata_abi_minor()` at run time; `strata.h` names the minor each
   addition arrived in (1.1: point lights; 1.2: point-light shadows; 1.3: a
-  terrain tile; 1.4: static meshes).
+  terrain tile; 1.4: static meshes; 1.5: unlit overlays and space lighting;
+  1.6: a sun placed by date, time and place; 1.7: textures and textured,
+  transformable meshes).
 - **Layouts are checkable.** `strata_struct_size(id)` and
   `strata_struct_field_offset(id, field)` report every boundary struct. The C++
   unit tests `static_assert` the layouts. The C# tests

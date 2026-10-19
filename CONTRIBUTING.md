@@ -43,7 +43,9 @@ Useful switches:
   - bumping `STRATA_ABI_VERSION`;
   - updating the layout table in `src/capi.cpp`;
   - updating the `static_assert`s in `tests/unit/test_abi.cpp`;
-  - updating the C# mirror in `bindings/csharp/Strata.Interop`.
+  - updating the C# mirror in `bindings/csharp/Strata.Interop`;
+  - updating the C# size and offset assertions in
+    `tests/csharp/Strata.Interop.Tests`.
 
   The C# layout tests fail if one of these is missed. Adding a new function,
   struct or enum value is not a break: bump `STRATA_ABI_MINOR` instead, add
@@ -61,9 +63,10 @@ Useful switches:
 
 ## Pull requests
 
-- CI must be green. That means Linux build, unit tests, golden images on both
-  the headless and the Xvfb surface, the C# ABI tests and harness, the sanitizer
-  job, and the Windows build.
+- CI must be green. That means Linux build, unit tests, golden images on the
+  headless and the Xvfb surface and through the GLES 3.0 device, the C# ABI
+  tests and harness, the sanitizer job, the Emscripten build with its browser
+  goldens, and the Windows build.
 - Keep a PR to one milestone step.
 
 ## Licence
