@@ -44,11 +44,8 @@ namespace {
 // A cube map array of up to this many cubes is emulated (STRATA_MAX_SHADOWED_POINT_LIGHTS).
 constexpr int kMaxEmulatedCubes = 4;
 // Cube 0 uses the unit the shader names; cubes 1.. use these. Strata's own
-// units are 1 to 4, and WebGL 2 guarantees 16 in the fragment shader.
+// units are 1 to 4.
 constexpr int kFirstExtraCubeUnit = 5;
-// Where textures are bound while they are created, so no unit a pass uses is
-// disturbed. No shader samples it.
-constexpr int kScratchUnit = 15;
 constexpr int kMaxBindings = 8;
 
 struct BufferRecord {
@@ -159,6 +156,12 @@ bool hasDepthClampExtension() {
 // overlay font, 4 a mesh's texture, 5-7 the other point shadow cubes), saved
 // and restored for a host context.
 constexpr int kHostTextureUnits = kFirstExtraCubeUnit + kMaxEmulatedCubes - 1;
+// Textures are bound to a scratch unit while they are created, so no unit a
+// pass uses is disturbed; no shader samples it. It is the device's last
+// fragment unit, so a device needs only one more than Strata binds. It used
+// to be fixed at 15, which demanded 16 units: WebGL 2's minimum, yet some
+// phone browsers report fewer (13 was seen on a real phone).
+constexpr int kMinFragmentTextureUnits = kHostTextureUnits + 1;
 // Uniform buffer slots Strata binds (0 frame, 1 pass, 2 point lights, 3 mesh).
 constexpr int kHostUniformSlots = 4;
 
@@ -191,10 +194,11 @@ public:
         uniformAlignment_ = static_cast<size_t>(alignment > 0 ? alignment : 256);
         GLint fragmentUnits = 0;
         glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &fragmentUnits);
-        if (fragmentUnits <= kScratchUnit) {
-            fail(STRATA_ERROR_GPU, "the GLES device needs 16 fragment texture units; this context has %d",
-                 fragmentUnits);
+        if (fragmentUnits < kMinFragmentTextureUnits) {
+            fail(STRATA_ERROR_GPU, "the GLES device needs %d fragment texture units; this context has %d",
+                 kMinFragmentTextureUnits, fragmentUnits);
         }
+        scratchUnit_ = fragmentUnits - 1;
         depthClamp_ = hasDepthClampExtension();
         description_ = std::string(renderer ? renderer : "?") + " | " + (version ? version : "?") +
                        (depthClamp_ ? "" : " | depth clamp emulated");
@@ -269,7 +273,7 @@ public:
         if (mipmaps) {
             for (int size = std::max(desc.width, desc.height); size > 1; size /= 2) ++levels;
         }
-        glActiveTexture(GL_TEXTURE0 + kScratchUnit);
+        glActiveTexture(GL_TEXTURE0 + static_cast<GLenum>(scratchUnit_));
         if (cube) {
             if (desc.layers > kMaxEmulatedCubes) {
                 fail(STRATA_ERROR_GPU, "the GLES device emulates cube map arrays of at most %d cubes (asked for %d)",
@@ -757,6 +761,7 @@ private:
     size_t uniformAlignment_ = 256;
     GLuint emptyVertexArray_ = 0;
     bool depthClamp_ = false;
+    int scratchUnit_ = kMinFragmentTextureUnits - 1;
     int cubeArrayUnit_ = -1;
     Table<BufferRecord> buffers_;
     Table<TextureRecord> textures_;

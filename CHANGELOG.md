@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The WebGL 2 / GLES device starts on contexts with fewer than 16 fragment
+  texture units. Its scratch unit (where textures are bound while created)
+  was fixed at 15, so a phone browser reporting 13 failed with "the GLES
+  device needs 16 fragment texture units". The scratch unit is now the
+  device's last unit, and 9 units (Strata's 8 plus scratch) are required.
 - The USD and save modules build and pass their tests on Windows (MSVC).
   `modules/save` gains `fs_win32.cpp` (MoveFileExW with write-through,
   FlushFileBuffers, LockFileEx; UTF-8 paths converted to UTF-16), selected
