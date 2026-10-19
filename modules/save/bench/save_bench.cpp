@@ -37,6 +37,8 @@ double peakRssMb() {
     if (!::GetProcessMemoryInfo(::GetCurrentProcess(), &pmc, sizeof pmc)) return 0.0;
     return static_cast<double>(pmc.PeakWorkingSetSize) / (1024.0 * 1024.0);
 #else
+    struct rusage ru {};
+    getrusage(RUSAGE_SELF, &ru);
     return ru.ru_maxrss / 1024.0;  // KiB on Linux
 #endif
 }
@@ -131,8 +133,6 @@ int main(int argc, char** argv) {
             std::string sha;
             save::sha256File(save::fs::join(dir, n), sha, &baseBytes);
         }
-    struct rusage ru {};
-    getrusage(RUSAGE_SELF, &ru);
     std::printf("{\"agents\":%d,\"grid\":%d,\"ticks\":%d,\"reps\":%d,\"save_ms\":%.2f,\"export_ms\":%.2f,"
                 "\"verify_ms\":%.2f,\"commit_ms\":%.2f,\"async_stall_ms\":%.3f,\"async_worker_ms\":%.2f,"
                 "\"load_ms\":%.2f,\"compose_ms\":%.2f,\"hydrate_ms\":%.2f,\"base_bytes\":%llu,\"delta_bytes\":%llu,"

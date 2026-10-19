@@ -336,7 +336,7 @@ void testDamagedSaves() {
              for (size_t i = b.size() / 3; i < b.size() / 3 + 64; ++i) b[i] = static_cast<char>(b[i] ^ 0x5a);
              writeAll(p, b);
          }},
-        {"deleted", [](const std::string& p) { ::unlink(p.c_str()); }},
+        {"deleted", [](const std::string& p) { std::remove(p.c_str()); }},
         {"empty", [](const std::string& p) { writeAll(p, ""); }},
     };
     for (const auto& d : damages) {
@@ -391,7 +391,7 @@ void testDamagedHead() {
             h[h.size() / 2] = static_cast<char>(h[h.size() / 2] ^ 4);
             writeAll(dir + "/HEAD", h);
         }
-        if (k == 3) ::unlink((dir + "/HEAD").c_str());
+        if (k == 3) std::remove((dir + "/HEAD").c_str());
         slot = openSlot(dir);
         auto r = slot->load();
         std::string why;
@@ -421,7 +421,7 @@ void testDamagedBase() {
             b[b.size() / 2] = static_cast<char>(b[b.size() / 2] ^ 1);
             writeAll(dir + "/" + base, b);
         } else {
-            ::unlink((dir + "/" + base).c_str());
+            std::remove((dir + "/" + base).c_str());
         }
         slot = openSlot(dir);
         auto r = slot->load();
@@ -515,7 +515,7 @@ void testMods() {
     CHECK_MSG(r.ok && warned, r.error);
     slot.reset();
     // A mod layer that cannot be read stops the slot from opening at all.
-    ::unlink((md + "/fast.usda").c_str());
+    std::remove((md + "/fast.usda").c_str());
     std::string err;
     CHECK(!Slot::open(dir2, toy::saveSchema(2), l, &err) && err.find("cannot read layer") != std::string::npos);
 }
