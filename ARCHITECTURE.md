@@ -23,7 +23,7 @@ is built now. Where the RFC plans more, that is called out as **later**.
 | `src/engine.cpp` | `strata::Engine`: creates the surface, loads GL with glad, owns the device and the renderer | only to load it |
 | `src/platform/` | `Surface` and its three implementations: `SdlSurface`, `EglSurface`, `HostSurface` | context creation only |
 | `src/rhi/` | `GpuDevice`, the interface the passes draw through; its GL 4.5 DSA backend and its GLES 3.0 / WebGL 2 backend, with the GLSL 4.50 to GLSL ES 3.00 rewrite (see [docs/WEB.md](docs/WEB.md)) | **yes, only here** |
-| `src/render/` | Primitive meshes, sun and sky model, cascade maths, pass list, `Renderer` | no: draws through `GpuDevice` |
+| `src/render/` | Primitive meshes, sun and sky model, cascade maths, point lights, terrain and static meshes, overlays, pass list, `Renderer` | no: draws through `GpuDevice` |
 | `src/image/` | PNG reading and writing (stb), golden-image comparison | no |
 | `tools/` | `strata-golden`, `strata-imgcmp`, the scene-file parser | no |
 | `modules/sim/` | Deterministic simulation building blocks: seeded RNG, entity-component registry, 2D fields with diffusion, fixed-step clock, state hash, colormaps. C++ only (`strata::sim`), not in the C ABI | no |
@@ -165,7 +165,7 @@ renderer. The C# harness reproduces the C++ golden with zero differing pixels.
   all come from the same time-of-day curve.
 - **L1** is the same path with `cascade_count = 1`.
 
-### `STRATA_LIGHTING_SPACE` (ABI 1.4)
+### `STRATA_LIGHTING_SPACE` (ABI 1.5)
 
 The sun fragment shader with the key light switched off: no sun or moon, no
 cascades, no fog and no sky, and a flat ambient term from `legacy_ambient`.
