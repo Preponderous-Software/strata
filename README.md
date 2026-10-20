@@ -65,8 +65,9 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 `v0.3.0` adds static meshes (ABI 1.4), unlit overlays and a space lighting
 mode (**O1**, ABI 1.5) and the C++-only `modules/sim` to `v0.2.0`'s point
 lights (**L3**), point-light shadows (**L4**) and terrain tile (**T1**), and
-`v0.1.0`'s skeleton and lighting **L1–L2**. The C ABI is 1.5: each addition is
-compatible, and every ABI 1.0 host still works.
+`v0.1.0`'s skeleton and lighting **L1–L2**. The C ABI is 1.5 in `v0.3.0` and
+1.7 on `main` (the unreleased seasonal sun and textures below): each addition
+is compatible, and every ABI 1.0 host still works.
 
 | Milestone | What it is | Golden images |
 |---|---|---|
