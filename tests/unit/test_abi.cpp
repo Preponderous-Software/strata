@@ -282,6 +282,53 @@ TEST(null_and_bad_arguments_fail_cleanly_without_a_context) {
     strata_destroy(nullptr);  // must be a no-op
 }
 
+TEST(surface_and_frame_calls_reject_bad_arguments_without_a_context) {
+    StrataEngine* engine = reinterpret_cast<StrataEngine*>(0x1);  // never dereferenced: pointers are checked first
+    int32_t width = -1, height = -1;
+    CHECK(strata_get_drawable_size(nullptr, &width, &height) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_get_drawable_size(engine, nullptr, &height) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_get_drawable_size(engine, &width, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(width == -1 && height == -1);
+    CHECK(strata_resize(nullptr, 64, 64) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(std::strlen(strata_last_error()) > 0);
+    CHECK(std::strcmp(strata_gpu_description(nullptr), "") == 0);
+
+    CHECK(strata_set_camera(nullptr, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_set_camera(engine, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_set_lighting(nullptr, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_set_lighting(engine, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+
+    StrataFrameDesc frame{};
+    CHECK(strata_begin_frame(nullptr, &frame) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_begin_frame(engine, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_present(nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+    StrataFrameStats stats{};
+    CHECK(strata_get_frame_stats(nullptr, &stats) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_get_frame_stats(engine, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+
+    uint8_t pixel[4] = {};
+    CHECK(strata_read_pixels_rgba8(nullptr, pixel, 4, &width, &height) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_read_pixels_rgba8(engine, nullptr, 4, &width, &height) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_read_pixels_rgba8(engine, pixel, 4, nullptr, &height) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_read_pixels_rgba8(engine, pixel, 4, &width, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_save_screenshot_png(nullptr, "out.png") == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_save_screenshot_png(engine, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_save_screenshot_png(engine, "") == STRATA_ERROR_INVALID_ARGUMENT);
+}
+
+TEST(every_status_has_a_name) {
+    CHECK(std::strcmp(strata_status_string(STRATA_OK), "ok") == 0);
+    CHECK(std::strcmp(strata_status_string(STRATA_ERROR_INVALID_ARGUMENT), "invalid argument") == 0);
+    CHECK(std::strcmp(strata_status_string(STRATA_ERROR_ABI_MISMATCH), "ABI mismatch") == 0);
+    CHECK(std::strcmp(strata_status_string(STRATA_ERROR_PLATFORM), "platform error") == 0);
+    CHECK(std::strcmp(strata_status_string(STRATA_ERROR_GPU), "GPU error") == 0);
+    CHECK(std::strcmp(strata_status_string(STRATA_ERROR_IO), "I/O error") == 0);
+    CHECK(std::strcmp(strata_status_string(STRATA_ERROR_INVALID_STATE), "invalid state") == 0);
+    CHECK(std::strcmp(strata_status_string(STRATA_ERROR_UNSUPPORTED), "unsupported") == 0);
+    CHECK(std::strcmp(strata_status_string(STRATA_ERROR_INTERNAL), "internal error") == 0);
+    CHECK(std::strcmp(strata_status_string(99), "unknown status") == 0);
+}
+
 TEST(lighting_defaults_are_beyond_nations_constants) {
     StrataLighting l{};
     REQUIRE(strata_lighting_defaults(STRATA_LIGHTING_LEGACY, &l) == STRATA_OK);
