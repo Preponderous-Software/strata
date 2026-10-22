@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.0
+
+The browser (WebGL 2 through Emscripten), a seasonal sun, textures, picking
+and texture updates. Every ABI addition is compatible: `STRATA_ABI_VERSION`
+stays 1 and `STRATA_ABI_MINOR` is 8.
+
 - ABI 1.8, for [Kindling](https://github.com/Preponderous-Software/kindling)
   (a first-person cozy restoration game): grime cleaned patch by patch,
   knowing what is under the crosshair, and mouse-look. All three are
