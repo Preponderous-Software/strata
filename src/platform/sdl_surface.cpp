@@ -22,6 +22,9 @@ public:
             fail(STRATA_ERROR_PLATFORM, "SDL_InitSubSystem(VIDEO) failed: %s", SDL_GetError());
         }
         videoInitialised_ = true;
+        // A hidden window standing in for a headless surface has no cursor to
+        // capture.
+        windowSurface_ = desc.surface == STRATA_SURFACE_WINDOW;
 
         const bool gles = api == GlApi::Gles3;
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, gles ? 3 : 4);
@@ -100,12 +103,23 @@ public:
         }
     }
 
+    void setRelativeMouseMode(bool enabled) override {
+        if (!windowSurface_) {
+            fail(STRATA_ERROR_UNSUPPORTED,
+                 "relative mouse mode needs a window surface; this is a headless one (a hidden window)");
+        }
+        if (!SDL_SetWindowRelativeMouseMode(window_, enabled)) {
+            fail(STRATA_ERROR_PLATFORM, "SDL_SetWindowRelativeMouseMode failed: %s", SDL_GetError());
+        }
+        relativeMouse_ = enabled;
+    }
+
     void resize(int width, int height) override { SDL_SetWindowSize(window_, width, height); }
     void present() override { SDL_GL_SwapWindow(window_); }
     const char* kind() const override { return "window"; }
 
 private:
-    static bool translate(const SDL_Event& event, StrataEvent& out) {
+    bool translate(const SDL_Event& event, StrataEvent& out) const {
         switch (event.type) {
             case SDL_EVENT_QUIT:
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
@@ -120,8 +134,12 @@ private:
                 return true;
             case SDL_EVENT_MOUSE_MOTION:
                 out.type = STRATA_EVENT_MOUSE_MOTION;
-                out.x = event.motion.x;
-                out.y = event.motion.y;
+                // In relative mode the cursor is hidden and held still, so
+                // only the movement means anything (x and y stay 0).
+                if (!relativeMouse_) {
+                    out.x = event.motion.x;
+                    out.y = event.motion.y;
+                }
                 out.dx = event.motion.xrel;
                 out.dy = event.motion.yrel;
                 return true;
@@ -157,6 +175,8 @@ private:
     SDL_Window* window_ = nullptr;
     SDL_GLContext context_ = nullptr;
     bool videoInitialised_ = false;
+    bool windowSurface_ = false;
+    bool relativeMouse_ = false;
 };
 
 }  // namespace

@@ -121,6 +121,10 @@ const int32_t kSolarPositionFields[] = {
     STRATA_OFFSET(StrataSolarPosition, hour_angle_degrees),
     STRATA_OFFSET(StrataSolarPosition, equation_of_time_minutes)};
 
+const int32_t kRayHitFields[] = {STRATA_OFFSET(StrataRayHit, mesh_id), STRATA_OFFSET(StrataRayHit, triangle),
+                                 STRATA_OFFSET(StrataRayHit, distance), STRATA_OFFSET(StrataRayHit, point),
+                                 STRATA_OFFSET(StrataRayHit, normal)};
+
 const int32_t kTexturedMeshFields[] = {STRATA_OFFSET(StrataTexturedMesh, mesh), STRATA_OFFSET(StrataTexturedMesh, uvs),
                                        STRATA_OFFSET(StrataTexturedMesh, texture),
                                        STRATA_OFFSET(StrataTexturedMesh, flags)};
@@ -137,7 +141,7 @@ const FieldTable* fieldTable(int32_t structId) {
         STRATA_TABLE(StrataTerrainTile, kTerrainTileFields), STRATA_TABLE(StrataMesh, kMeshFields),
         STRATA_TABLE(StrataLineVertex, kLineVertexFields), STRATA_TABLE(StrataPoint, kPointFields),
         STRATA_TABLE(StrataText, kTextFields),             STRATA_TABLE(StrataSolarPosition, kSolarPositionFields),
-        STRATA_TABLE(StrataTexturedMesh, kTexturedMeshFields)};
+        STRATA_TABLE(StrataTexturedMesh, kTexturedMeshFields), STRATA_TABLE(StrataRayHit, kRayHitFields)};
     if (structId < 0 || structId >= static_cast<int32_t>(sizeof tables / sizeof tables[0])) return nullptr;
     return &tables[structId];
 }
@@ -313,6 +317,25 @@ StrataStatus strata_create_texture_rgba8(StrataEngine* engine, int32_t width, in
                                          uint32_t flags, uint32_t* out_id) {
     if (!engine || !rgba || !out_id) return invalid("engine, rgba and out_id must not be NULL");
     return guard([&] { *out_id = engine->engine->createTextureRgba8(width, height, rgba, flags); });
+}
+
+StrataStatus strata_update_texture_rgba8(StrataEngine* engine, uint32_t id, int32_t x, int32_t y, int32_t width,
+                                         int32_t height, const uint8_t* rgba) {
+    if (!engine || !rgba) return invalid("engine and rgba must not be NULL");
+    return guard([&] { engine->engine->updateTextureRgba8(id, x, y, width, height, rgba); });
+}
+
+StrataStatus strata_raycast_meshes(StrataEngine* engine, const float origin[3], const float direction[3],
+                                   float max_distance, StrataRayHit* out_hit) {
+    if (!engine || !origin || !direction || !out_hit) {
+        return invalid("engine, origin, direction and out_hit must not be NULL");
+    }
+    return guard([&] { *out_hit = engine->engine->raycastMeshes(origin, direction, max_distance); });
+}
+
+StrataStatus strata_set_relative_mouse_mode(StrataEngine* engine, int32_t enabled) {
+    if (!engine) return invalid("engine must not be NULL");
+    return guard([&] { engine->engine->setRelativeMouseMode(enabled != 0); });
 }
 
 StrataStatus strata_destroy_texture(StrataEngine* engine, uint32_t id) {

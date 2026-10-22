@@ -55,9 +55,12 @@
  *   1.7  textures and textured, transformable meshes (StrataTexturedMesh,
  *        strata_create_texture_rgba8, strata_destroy_texture,
  *        strata_add_textured_mesh, strata_set_mesh_transform,
- *        STRATA_MESH_UNLIT) */
+ *        STRATA_MESH_UNLIT)
+ *   1.8  texture sub-region updates, mesh ray picking and relative mouse
+ *        mode (strata_update_texture_rgba8, StrataRayHit,
+ *        strata_raycast_meshes, strata_set_relative_mouse_mode) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 7u
+#define STRATA_ABI_MINOR 8u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -307,6 +310,18 @@ typedef struct StrataTexturedMesh {
     uint32_t flags;       /* STRATA_MESH_*; any other bit is rejected */
 } StrataTexturedMesh;
 
+/* ------------------------------------------------------------------ picking */
+
+/* ABI 1.8. What strata_raycast_meshes found: the nearest static mesh triangle
+ * along a ray. 36 bytes. */
+typedef struct StrataRayHit {
+    uint32_t mesh_id;   /* the mesh hit, or 0 when nothing was hit (every other field is then 0, triangle -1) */
+    int32_t triangle;   /* index of the hit triangle in the mesh's index list, divided by 3; -1 for no hit */
+    float distance;     /* from the origin to the hit, along the normalised direction (world units) */
+    float point[3];     /* the hit, world space */
+    float normal[3];    /* unit world-space geometric normal of the hit triangle, on the side the ray came from */
+} StrataRayHit;
+
 /* ----------------------------------------------------------------- overlays */
 
 /* ABI 1.5. Overlays are drawn after the lit scene and the sky, unlit, with
@@ -427,7 +442,8 @@ enum {
     STRATA_STRUCT_POINT = 11,       /* ABI 1.5 */
     STRATA_STRUCT_TEXT = 12,        /* ABI 1.5 */
     STRATA_STRUCT_SOLAR_POSITION = 13, /* ABI 1.6 */
-    STRATA_STRUCT_TEXTURED_MESH = 14   /* ABI 1.7 */
+    STRATA_STRUCT_TEXTURED_MESH = 14,  /* ABI 1.7 */
+    STRATA_STRUCT_RAY_HIT = 15         /* ABI 1.8 */
 };
 
 /* Field ids for strata_struct_field_offset(STRATA_STRUCT_RENDER_ITEM, ...). */
@@ -537,6 +553,18 @@ STRATA_API StrataStatus strata_clear_meshes(StrataEngine* engine);
  * within an engine. */
 STRATA_API StrataStatus strata_create_texture_rgba8(StrataEngine* engine, int32_t width, int32_t height,
                                                     const uint8_t* rgba, uint32_t flags, uint32_t* out_id);
+/* ABI 1.8. Replaces the width x height rectangle at (x, y) of a texture made
+ * by strata_create_texture_rgba8 (x to the right, y down from the first row)
+ * with `rgba`: 4 bytes per texel, rows top to bottom, tightly packed, copied
+ * during the call, the same conventions as creation. The rectangle must lie
+ * inside the texture and be at least 1 x 1; an unknown id, a rectangle out of
+ * bounds or a NULL rgba is STRATA_ERROR_INVALID_ARGUMENT and changes nothing.
+ * A texture made with STRATA_TEXTURE_MIPMAPS has its whole mip chain rebuilt,
+ * which costs about as much as the base level again: on a large mipmapped
+ * texture, batch small updates into one call per frame. Meshes see the new
+ * texels from the next frame drawn. */
+STRATA_API StrataStatus strata_update_texture_rgba8(StrataEngine* engine, uint32_t id, int32_t x, int32_t y,
+                                                    int32_t width, int32_t height, const uint8_t* rgba);
 /* ABI 1.7. Frees a texture. Meshes that use it draw untextured from then on;
  * an unknown id is STRATA_ERROR_INVALID_ARGUMENT. */
 STRATA_API StrataStatus strata_destroy_texture(StrataEngine* engine, uint32_t id);
@@ -554,6 +582,35 @@ STRATA_API StrataStatus strata_add_textured_mesh(StrataEngine* engine, const Str
  * rotate(spin about +Y) * scale(radius), with the mesh built around the
  * origin. Changing the matrix re-uploads nothing but the matrix. */
 STRATA_API StrataStatus strata_set_mesh_transform(StrataEngine* engine, uint32_t id, const float model[16]);
+
+/* ABI 1.8. Casts a ray against every static mesh (strata_add_mesh and
+ * strata_add_textured_mesh, unlit ones included) with its current model
+ * matrix, and writes the nearest hit within max_distance to *out_hit, or
+ * mesh_id 0 when there is none (still STRATA_OK). origin is world space;
+ * direction must be finite and non-zero and is normalised by the engine;
+ * max_distance must be > 0 (it may be +infinity). Both faces of a triangle
+ * count, so a ray starting inside a closed mesh hits its inside. Primitives,
+ * the terrain tile and overlays are not tested. Equally near hits go to the
+ * mesh added first. Needs no frame and draws nothing.
+ *
+ * To answer this without reading the GPU back, the engine keeps a CPU copy of
+ * every mesh's positions and indices from ABI 1.8 on: 12 bytes per vertex plus
+ * 4 per index (the GPU copy is 44 per vertex plus 4 per index), freed with
+ * the mesh. The
+ * cost per call is one bounding-box test per mesh plus one ray-triangle test
+ * per triangle of each mesh whose box the ray crosses. */
+STRATA_API StrataStatus strata_raycast_meshes(StrataEngine* engine, const float origin[3], const float direction[3],
+                                              float max_distance, StrataRayHit* out_hit);
+
+/* ABI 1.8. Relative mouse mode for first-person look. Non-zero enabled hides
+ * the cursor, confines it to the window and reports STRATA_EVENT_MOUSE_MOTION
+ * as relative movement only: dx and dy carry it, and x and y are 0. Zero
+ * shows the cursor and goes back to absolute positions. Window surface only;
+ * headless and host-context engines return STRATA_ERROR_UNSUPPORTED and
+ * change nothing (a host that owns the window captures the mouse itself). In
+ * a browser this is pointer lock, which the browser grants only from a user
+ * gesture such as a click; SDL requests it on the next one. */
+STRATA_API StrataStatus strata_set_relative_mouse_mode(StrataEngine* engine, int32_t enabled);
 
 /* A frame is begin_frame, any number of submits, end_frame, then present.
  * Submitted arrays are read during the call and never retained. */

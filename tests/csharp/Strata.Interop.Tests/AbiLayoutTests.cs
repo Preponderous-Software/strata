@@ -97,6 +97,25 @@ namespace Strata.Interop.Tests {
         }
 
         [Fact]
+        public unsafe void RayHitMatchesNative() {
+            Assert.Equal(36, Unsafe.SizeOf<StrataRayHit>());
+            AssertLayout<StrataRayHit>(StrataAbi.StructRayHit, "mesh_id", "triangle", "distance", "point", "normal");
+            Assert.Equal(0, (int) Marshal.OffsetOf<StrataRayHit>("mesh_id"));
+            Assert.Equal(4, (int) Marshal.OffsetOf<StrataRayHit>("triangle"));
+            Assert.Equal(8, (int) Marshal.OffsetOf<StrataRayHit>("distance"));
+            Assert.Equal(12, (int) Marshal.OffsetOf<StrataRayHit>("point"));
+            Assert.Equal(24, (int) Marshal.OffsetOf<StrataRayHit>("normal"));
+            float* origin = stackalloc float[3];
+            float* direction = stackalloc float[3];
+            direction[2] = -1;
+            StrataRayHit hit;
+            Assert.Equal(1, StrataNative.strata_raycast_meshes(IntPtr.Zero, origin, direction, 10, &hit));  // STRATA_ERROR_INVALID_ARGUMENT
+            byte* texel = stackalloc byte[4];
+            Assert.Equal(1, StrataNative.strata_update_texture_rgba8(IntPtr.Zero, 1, 0, 0, 1, 1, texel));
+            Assert.Equal(1, StrataNative.strata_set_relative_mouse_mode(IntPtr.Zero, 1));
+        }
+
+        [Fact]
         public unsafe void OverlaySubmitsRejectANullEngine() {
             var point = new StrataPoint { size_pixels = 2 };
             Assert.Equal(1, StrataNative.strata_submit_points(IntPtr.Zero, &point, 1));  // STRATA_ERROR_INVALID_ARGUMENT

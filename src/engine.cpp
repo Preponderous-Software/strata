@@ -140,6 +140,14 @@ uint32_t Engine::createTextureRgba8(int32_t width, int32_t height, const uint8_t
 void Engine::destroyTexture(uint32_t id) { impl_->renderer->destroyTexture(id); }
 uint32_t Engine::addTexturedMesh(const StrataTexturedMesh& mesh) { return impl_->renderer->addTexturedMesh(mesh); }
 void Engine::setMeshTransform(uint32_t id, const float* model) { impl_->renderer->setMeshTransform(id, model); }
+void Engine::updateTextureRgba8(uint32_t id, int32_t x, int32_t y, int32_t width, int32_t height,
+                                const uint8_t* rgba) {
+    impl_->renderer->updateTexture(id, x, y, width, height, rgba);
+}
+StrataRayHit Engine::raycastMeshes(const float origin[3], const float direction[3], float maxDistance) const {
+    return impl_->renderer->raycastMeshes(origin, direction, maxDistance);
+}
+void Engine::setRelativeMouseMode(bool enabled) { impl_->surface->setRelativeMouseMode(enabled); }
 
 void Engine::setPointLights(const StrataPointLight* lights, size_t count) {
     if (count > 0 && lights == nullptr) fail(STRATA_ERROR_INVALID_ARGUMENT, "lights is NULL with a non-zero count");

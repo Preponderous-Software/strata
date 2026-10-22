@@ -34,7 +34,7 @@ renders on llvmpipe and compares on each pull request. The animation is the L2
 village drawn at 39 times of day by `tools/make_readme_media.py`.
 
 Strata is a small C++17 engine for simulation projects. It was built for two
-games and is now used by four projects:
+games and is now used by five projects:
 
 - [**Beyond Nations**](https://github.com/Preponderous-Software/beyond-nations),
   whose simulation is C#, reaches Strata through the C ABI.
@@ -44,6 +44,9 @@ games and is now used by four projects:
   system from JPL data with the overlays and space lighting.
 - [**Microbiome**](https://github.com/Preponderous-Software/microbiome) runs its
   micro-environments on `modules/sim`.
+- [**Kindling**](https://github.com/Preponderous-Software/kindling), a
+  first-person cozy restoration game, uses texture updates, mesh picking and
+  relative mouse mode.
 
 It is not a general-purpose engine. There is no editor, and nothing goes in
 without a real consumer project that needs it.
@@ -66,7 +69,7 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 mode (**O1**, ABI 1.5) and the C++-only `modules/sim` to `v0.2.0`'s point
 lights (**L3**), point-light shadows (**L4**) and terrain tile (**T1**), and
 `v0.1.0`'s skeleton and lighting **L1–L2**. The C ABI is 1.5 in `v0.3.0` and
-1.7 on `main` (the unreleased seasonal sun and textures below): each addition
+1.8 on `main` (the unreleased seasonal sun, textures and picking below): each addition
 is compatible, and every ABI 1.0 host still works.
 
 | Milestone | What it is | Golden images |
@@ -81,6 +84,7 @@ is compatible, and every ABI 1.0 host still works.
 | O1 *(ABI 1.5)* | Unlit overlays (lines, round points, screen text in a public-domain 8×8 font) and a space lighting mode lit only by point lights | `o1_space_system`, `o1_overlays_sun` |
 | Seasonal sun *(ABI 1.6, unreleased)* | The sun placed from a real date, time, latitude and longitude (NOAA solar position), alongside the time-of-day sun | `sun_june_noon`, `sun_december_noon`, `sun_december_afternoon` |
 | Textures *(ABI 1.7, unreleased)* | RGBA8 textures with mip maps, textured meshes (planet maps on latitude-longitude spheres), unlit emissive meshes, and a model matrix per mesh for spinning about a tilted axis | `tex_globe_sun`, `tex_space_planets` |
+| Picking and texture updates *(ABI 1.8, unreleased)* | Sub-rectangle texture updates (grime cleaned patch by patch), the nearest static-mesh triangle along a ray through each mesh's model matrix, and relative mouse mode for first-person look | `tex_update_grime` (its scene also checks rays) |
 
 Next come streaming and larger terrain (T2–T4), meshes and materials (M1–M4),
 and optional OpenUSD modules (`STRATA_WITH_USD`, off by default).

@@ -15,6 +15,7 @@
 #include "platform/surface.hpp"
 #include "render/cascades.hpp"
 #include "render/overlay.hpp"
+#include "render/ray_pick.hpp"
 #include "render/sun.hpp"
 #include "rhi/gpu_device.hpp"
 #include "strata/strata.h"
@@ -44,6 +45,9 @@ public:
     // ABI 1.7.
     uint32_t createTexture(int32_t width, int32_t height, const uint8_t* rgba, uint32_t flags);
     void destroyTexture(uint32_t id);
+    // ABI 1.8.
+    void updateTexture(uint32_t id, int32_t x, int32_t y, int32_t width, int32_t height, const uint8_t* rgba);
+    StrataRayHit raycastMeshes(const float* origin, const float* direction, float maxDistance) const;
 
     void beginFrame(const StrataFrameDesc& desc);
     void submit(const StrataRenderItem* items, size_t count);
@@ -120,6 +124,9 @@ private:
         glm::mat4 model{1.0f};
         uint32_t texture = 0;  // texture id; 0 or a destroyed id draws white
         uint32_t flags = 0;    // STRATA_MESH_*
+        // ABI 1.8: a CPU copy of the model-space positions and indices, and
+        // their bounds, for picking.
+        PickGeometry pick;
     };
     std::vector<MeshEntry> meshes_;
     uint32_t nextMeshId_ = 1;
@@ -130,7 +137,12 @@ private:
     size_t meshUniformStride_ = 256;
 
     // Textures (ABI 1.7) by id, and the 1 x 1 white texture untextured meshes sample.
-    std::vector<std::pair<uint32_t, rhi::TextureHandle>> textures_;
+    struct TextureEntry {
+        uint32_t id = 0;
+        rhi::TextureHandle handle;
+        int32_t width = 0, height = 0;
+    };
+    std::vector<TextureEntry> textures_;
     uint32_t nextTextureId_ = 1;
     rhi::TextureHandle whiteTexture_;
     rhi::TextureHandle textureFor(uint32_t id) const;

@@ -227,6 +227,19 @@ public:
         return TextureHandle{textures_.add(record)};
     }
 
+    void updateTexture(TextureHandle texture, int x, int y, int width, int height, const void* data) override {
+        const TextureRecord& record = textures_.get(texture.value);
+        const TextureDesc& desc = record.desc;
+        if (desc.layers != 0 || desc.format == TextureFormat::Depth32F) {
+            fail(STRATA_ERROR_INTERNAL, "updateTexture: only 2D colour textures can be updated");
+        }
+        const bool r8 = desc.format == TextureFormat::R8;
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTextureSubImage2D(record.name, 0, x, y, width, height, r8 ? GL_RED : GL_RGBA, GL_UNSIGNED_BYTE, data);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        if (desc.mipmaps && desc.format == TextureFormat::RGBA8) glGenerateTextureMipmap(record.name);
+    }
+
     TargetHandle createTarget(const TargetDesc& desc) override {
         TargetRecord record;
         glCreateFramebuffers(1, &record.framebuffer);

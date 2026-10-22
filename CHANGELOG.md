@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- ABI 1.8, for [Kindling](https://github.com/Preponderous-Software/kindling)
+  (a first-person cozy restoration game): grime cleaned patch by patch,
+  knowing what is under the crosshair, and mouse-look. All three are
+  compatible additions; every ABI 1.x host keeps working.
+  - `strata_update_texture_rgba8` replaces a rectangle of an existing
+    texture (same texel conventions as creation; the mip chain is rebuilt for
+    `STRATA_TEXTURE_MIPMAPS` textures). New `GpuDevice::updateTexture` in the
+    GL 4.5 and GLES 3.0 / WebGL 2 devices; `Engine::updateTextureRgba8`.
+  - `StrataRayHit` (`STRATA_STRUCT_RAY_HIT`, 36 bytes) and
+    `strata_raycast_meshes`: the nearest static-mesh triangle along a ray,
+    through each mesh's model matrix, both faces counting. Meshes now keep a
+    CPU copy of their positions and indices for this (12 bytes per vertex
+    plus 4 per index). GL-free maths in `src/render/ray_pick.cpp`, with unit
+    tests; `Engine::raycastMeshes`.
+  - `strata_set_relative_mouse_mode`: on the SDL3 window, hides and captures
+    the cursor and reports motion as `dx`/`dy` only (pointer lock in a
+    browser); `STRATA_ERROR_UNSUPPORTED` on headless and host-context
+    surfaces. `Engine::setRelativeMouseMode`.
+  - C# mirror and P/Invokes in `Strata.Interop`, with layout tests.
+  - New golden `tex_update_grime`, and two scene directives:
+    `texture_update` (applied between the two frames `strata-golden` draws)
+    and `expect_ray` (fails the scene unless the raycast hits the named mesh).
+
 - The WebGL 2 / GLES device starts on contexts with fewer than 16 fragment
   texture units. Its scratch unit (where textures are bound while created)
   was fixed at 15, so a phone browser reporting 13 failed with "the GLES

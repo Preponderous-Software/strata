@@ -312,6 +312,25 @@ public:
         return TextureHandle{textures_.add(record)};
     }
 
+    void updateTexture(TextureHandle texture, int x, int y, int width, int height, const void* data) override {
+        const TextureRecord& record = textures_.get(texture.value);
+        const TextureDesc& desc = record.desc;
+        if (record.target != GL_TEXTURE_2D || desc.format == TextureFormat::Depth32F) {
+            fail(STRATA_ERROR_INTERNAL, "updateTexture: only 2D colour textures can be updated");
+        }
+        const bool r8 = desc.format == TextureFormat::R8;
+        // Bound on the scratch unit, as in createTexture, so no unit a pass
+        // uses changes.
+        glActiveTexture(GL_TEXTURE0 + static_cast<GLenum>(scratchUnit_));
+        glBindTexture(GL_TEXTURE_2D, record.name);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, r8 ? GL_RED : GL_RGBA, GL_UNSIGNED_BYTE, data);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        if (desc.mipmaps && desc.format == TextureFormat::RGBA8) glGenerateMipmap(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glActiveTexture(GL_TEXTURE0);
+    }
+
     TargetHandle createTarget(const TargetDesc& desc) override {
         TargetRecord record;
         glGenFramebuffers(1, &record.framebuffer);

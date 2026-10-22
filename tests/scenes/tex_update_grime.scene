@@ -1,0 +1,33 @@
+# ABI 1.8: texture sub-region updates and mesh picking. A wall panel faces
+# the camera, textured with a dull, low-contrast grime checker (no mip maps,
+# so the image does not depend on how a driver filters a mip chain). After the
+# first frame two rectangles of the texture are replaced with a clean colour,
+# as a game cleans grime patch by patch: one inside the texture and one that
+# reaches its right and bottom edges. The captured second frame shows both.
+# A tilted, spun cube sits beside the panel. expect_ray lines check
+# strata_raycast_meshes against both meshes, through the model matrix, from
+# behind (a back face) and with a max_distance that stops short.
+size 320 180
+camera 0 0 5  0 0 0  60 0.1 50
+lighting legacy -0.3 -0.5 -0.8 0.45
+clear 0.20 0.22 0.25 1
+texture grime checker 64 64 4 4  0.52 0.48 0.42  0.44 0.40 0.35
+mesh 1 1 1
+vertices -1.5 -1.5 0  1.5 -1.5 0  1.5 1.5 0  -1.5 1.5 0
+uvs 0 1  1 1  1 0  0 0
+triangles 0 1 2  0 2 3
+mesh_texture grime
+mesh_unlit
+texture_update grime 8 8 24 20  0.80 0.76 0.68
+texture_update grime 48 40 16 24  0.80 0.76 0.68
+mesh 0.55 0.35 0.25
+vertices -0.5 -0.5 -0.5  0.5 -0.5 -0.5  0.5 0.5 -0.5  -0.5 0.5 -0.5  -0.5 -0.5 0.5  0.5 -0.5 0.5  0.5 0.5 0.5  -0.5 0.5 0.5
+triangles 0 4 7  0 7 3  1 2 6  1 6 5  0 1 5  0 5 4  3 7 6  3 6 2  0 3 2  0 2 1  4 5 6  4 6 7
+mesh_transform 2.4 0 0.5  1 0 0  20  30  0.8
+expect_ray 0 0 5  0 0 -1  100  0 5
+expect_ray 0.5 0.5 5  0 0 1  100  none
+expect_ray 0 0 5  0 0 -1  4.9  none
+expect_ray 0 0 -5  0 0 2  100  0 5
+expect_ray 2.4 0 5  0 0 -1  100  1
+expect_ray 2.4 0 -5  0 0 1  100  1
+expect_ray 2.4 0 0.5  0 1 0  100  1

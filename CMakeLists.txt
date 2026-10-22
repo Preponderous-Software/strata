@@ -102,6 +102,7 @@ set(STRATA_ENGINE_SOURCES
     src/render/lights.cpp
     src/render/terrain_mesh.cpp
     src/render/static_mesh.cpp
+    src/render/ray_pick.cpp
     src/render/pass_list.cpp
     src/render/overlay.cpp
     src/render/renderer.cpp
