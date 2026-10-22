@@ -65,12 +65,14 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 
 ## Status
 
-`v0.3.0` adds static meshes (ABI 1.4), unlit overlays and a space lighting
-mode (**O1**, ABI 1.5) and the C++-only `modules/sim` to `v0.2.0`'s point
-lights (**L3**), point-light shadows (**L4**) and terrain tile (**T1**), and
-`v0.1.0`'s skeleton and lighting **L1–L2**. The C ABI is 1.5 in `v0.3.0` and
-1.8 on `main` (the unreleased seasonal sun, textures and picking below): each addition
-is compatible, and every ABI 1.0 host still works.
+`v0.4.0` adds the browser (a WebGL 2 / GLES 3.0 device built with
+Emscripten), a seasonal sun (ABI 1.6), textures and textured meshes (ABI 1.7),
+and picking, texture updates and relative mouse mode (ABI 1.8) to `v0.3.0`'s
+static meshes (ABI 1.4), unlit overlays and space lighting (**O1**, ABI 1.5)
+and `modules/sim`, `v0.2.0`'s point lights (**L3**), point-light shadows
+(**L4**) and terrain tile (**T1**), and `v0.1.0`'s skeleton and lighting
+**L1–L2**. The C ABI is 1.8: each addition is compatible, and every ABI 1.0
+host still works.
 
 | Milestone | What it is | Golden images |
 |---|---|---|
@@ -82,9 +84,9 @@ is compatible, and every ABI 1.0 host still works.
 | T1 *(ABI 1.3)* | One static heightmapped terrain tile, lit, casting and receiving sun and point-light shadows | `t1_terrain_noon`, `t1_terrain_morning`, `t1_terrain_night_fire` |
 | Static meshes *(ABI 1.4)* | Up to 256 host-built indexed triangle meshes in world space with per-vertex colour, drawn and shadowed like the terrain | `mesh_static_morning`, `mesh_static_night_lamp` |
 | O1 *(ABI 1.5)* | Unlit overlays (lines, round points, screen text in a public-domain 8×8 font) and a space lighting mode lit only by point lights | `o1_space_system`, `o1_overlays_sun` |
-| Seasonal sun *(ABI 1.6, unreleased)* | The sun placed from a real date, time, latitude and longitude (NOAA solar position), alongside the time-of-day sun | `sun_june_noon`, `sun_december_noon`, `sun_december_afternoon` |
-| Textures *(ABI 1.7, unreleased)* | RGBA8 textures with mip maps, textured meshes (planet maps on latitude-longitude spheres), unlit emissive meshes, and a model matrix per mesh for spinning about a tilted axis | `tex_globe_sun`, `tex_space_planets` |
-| Picking and texture updates *(ABI 1.8, unreleased)* | Sub-rectangle texture updates (grime cleaned patch by patch), the nearest static-mesh triangle along a ray through each mesh's model matrix, and relative mouse mode for first-person look | `tex_update_grime` (its scene also checks rays) |
+| Seasonal sun *(ABI 1.6)* | The sun placed from a real date, time, latitude and longitude (NOAA solar position), alongside the time-of-day sun | `sun_june_noon`, `sun_december_noon`, `sun_december_afternoon` |
+| Textures *(ABI 1.7)* | RGBA8 textures with mip maps, textured meshes (planet maps on latitude-longitude spheres), unlit emissive meshes, and a model matrix per mesh for spinning about a tilted axis | `tex_globe_sun`, `tex_space_planets` |
+| Picking and texture updates *(ABI 1.8)* | Sub-rectangle texture updates (grime cleaned patch by patch), the nearest static-mesh triangle along a ray through each mesh's model matrix, and relative mouse mode for first-person look | `tex_update_grime` (its scene also checks rays) |
 
 Next come streaming and larger terrain (T2–T4), meshes and materials (M1–M4),
 and optional OpenUSD modules (`STRATA_WITH_USD`, off by default).
