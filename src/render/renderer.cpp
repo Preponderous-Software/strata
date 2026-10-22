@@ -163,7 +163,7 @@ Renderer::~Renderer() {
     device_.destroy(pointShadowMaps_);
     device_.destroy(pointShadowPipeline_);
     clearMeshes();
-    for (auto& t : textures_) device_.destroy(t.second);
+    for (auto& t : textures_) device_.destroy(t.handle);
     textures_.clear();
     device_.destroy(whiteTexture_);
     device_.destroy(meshUniforms_);
@@ -477,6 +477,7 @@ uint32_t Renderer::addMeshEntry(const StrataMesh& m, const float* uvs, uint32_t 
     if (nextMeshId_ == 0) fail(STRATA_ERROR_INVALID_STATE, "mesh: ids exhausted");
     const StaticMesh mesh = buildStaticMesh(m, uvs);  // validates first; throws before anything changes
     MeshEntry entry;
+    entry.pick = buildPickGeometry(m);
     entry.vertices = device_.createBuffer(mesh.vertices.size() * sizeof(float), mesh.vertices.data(), false,
                                           "strata.mesh-vertices");
     entry.indices = device_.createIndexBuffer(mesh.indices.size() * sizeof(uint32_t), mesh.indices.data(),
@@ -484,9 +485,10 @@ uint32_t Renderer::addMeshEntry(const StrataMesh& m, const float* uvs, uint32_t 
     entry.indexCount = static_cast<uint32_t>(mesh.indices.size());
     entry.texture = texture;
     entry.flags = flags;
-    entry.id = nextMeshId_++;
-    meshes_.push_back(entry);
-    return entry.id;
+    const uint32_t id = nextMeshId_++;
+    entry.id = id;
+    meshes_.push_back(std::move(entry));
+    return id;
 }
 
 void Renderer::setMeshTransform(uint32_t id, const float* model) {
@@ -512,7 +514,7 @@ void Renderer::setMeshTransform(uint32_t id, const float* model) {
 
 rhi::TextureHandle Renderer::textureFor(uint32_t id) const {
     for (const auto& t : textures_) {
-        if (t.first == id) return t.second;
+        if (t.id == id) return t.handle;
     }
     return {};
 }
@@ -540,18 +542,81 @@ uint32_t Renderer::createTexture(int32_t width, int32_t height, const uint8_t* r
     desc.debugName = "strata.mesh-texture";
     const rhi::TextureHandle texture = device_.createTexture(desc);
     const uint32_t id = nextTextureId_++;
-    textures_.emplace_back(id, texture);
+    TextureEntry entry;
+    entry.id = id;
+    entry.handle = texture;
+    entry.width = width;
+    entry.height = height;
+    textures_.push_back(entry);
     return id;
 }
 
 void Renderer::destroyTexture(uint32_t id) {
     for (auto it = textures_.begin(); it != textures_.end(); ++it) {
-        if (it->first != id) continue;
-        device_.destroy(it->second);
+        if (it->id != id) continue;
+        device_.destroy(it->handle);
         textures_.erase(it);
         return;
     }
     fail(STRATA_ERROR_INVALID_ARGUMENT, "texture: no texture with id %u", id);
+}
+
+void Renderer::updateTexture(uint32_t id, int32_t x, int32_t y, int32_t width, int32_t height, const uint8_t* rgba) {
+    const TextureEntry* entry = nullptr;
+    for (const auto& t : textures_) {
+        if (t.id == id) entry = &t;
+    }
+    if (!entry) fail(STRATA_ERROR_INVALID_ARGUMENT, "texture: no texture with id %u", id);
+    if (!rgba) fail(STRATA_ERROR_INVALID_ARGUMENT, "texture update: rgba is NULL");
+    // In 64 bits, so x + width cannot overflow.
+    if (x < 0 || y < 0 || width < 1 || height < 1 ||
+        static_cast<int64_t>(x) + width > entry->width || static_cast<int64_t>(y) + height > entry->height) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT,
+             "texture update: the %d x %d rectangle at (%d, %d) is not inside the %d x %d texture", width, height, x,
+             y, entry->width, entry->height);
+    }
+    const bool host = surface_.isHostOwned();
+    if (host) device_.captureHostState();
+    device_.updateTexture(entry->handle, x, y, width, height, rgba);
+    if (host) device_.restoreHostState();
+}
+
+StrataRayHit Renderer::raycastMeshes(const float* origin, const float* direction, float maxDistance) const {
+    if (!origin || !direction) fail(STRATA_ERROR_INVALID_ARGUMENT, "raycast: origin and direction must not be NULL");
+    const glm::vec3 o(origin[0], origin[1], origin[2]);
+    const glm::vec3 d(direction[0], direction[1], direction[2]);
+    if (!std::isfinite(o.x) || !std::isfinite(o.y) || !std::isfinite(o.z)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "raycast: origin must be finite");
+    }
+    const float length = glm::length(d);
+    if (!std::isfinite(d.x) || !std::isfinite(d.y) || !std::isfinite(d.z) || !(length > 0.0f) ||
+        !std::isfinite(length)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "raycast: direction must be finite and non-zero");
+    }
+    if (!(maxDistance > 0.0f)) fail(STRATA_ERROR_INVALID_ARGUMENT, "raycast: max_distance must be > 0");
+    const glm::vec3 unit = d / length;
+
+    StrataRayHit out{};
+    out.triangle = -1;
+    PickHit best;
+    uint32_t bestId = 0;
+    for (const auto& entry : meshes_) {
+        const PickHit hit = raycastMesh(entry.pick, entry.model, o, unit, maxDistance);
+        // Strictly nearer only, so a tie goes to the mesh added first.
+        if (hit.hit && (!best.hit || hit.distance < best.distance)) {
+            best = hit;
+            bestId = entry.id;
+        }
+    }
+    if (!best.hit) return out;
+    out.mesh_id = bestId;
+    out.triangle = best.triangle;
+    out.distance = best.distance;
+    for (int i = 0; i < 3; ++i) {
+        out.point[i] = best.point[i];
+        out.normal[i] = best.normal[i];
+    }
+    return out;
 }
 
 void Renderer::writeMeshUniforms() {

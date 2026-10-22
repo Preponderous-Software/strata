@@ -81,6 +81,20 @@ public:
     void destroyTexture(uint32_t id);
     uint32_t addTexturedMesh(const StrataTexturedMesh& mesh);
     void setMeshTransform(uint32_t id, const float* model);
+    // ABI 1.8. Replaces a width x height rectangle at (x, y) of a texture
+    // (RGBA8, rows top to bottom, copied); rebuilds its mip chain if it has
+    // one. Throws INVALID_ARGUMENT for an unknown id or a rectangle outside
+    // the texture, and then changes nothing.
+    void updateTextureRgba8(uint32_t id, int32_t x, int32_t y, int32_t width, int32_t height, const uint8_t* rgba);
+    // ABI 1.8. The nearest static mesh triangle along a ray (world space;
+    // direction finite and non-zero, normalised here; maxDistance > 0), both
+    // faces counting. mesh_id is 0 when nothing is hit. See
+    // strata_raycast_meshes for the memory this costs.
+    StrataRayHit raycastMeshes(const float origin[3], const float direction[3], float maxDistance) const;
+    // ABI 1.8. Hides and captures the cursor so mouse motion arrives as dx/dy
+    // only (first-person look). Window surface only: throws UNSUPPORTED on
+    // headless and host-context surfaces.
+    void setRelativeMouseMode(bool enabled);
 
     void beginFrame(const StrataFrameDesc& desc);
     void submitPrimitives(const StrataRenderItem* items, size_t count);

@@ -144,6 +144,11 @@ public:
     virtual size_t bufferSize(BufferHandle buffer) const = 0;
     virtual void updateBuffer(BufferHandle buffer, size_t offset, size_t bytes, const void* data) = 0;
     virtual TextureHandle createTexture(const TextureDesc& desc) = 0;
+    // 2D colour textures only: replaces the width x height texels at (x, y) of
+    // level 0 (row 0 is v = 0, as initialData) with tightly packed rgba, then
+    // rebuilds the mip chain if the texture has one. The caller checks the
+    // rectangle lies inside the texture.
+    virtual void updateTexture(TextureHandle texture, int x, int y, int width, int height, const void* data) = 0;
     virtual TargetHandle createTarget(const TargetDesc& desc) = 0;
     virtual PipelineHandle createPipeline(const PipelineDesc& desc) = 0;
     virtual void destroy(BufferHandle buffer) = 0;

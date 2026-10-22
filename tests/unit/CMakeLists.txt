@@ -7,6 +7,7 @@ add_executable(strata-unit-tests
     test_lights.cpp
     test_terrain_mesh.cpp
     test_static_mesh.cpp
+    test_ray_pick.cpp
     test_pass_list.cpp
     test_overlay.cpp
     test_image_compare.cpp

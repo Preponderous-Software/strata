@@ -47,6 +47,11 @@ public:
         return false;
     }
 
+    // ABI 1.8. Hides and captures the cursor, reporting mouse motion as
+    // relative movement only. Only a window surface can; the default throws
+    // STRATA_ERROR_UNSUPPORTED.
+    virtual void setRelativeMouseMode(bool enabled);
+
     virtual void drawableSize(int& width, int& height) const = 0;
     virtual void resize(int width, int height) = 0;
     virtual void present() {}

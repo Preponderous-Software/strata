@@ -45,7 +45,8 @@ Emscripten builds always use GLES 3.0.
   addition arrived in (1.1: point lights; 1.2: point-light shadows; 1.3: a
   terrain tile; 1.4: static meshes; 1.5: unlit overlays and space lighting;
   1.6: a sun placed by date, time and place; 1.7: textures and textured,
-  transformable meshes).
+  transformable meshes; 1.8: texture sub-region updates, mesh ray picking and
+  relative mouse mode).
 - **Layouts are checkable.** `strata_struct_size(id)` and
   `strata_struct_field_offset(id, field)` report every boundary struct. The C++
   unit tests `static_assert` the layouts. The C# tests
@@ -261,6 +262,22 @@ work.
   and cube-shadow passes. `STRATA_MESH_UNLIT` meshes are drawn last in the
   opaque pass as colour times texture, with no lights or fog, and are left
   out of every shadow pass, so a star's surface can sit around a point light.
+- **Texture updates (ABI 1.8).** `strata_update_texture_rgba8` replaces a
+  rectangle of an existing texture through `GpuDevice::updateTexture`
+  (`glTextureSubImage2D` on GL 4.5, `glTexSubImage2D` on the GLES device's
+  scratch unit) and rebuilds the mip chain of a mipmapped texture, so a game
+  can clean grime patch by patch without re-creating the texture.
+- **Picking (ABI 1.8).** `strata_raycast_meshes` returns the nearest
+  triangle of any static mesh along a world-space ray. GPU buffers cannot be
+  read back cheaply, so each mesh also keeps a CPU copy of its model-space
+  positions and indices (12 bytes per vertex and 4 per index, beside the
+  GPU's 44 and 4) and a model-space bounding box. The ray is taken into
+  model space with the inverse of the affine model matrix (which keeps the
+  ray parameter, so distances stay world distances), tested against the box,
+  then against every triangle with Möller–Trumbore, both faces counting. The
+  normal goes back through the inverse transpose and is turned to face the
+  ray's origin. The maths is GL-free (`src/render/ray_pick.cpp`) and
+  unit-tested; it is a linear scan, with no BVH yet.
 - This is a narrow precursor to RFC 0020 §9 (cooked meshes, instancing,
   materials): no tangents, normal maps, instancing or LOD.
 

@@ -1,4 +1,4 @@
-// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.5).
+// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.8).
 // Copyright (c) 2026 Daniel McCoy Stephenson. MIT licence; see LICENSE.
 using System;
 using System.IO;
@@ -9,8 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes.</summary>
-        public const uint Minor = 7;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode.</summary>
+        public const uint Minor = 8;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
@@ -25,7 +25,8 @@ namespace Strata.Interop {
             StructMesh = 9,        // ABI 1.4
             StructLineVertex = 10, StructPoint = 11, StructText = 12,  // ABI 1.5
             StructSolarPosition = 13,  // ABI 1.6
-            StructTexturedMesh = 14;   // ABI 1.7
+            StructTexturedMesh = 14,   // ABI 1.7
+            StructRayHit = 15;         // ABI 1.8
         public const uint TextureMipmaps = 0x1u, TextureClampU = 0x2u, TextureClampV = 0x4u;  // ABI 1.7
         public const uint MeshUnlit = 0x1u;  // ABI 1.7
 
@@ -201,6 +202,16 @@ namespace Strata.Interop {
         public uint flags;
     }
 
+    /// <summary>StrataRayHit (ABI 1.8): 36 bytes. mesh_id 0 means nothing was hit.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct StrataRayHit {
+        public uint mesh_id;
+        public int triangle;         // index in the mesh's index list / 3, or -1
+        public float distance;       // along the normalised direction
+        public fixed float point[3];  // world space
+        public fixed float normal[3]; // unit, world space, facing the ray's origin
+    }
+
     public static unsafe class StrataNative {
         public const string Library = "strata";
 
@@ -255,6 +266,12 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_add_textured_mesh(IntPtr engine, StrataTexturedMesh* mesh, uint* id);
         /// <summary>ABI 1.7. model points at 16 floats, column-major; null restores the identity.</summary>
         [DllImport(Library)] public static extern int strata_set_mesh_transform(IntPtr engine, uint id, float* model);
+        /// <summary>ABI 1.8. Replaces a width x height rectangle at (x, y) of a texture; rgba is width * height * 4 bytes, top row first.</summary>
+        [DllImport(Library)] public static extern int strata_update_texture_rgba8(IntPtr engine, uint id, int x, int y, int width, int height, byte* rgba);
+        /// <summary>ABI 1.8. origin and direction point at three floats each; writes the nearest mesh hit (mesh_id 0 for none).</summary>
+        [DllImport(Library)] public static extern int strata_raycast_meshes(IntPtr engine, float* origin, float* direction, float maxDistance, StrataRayHit* hit);
+        /// <summary>ABI 1.8. Window surface only; headless and host-context engines return STRATA_ERROR_UNSUPPORTED (7).</summary>
+        [DllImport(Library)] public static extern int strata_set_relative_mouse_mode(IntPtr engine, int enabled);
         [DllImport(Library)] public static extern int strata_begin_frame(IntPtr engine, StrataFrameDesc* desc);
         /// <summary>items points at count 44-byte records with the StrataRenderItem layout.</summary>
         [DllImport(Library)] public static extern int strata_submit_primitives(IntPtr engine, void* items, int count);

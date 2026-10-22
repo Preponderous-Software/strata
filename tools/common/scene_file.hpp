@@ -32,6 +32,13 @@
 //                                 (model = translate * rotate(tilt axis) * rotate(+Y, spin) * scale)
 //   sun date <YYYY-MM-DD> <HH:MM> <utc_offset_hours> <latitude> <longitude>
 //                                 (ABI 1.6: places the sun with strata_solar_position)
+//   texture_update <name> <x> <y> <w> <h> <r g b>
+//                                 (ABI 1.8: fills that rectangle of a texture with one colour through
+//                                  strata_update_texture_rgba8, after the first frame and before the
+//                                  captured one; updates apply in file order)
+//   expect_ray <ox oy oz> <dx dy dz> <max_distance> <mesh_index|none> [distance]
+//                                 (ABI 1.8: strata_raycast_meshes must hit that mesh, counted from 0 in
+//                                  file order, at that distance within 0.001, or hit nothing)
 #pragma once
 
 #include <string>
@@ -92,6 +99,22 @@ struct Scene {
         std::vector<uint8_t> rgba;
     };
     std::vector<Texture> textures;
+    struct TextureUpdate {  // ABI 1.8
+        std::string name;
+        int x = 0, y = 0, width = 0, height = 0;
+        std::vector<uint8_t> rgba;
+    };
+    std::vector<TextureUpdate> textureUpdates;
+    struct RayExpectation {  // ABI 1.8
+        float origin[3] = {0, 0, 0};
+        float direction[3] = {0, 0, -1};
+        float maxDistance = 0.0f;
+        int mesh = -1;  // index into meshes, or -1 for no hit
+        bool hasDistance = false;
+        float distance = 0.0f;
+        int line = 0;
+    };
+    std::vector<RayExpectation> rayExpectations;
 };
 
 // Throws std::runtime_error with "file:line: message" on a malformed scene.

@@ -121,7 +121,7 @@ WebGL 2 link options with it.
 
 | Surface | In a browser |
 |---|---|
-| `STRATA_SURFACE_WINDOW` | SDL3 creates a WebGL 2 context on the canvas `#canvas` (change it with SDL's `SDL_HINT_EMSCRIPTEN_CANVAS_SELECTOR`) and sizes it to `width` x `height` CSS pixels times the device pixel ratio. Keyboard, mouse, wheel and text events arrive through `strata_poll_event` as on the desktop. |
+| `STRATA_SURFACE_WINDOW` | SDL3 creates a WebGL 2 context on the canvas `#canvas` (change it with SDL's `SDL_HINT_EMSCRIPTEN_CANVAS_SELECTOR`) and sizes it to `width` x `height` CSS pixels times the device pixel ratio. Keyboard, mouse, wheel and text events arrive through `strata_poll_event` as on the desktop. `strata_set_relative_mouse_mode` (ABI 1.8) is the browser's pointer lock, which is granted only from a user gesture: SDL asks for it on the next click on the canvas, and Escape releases it. |
 | `STRATA_SURFACE_HEADLESS` | No EGL in a browser: a hidden SDL3 window, so it still needs a canvas. |
 | `STRATA_SURFACE_HOST_CONTEXT` | Strata draws into the WebGL 2 context the host made current (`emscripten_webgl_make_context_current`). `get_proc_address` must still be non-NULL, as the ABI requires, but it is never called: Emscripten's bindings are used. `strata_create` fails with `STRATA_ERROR_PLATFORM` if no WebGL context is current. Strata saves and restores the GL state it touches, as on the desktop. |
 

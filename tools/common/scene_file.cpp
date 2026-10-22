@@ -324,6 +324,39 @@ void parse(const std::string& path, Scene& scene, int depth) {
             SceneMesh& mesh = scene.meshes.back();
             std::memcpy(mesh.transform, m, sizeof m);
             mesh.hasTransform = true;
+        } else if (word == "texture_update") {
+            Scene::TextureUpdate u;
+            float rgb[3];
+            read(in, u.name, where, "texture name");
+            read(in, u.x, where, "x");
+            read(in, u.y, where, "y");
+            read(in, u.width, where, "width");
+            read(in, u.height, where, "height");
+            for (float& v : rgb) read(in, v, where, "colour");
+            if (u.width < 1 || u.height < 1 || u.width > 4096 || u.height > 4096) bad(where, "update size out of range");
+            u.rgba.resize(static_cast<size_t>(u.width) * static_cast<size_t>(u.height) * 4, 255);
+            for (size_t i = 0; i < u.rgba.size(); i += 4) {
+                for (int c = 0; c < 3; ++c) u.rgba[i + static_cast<size_t>(c)] = toByte(rgb[c]);
+            }
+            scene.textureUpdates.push_back(std::move(u));
+        } else if (word == "expect_ray") {
+            Scene::RayExpectation r;
+            std::string target;
+            for (float& v : r.origin) read(in, v, where, "origin");
+            for (float& v : r.direction) read(in, v, where, "direction");
+            read(in, r.maxDistance, where, "max distance");
+            read(in, target, where, "mesh index or 'none'");
+            if (target != "none") {
+                try {
+                    r.mesh = std::stoi(target);
+                } catch (const std::exception&) {
+                    bad(where, "expected a mesh index or 'none'");
+                }
+                if (r.mesh < 0) bad(where, "the mesh index must be >= 0");
+            }
+            if (in >> r.distance) r.hasDistance = true;
+            r.line = lineNumber;
+            scene.rayExpectations.push_back(r);
         } else if (word == "include") {
             std::string other;
             read(in, other, where, "file name");
@@ -445,6 +478,17 @@ Scene loadScene(const std::string& path) {
         if (!mesh.colors.empty() && mesh.colors.size() != mesh.positions.size()) {
             bad(path, "a mesh has " + std::to_string(mesh.colors.size()) + " colour values, expected " +
                           std::to_string(mesh.positions.size()));
+        }
+    }
+    for (const Scene::TextureUpdate& u : scene.textureUpdates) {
+        bool known = false;
+        for (const Scene::Texture& t : scene.textures) known = known || t.name == u.name;
+        if (!known) bad(path, "texture_update names unknown texture '" + u.name + "'");
+    }
+    for (const Scene::RayExpectation& r : scene.rayExpectations) {
+        if (r.mesh >= static_cast<int>(scene.meshes.size())) {
+            bad(path + ":" + std::to_string(r.line), "expect_ray names mesh " + std::to_string(r.mesh) + " of " +
+                                                         std::to_string(scene.meshes.size()));
         }
     }
     return scene;

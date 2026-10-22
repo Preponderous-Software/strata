@@ -13,6 +13,7 @@
 // Scene files whose names start with '_' are includes, not tests. On a
 // failure the rendered image and a diff are written to <out-dir>.
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -88,6 +89,7 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
                          "strata_create_texture_rgba8");
         textures.emplace_back(t.name, id);
     }
+    std::vector<uint32_t> meshIds;
     for (const auto& mesh : scene.meshes) {
         const StrataMesh view = mesh.view();
         uint32_t id = 0;
@@ -110,6 +112,19 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
         if (ok && mesh.hasTransform) {
             ok = check(strata_set_mesh_transform(engine, id, mesh.transform), "strata_set_mesh_transform");
         }
+        meshIds.push_back(id);
+    }
+    for (const auto& r : scene.rayExpectations) {
+        if (!ok) break;
+        StrataRayHit hit{};
+        ok = check(strata_raycast_meshes(engine, r.origin, r.direction, r.maxDistance, &hit), "strata_raycast_meshes");
+        const uint32_t want = r.mesh < 0 ? 0u : meshIds[static_cast<size_t>(r.mesh)];
+        if (ok && (hit.mesh_id != want ||
+                   (want != 0 && r.hasDistance && std::fabs(hit.distance - r.distance) > 1e-3f))) {
+            std::fprintf(stderr, "expect_ray on line %d: wanted mesh id %u at %.4f, got mesh id %u at %.4f\n", r.line,
+                         want, static_cast<double>(r.distance), hit.mesh_id, static_cast<double>(hit.distance));
+            ok = false;
+        }
     }
     if (!scene.pointLights.empty()) {
         ok = ok && check(strata_set_point_lights(engine, scene.pointLights.data(),
@@ -118,6 +133,19 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
     }
     // Two frames: the second proves a frame can follow a frame, and is the one captured.
     for (int frame = 0; ok && frame < 2; ++frame) {
+        if (frame == 1) {
+            // Texture updates land between the frames, after the texture has
+            // been drawn once, so the captured frame shows them.
+            for (const auto& u : scene.textureUpdates) {
+                uint32_t id = 0;
+                for (const auto& t : textures) {
+                    if (t.first == u.name) id = t.second;
+                }
+                ok = ok && check(strata_update_texture_rgba8(engine, id, u.x, u.y, u.width, u.height, u.rgba.data()),
+                                 "strata_update_texture_rgba8");
+            }
+            if (!ok) break;
+        }
         ok = ok && check(strata_begin_frame(engine, &scene.frame), "strata_begin_frame");
         ok = ok && check(strata_submit_primitives(engine, scene.items.data(), static_cast<int32_t>(scene.items.size())),
                          "strata_submit_primitives");
