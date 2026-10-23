@@ -1,7 +1,8 @@
 # Contributing
 
-Strata serves two games: Beyond Nations and the colony sim. A feature goes in
-when one of them needs it. "An engine usually has this" is not enough.
+Strata serves the consumer projects listed in the [README](README.md). A
+feature goes in when one of them needs it. "An engine usually has this" is not
+enough.
 
 ## Before you start
 
