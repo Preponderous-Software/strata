@@ -1,7 +1,7 @@
 // A tiny text format for golden-image scenes, read by strata-golden and by the
 // C# primitives harness so both draw exactly the same thing.
 //
-//   # comment
+//   # comment                     ('#' ends any line, text included)
 //   size <width> <height>
 //   camera <eye x y z> <target x y z> <fov_y_degrees> <near> <far>
 //   lighting legacy <dir x y z> <ambient>
@@ -23,7 +23,8 @@
 //   point <px py pz> <size_pixels> <world_diameter> <r g b a> [soft] (ABI 1.5)
 //   text <x> <y> <pixel_size> <r g b a> [shadow] : <text to the end of the line>
 //   texture <name> checker <w> <h> <cells_u> <cells_v> <r g b> <r g b> [mipmaps] [clamp_v]   (ABI 1.7)
-//   texture <name> globe <w> <h> [mipmaps]  (a test planet: hued checker, white caps, red prime meridian)
+//   texture <name> globe <w> <h> [mipmaps]  (a test planet: hued checker, white caps, red prime meridian;
+//                                            always clamp_v)
 //   sphere_mesh <slices> <stacks> <r g b>   (starts a unit-radius latitude-longitude sphere with planet uvs)
 //   uvs <u v ...>                 (the current mesh's texture coordinates)
 //   mesh_texture <name>           (the current mesh samples that texture)
@@ -117,7 +118,9 @@ struct Scene {
     std::vector<RayExpectation> rayExpectations;
 };
 
-// Throws std::runtime_error with "file:line: message" on a malformed scene.
+// Throws std::runtime_error with "file:line: message" on a malformed scene. The
+// checks made once the whole file is read (terrain heights and colours, mesh
+// vertex, uv and colour counts, texture_update names) report "file: message".
 Scene loadScene(const std::string& path);
 
 }  // namespace strata::scene
