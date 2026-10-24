@@ -533,7 +533,8 @@ rhi::TextureHandle Renderer::textureFor(uint32_t id) const {
 }
 
 uint32_t Renderer::createTexture(int32_t width, int32_t height, const uint8_t* rgba, uint32_t flags) {
-    const uint32_t known = STRATA_TEXTURE_MIPMAPS | STRATA_TEXTURE_CLAMP_U | STRATA_TEXTURE_CLAMP_V;
+    const uint32_t known =
+        STRATA_TEXTURE_MIPMAPS | STRATA_TEXTURE_CLAMP_U | STRATA_TEXTURE_CLAMP_V | STRATA_TEXTURE_NEAREST;
     if (flags & ~known) fail(STRATA_ERROR_INVALID_ARGUMENT, "texture: unknown flags 0x%x", flags);
     if (width < 1 || height < 1 || width > STRATA_MAX_TEXTURE_SIZE || height > STRATA_MAX_TEXTURE_SIZE) {
         fail(STRATA_ERROR_INVALID_ARGUMENT, "texture: width and height must be 1..%d (got %d x %d)",
@@ -552,6 +553,7 @@ uint32_t Renderer::createTexture(int32_t width, int32_t height, const uint8_t* r
     desc.mipmaps = (flags & STRATA_TEXTURE_MIPMAPS) != 0;
     desc.repeatU = (flags & STRATA_TEXTURE_CLAMP_U) == 0;
     desc.repeatV = (flags & STRATA_TEXTURE_CLAMP_V) == 0;
+    desc.nearest = (flags & STRATA_TEXTURE_NEAREST) != 0;  // ABI 1.10
     desc.debugName = "strata.mesh-texture";
     const rhi::TextureHandle texture = device_.createTexture(desc);
     const uint32_t id = nextTextureId_++;

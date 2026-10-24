@@ -22,7 +22,8 @@
 //   circle <cx cy cz> <radius> <segments> <r g b a>  (line loop in the XZ plane)
 //   point <px py pz> <size_pixels> <world_diameter> <r g b a> [soft] (ABI 1.5)
 //   text <x> <y> <pixel_size> <r g b a> [shadow] : <text to the end of the line>
-//   texture <name> checker <w> <h> <cells_u> <cells_v> <r g b> <r g b> [mipmaps] [clamp_v]   (ABI 1.7)
+//   texture <name> checker <w> <h> <cells_u> <cells_v> <r g b> <r g b> [mipmaps] [clamp_v] [nearest]
+//                                 (ABI 1.7; nearest is STRATA_TEXTURE_NEAREST, ABI 1.10)
 //   texture <name> globe <w> <h> [mipmaps]  (a test planet: hued checker, white caps, red prime meridian;
 //                                            always clamp_v)
 //   sphere_mesh <slices> <stacks> <r g b>   (starts a unit-radius latitude-longitude sphere with planet uvs)
