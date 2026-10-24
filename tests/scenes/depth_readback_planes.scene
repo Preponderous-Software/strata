@@ -1,0 +1,32 @@
+# ABI 1.9: depth readback. The camera looks down -Z from z = 10. A lit wall
+# at z = -5 (15 units away) fills the left of the frame; nothing is behind
+# the right, where the sky shows. A cube primitive's front face sits at
+# z = 6 (4 units away) and an unlit square at z = 2 (8 units away). A point
+# and a line are drawn over the empty right side. expect_depth reads
+# strata_read_depth_f32 after the captured frame: the wall reads 15 at every
+# corner it covers (planar, not radial), the cube 4, the unlit square 8, and
+# the sky, the point and the line +infinity, because they write no depth.
+size 320 180
+camera 0 0 10  0 0 0  60 0.1 50
+lighting sun 0.45 40  2 1024 40 0.6 0
+clear 0 0 0 1 sky
+mesh 0.62 0.58 0.50
+vertices -20 -10 -5  4 -10 -5  4 10 -5  -20 10 -5
+triangles 0 1 2  0 2 3
+item cube -3 0 5  2 2 2  0.75 0.30 0.20
+mesh 0.20 0.55 0.85
+vertices 1 -3 2  3 -3 2  3 -1 2  1 -1 2
+triangles 0 1 2  0 2 3
+mesh_unlit
+point 8 0 0  12 0  1 0.8 0.2 1
+line 6 -4 0  12 4 0  1 1 0 1
+expect_depth 0 0 15
+expect_depth 0 179 15
+expect_depth 160 90 15
+expect_depth 160 10 15
+expect_depth 43 90 4
+expect_depth 199 129 8
+expect_depth 319 0 inf
+expect_depth 319 179 inf
+expect_depth 284 90 inf
+expect_depth 270 70 inf

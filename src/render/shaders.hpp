@@ -440,6 +440,25 @@ inline const char* kTextFragment =
     "    fragColor = vColor;\n"
     "}\n";
 
+// Depth readback (ABI 1.9): a fullscreen triangle that copies the depth
+// attachment's float bits into RGBA8, low byte in red, so the value survives
+// an RGBA8 readback exactly on every device.
+inline const char* kDepthPackVertex =
+    "#version 450 core\n"
+    "void main() {\n"
+    "    vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2)) * 2.0 - 1.0;\n"
+    "    gl_Position = vec4(p, 0.0, 1.0);\n"
+    "}\n";
+
+inline const char* kDepthPackFragment =
+    "#version 450 core\n"
+    "layout(binding = 0) uniform sampler2D uDepth;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    uint bits = floatBitsToUint(texelFetch(uDepth, ivec2(gl_FragCoord.xy), 0).r);\n"
+    "    fragColor = vec4(uvec4(bits & 255u, (bits >> 8) & 255u, (bits >> 16) & 255u, bits >> 24)) / 255.0;\n"
+    "}\n";
+
 #undef STRATA_FRAME_BLOCK
 #undef STRATA_POINT_LIGHT_BLOCK
 #undef STRATA_POINT_SHADOW_BLOCK

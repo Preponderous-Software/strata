@@ -98,7 +98,7 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 8u);
+    CHECK(strata_abi_minor() >= 9u);
 }
 
 TEST(point_light_layout_is_queryable) {
@@ -199,6 +199,16 @@ TEST(abi_1_8_calls_reject_bad_arguments_without_a_context) {
     CHECK(strata_raycast_meshes(engine, origin, nullptr, 10.0f, &hit) == STRATA_ERROR_INVALID_ARGUMENT);
     CHECK(strata_raycast_meshes(engine, origin, direction, 10.0f, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
     CHECK(strata_set_relative_mouse_mode(nullptr, 1) == STRATA_ERROR_INVALID_ARGUMENT);
+}
+
+TEST(abi_1_9_depth_readback_rejects_bad_arguments_without_a_context) {
+    float depth[4] = {};
+    int32_t width = 0, height = 0;
+    StrataEngine* engine = reinterpret_cast<StrataEngine*>(0x1);  // never dereferenced: pointers are checked first
+    CHECK(strata_read_depth_f32(nullptr, depth, sizeof depth, &width, &height) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_read_depth_f32(engine, nullptr, sizeof depth, &width, &height) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_read_depth_f32(engine, depth, sizeof depth, nullptr, &height) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_read_depth_f32(engine, depth, sizeof depth, &width, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
 }
 
 TEST(set_terrain_rejects_a_null_engine) {

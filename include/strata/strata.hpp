@@ -109,6 +109,10 @@ public:
 
     // RGBA8, top row first.
     void readPixels(std::vector<uint8_t>& rgba, int32_t& width, int32_t& height);
+    // ABI 1.9. The last frame's depth: planar distance along the view axis in
+    // world units, top row first, +infinity where nothing was drawn. Headless
+    // surfaces only: throws UNSUPPORTED on a window or host context.
+    void readDepth(std::vector<float>& depth, int32_t& width, int32_t& height);
     void saveScreenshotPng(const std::string& path);
 
     struct Impl;

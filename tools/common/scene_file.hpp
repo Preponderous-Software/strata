@@ -40,6 +40,10 @@
 //   expect_ray <ox oy oz> <dx dy dz> <max_distance> <mesh_index|none> [distance]
 //                                 (ABI 1.8: strata_raycast_meshes must hit that mesh, counted from 0 in
 //                                  file order, at that distance within 0.001, or hit nothing)
+//   expect_depth <x> <y> <distance|inf>
+//                                 (ABI 1.9: strata_read_depth_f32 must read that planar distance at pixel
+//                                  (x, y) of the captured frame, top row first, within 0.1 %, or +infinity;
+//                                  skipped, with a note, where depth readback is unsupported)
 #pragma once
 
 #include <string>
@@ -116,6 +120,12 @@ struct Scene {
         int line = 0;
     };
     std::vector<RayExpectation> rayExpectations;
+    struct DepthExpectation {  // ABI 1.9
+        int x = 0, y = 0;
+        float distance = 0.0f;  // +infinity: nothing drawn there
+        int line = 0;
+    };
+    std::vector<DepthExpectation> depthExpectations;
 };
 
 // Throws std::runtime_error with "file:line: message" on a malformed scene. The

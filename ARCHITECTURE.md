@@ -46,7 +46,7 @@ Emscripten builds always use GLES 3.0.
   terrain tile; 1.4: static meshes; 1.5: unlit overlays and space lighting;
   1.6: a sun placed by date, time and place; 1.7: textures and textured,
   transformable meshes; 1.8: texture sub-region updates, mesh ray picking and
-  relative mouse mode).
+  relative mouse mode; 1.9: depth readback).
 - **Layouts are checkable.** `strata_struct_size(id)` and
   `strata_struct_field_offset(id, field)` report every boundary struct. The C++
   unit tests `static_assert` the layouts. The C# tests
@@ -101,6 +101,10 @@ overlay:  lines, points, camera, depth -> color
 text:     text -> color
 readback: color -> pixels
 ```
+
+`strata_read_depth_f32` (ABI 1.9) is not a frame pass: it runs on demand
+after a frame, like `readback`, and is described under
+[Depth readback](#depth-readback-abi-19).
 
 **Later** passes slot into this list: depth pre-pass, transparent geometry,
 post (tonemap) and UI.
@@ -309,6 +313,32 @@ drawing. They are frame inputs like primitives (submitted between
 blend modes (alpha, additive), non-indexed instanced draws, and `R8` textures
 with initial data and nearest filtering. A host context gets its blend state
 and texture unit 3 back after each frame.
+
+## Depth readback (ABI 1.9)
+
+`strata_read_depth_f32` returns the last frame's depth as one float per
+pixel: the distance along the camera's view axis in world units, or +infinity
+where nothing was drawn. It exists for hosts that render labelled data, such
+as depth maps for a synthetic dataset.
+
+- **Headless only.** It reads the offscreen target's `DEPTH_COMPONENT32F`
+  attachment, which only the EGL headless surface has. A window, a host
+  context, and a headless request that fell back to a hidden SDL window
+  (Windows, browsers) return `STRATA_ERROR_UNSUPPORTED`.
+- **Same path on both devices.** GLES 3.0 and WebGL 2 cannot `glReadPixels`
+  a depth attachment, so a fullscreen `depth_pack` draw samples the depth
+  texture with `texelFetch` (the attachment is created with nearest filtering,
+  which GLES needs for a float texture to be complete) and writes each
+  float's 32 bits into an RGBA8 texel, low byte in red. The RGBA8 target is
+  read back as usual and the bits reassembled, so the depth is exact.
+- **Linearised on the CPU** (`src/render/depth_readback.cpp`, GL-free and
+  unit-tested) with the projection the frame was drawn with: NDC z = 2d - 1,
+  taken back through the projection's z and w rows. That inverts whatever
+  the GPU did, so it is correct for either depth convention and for
+  orthographic projections. The cleared value (d = 1) reads as +infinity.
+- **What writes depth.** Primitives, the terrain tile and static meshes,
+  unlit ones included. The sky and overlays never write depth, so they read
+  as whatever is behind them.
 
 ## Optional modules
 

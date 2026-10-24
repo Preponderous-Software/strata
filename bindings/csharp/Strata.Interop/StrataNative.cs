@@ -9,8 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode.</summary>
-        public const uint Minor = 8;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback.</summary>
+        public const uint Minor = 9;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
@@ -285,6 +285,8 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_present(IntPtr engine);
         [DllImport(Library)] public static extern int strata_get_frame_stats(IntPtr engine, StrataFrameStats* stats);
         [DllImport(Library)] public static extern int strata_read_pixels_rgba8(IntPtr engine, byte* dst, int capacity, int* width, int* height);
+        /// <summary>ABI 1.9. Planar view distance per pixel, top row first; +infinity where nothing was drawn. Headless only.</summary>
+        [DllImport(Library)] public static extern int strata_read_depth_f32(IntPtr engine, float* dst, int capacity, int* width, int* height);
         [DllImport(Library)] public static extern int strata_save_screenshot_png(IntPtr engine, byte* utf8Path);
 
         public static string LastError() => Marshal.PtrToStringUTF8(strata_last_error()) ?? "";

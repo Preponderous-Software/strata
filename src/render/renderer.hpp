@@ -58,6 +58,10 @@ public:
 
     const StrataFrameStats& stats() const { return stats_; }
     void readPixels(std::vector<uint8_t>& rgbaTopDown, int& width, int& height);
+    // ABI 1.9. The last frame's planar view distance per pixel, top row first;
+    // +infinity where nothing was drawn. Offscreen (headless) targets only:
+    // throws UNSUPPORTED on a window or host context.
+    void readDepth(std::vector<float>& depthTopDown, int& width, int& height);
 
     static void validateCamera(const StrataCamera& camera);
     static void validateLighting(const StrataLighting& lighting);
@@ -151,6 +155,13 @@ private:
     rhi::TextureHandle offscreenColor_, offscreenDepth_;
     rhi::TargetHandle offscreenTarget_;
     int offscreenWidth_ = 0, offscreenHeight_ = 0;
+    // Depth readback (ABI 1.9): the depth attachment's floats, bit for bit, in
+    // an RGBA8 target the size of the offscreen one, made on first use.
+    rhi::TextureHandle depthPackColor_;
+    rhi::TargetHandle depthPackTarget_;
+    int depthPackWidth_ = 0, depthPackHeight_ = 0;
+    rhi::PipelineHandle depthPackPipeline_;
+    float lastProjection_[16] = {};  // the projection the last frame was drawn with
 
     rhi::TextureHandle shadowMaps_;
     std::array<rhi::TargetHandle, kMaxCascades> shadowTargets_{};

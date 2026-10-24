@@ -197,6 +197,13 @@ void Engine::readPixels(std::vector<uint8_t>& rgba, int32_t& width, int32_t& hei
     height = h;
 }
 
+void Engine::readDepth(std::vector<float>& depth, int32_t& width, int32_t& height) {
+    int w = 0, h = 0;
+    impl_->renderer->readDepth(depth, w, h);
+    width = w;
+    height = h;
+}
+
 void Engine::saveScreenshotPng(const std::string& path) {
     std::vector<uint8_t> rgba;
     int32_t width = 0, height = 0;

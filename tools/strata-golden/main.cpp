@@ -45,6 +45,8 @@ bool check(StrataStatus status, const char* what) {
     return false;
 }
 
+bool checkDepth(StrataEngine* engine, const strata::scene::Scene& scene, int32_t width, int32_t height);
+
 // Renders a scene with a fresh engine and returns its pixels.
 bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::image::Image& out, std::string& gpu) {
     StrataEngineDesc desc{};
@@ -177,6 +179,7 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
         ok = check(strata_read_pixels_rgba8(engine, out.rgba.data(), static_cast<int32_t>(out.rgba.size()), &w, &h),
                    "strata_read_pixels_rgba8");
         for (size_t i = 3; i < out.rgba.size(); i += 4) out.rgba[i] = 255;
+        if (ok && !scene.depthExpectations.empty()) ok = checkDepth(engine, scene, width, height);
         StrataFrameStats stats{};
         strata_get_frame_stats(engine, &stats);
         std::printf("  %d instances (cube %d, capsule %d, cylinder %d, sphere %d), %d draws, %d cascades, %.2f ms CPU\n",
@@ -186,6 +189,36 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
     }
     if (surface == STRATA_SURFACE_WINDOW) strata_present(engine);
     strata_destroy(engine);
+    return ok;
+}
+
+// ABI 1.9: expect_depth lines, read from the captured frame.
+bool checkDepth(StrataEngine* engine, const strata::scene::Scene& scene, int32_t width, int32_t height) {
+    std::vector<float> depth(static_cast<size_t>(width) * static_cast<size_t>(height));
+    int32_t w = 0, h = 0;
+    const StrataStatus status = strata_read_depth_f32(engine, depth.data(),
+                                                      static_cast<int32_t>(depth.size() * sizeof(float)), &w, &h);
+    if (status == STRATA_ERROR_UNSUPPORTED) {
+        std::printf("  expect_depth skipped: %s\n", strata_last_error());
+        return true;
+    }
+    if (!check(status, "strata_read_depth_f32")) return false;
+    if (w != width || h != height) {
+        std::fprintf(stderr, "strata_read_depth_f32 read %dx%d, the frame is %dx%d\n", w, h, width, height);
+        return false;
+    }
+    bool ok = true;
+    for (const auto& d : scene.depthExpectations) {
+        const float got = depth[static_cast<size_t>(d.y) * static_cast<size_t>(width) + static_cast<size_t>(d.x)];
+        const bool pass = std::isinf(d.distance) ? (std::isinf(got) && got > 0.0f)
+                                                 : std::fabs(got - d.distance) <= d.distance * 1e-3f;
+        if (!pass) {
+            std::fprintf(stderr, "expect_depth on line %d: wanted %.4f at (%d, %d), got %.4f\n", d.line,
+                         static_cast<double>(d.distance), d.x, d.y, static_cast<double>(got));
+            ok = false;
+        }
+    }
+    std::printf("  %zu depth expectation(s) %s\n", scene.depthExpectations.size(), ok ? "met" : "FAILED");
     return ok;
 }
 

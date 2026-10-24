@@ -357,6 +357,23 @@ void parse(const std::string& path, Scene& scene, int depth) {
             if (in >> r.distance) r.hasDistance = true;
             r.line = lineNumber;
             scene.rayExpectations.push_back(r);
+        } else if (word == "expect_depth") {
+            Scene::DepthExpectation d;
+            std::string distance;
+            read(in, d.x, where, "x");
+            read(in, d.y, where, "y");
+            read(in, distance, where, "distance or 'inf'");
+            if (distance == "inf") {
+                d.distance = std::numeric_limits<float>::infinity();
+            } else {
+                try {
+                    d.distance = std::stof(distance);
+                } catch (const std::exception&) {
+                    bad(where, "expected a distance or 'inf'");
+                }
+            }
+            d.line = lineNumber;
+            scene.depthExpectations.push_back(d);
         } else if (word == "include") {
             std::string other;
             read(in, other, where, "file name");
@@ -489,6 +506,11 @@ Scene loadScene(const std::string& path) {
         if (r.mesh >= static_cast<int>(scene.meshes.size())) {
             bad(path + ":" + std::to_string(r.line), "expect_ray names mesh " + std::to_string(r.mesh) + " of " +
                                                          std::to_string(scene.meshes.size()));
+        }
+    }
+    for (const Scene::DepthExpectation& d : scene.depthExpectations) {
+        if (d.x < 0 || d.y < 0 || d.x >= scene.width || d.y >= scene.height) {
+            bad(path + ":" + std::to_string(d.line), "expect_depth pixel is outside the frame");
         }
     }
     return scene;
