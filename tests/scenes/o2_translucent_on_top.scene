@@ -1,0 +1,33 @@
+# ABI 1.11: translucent meshes, overlays on top of the scene, and filled
+# screen rectangles. Under the sun with its sky:
+# - a blue translucent fence (alpha 0.45) stands in front of an opaque red
+#   cube, and a yellow unlit translucent panel (alpha 0.5) overlaps the fence
+#   nearer the camera, so back-to-front blending shows in the overlap; the
+#   fence's top edge rises above the horizon, so it also blends over the sky;
+# - a brown block hides the middle of a depth-tested white line and a white
+#   point behind it, while a magenta line and point with on_top show through;
+# - a dark half-transparent panel backs a line of text at the bottom.
+size 320 180
+camera 0 4 12  0 1 0  60 0.1 100
+lighting sun 0.42 35  2 1024 40 0.6 0
+clear 0 0 0 1 sky
+mesh 0.30 0.50 0.25
+vertices -30 0 30  30 0 30  30 0 -30  -30 0 -30
+triangles 0 1 2  0 2 3
+item cube 1 1 -2  2 2 2  0.80 0.20 0.15
+item cube -3 1.5 5  1.2 3 1.2  0.45 0.30 0.18
+mesh 0.20 0.45 0.95
+vertices -3 0 1  3 0 1  3 3.4 1  -3 3.4 1
+triangles 0 1 2  0 2 3
+mesh_translucent 0.45
+mesh 1.00 0.85 0.20
+vertices 0 0.4 3  4 0.4 3  4 1.8 3  0 1.8 3
+triangles 0 1 2  0 2 3
+mesh_unlit
+mesh_translucent 0.5
+line -10 1.2 0  -3.5 1.2 0  1 1 1 1
+line -10 2.2 0  -3.5 2.2 0  1 0.2 0.9 1 on_top
+point -5 0.8 0  10 0  1 1 1 1
+point -5 2.6 0  10 0  1 0.2 0.9 1 on_top
+rect 8 146 304 26  0 0 0 0.6
+text 16 151 16  1 1 1 1 : TRANSLUCENT ON TOP

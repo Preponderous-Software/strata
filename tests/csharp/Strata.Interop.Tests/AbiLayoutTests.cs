@@ -116,6 +116,15 @@ namespace Strata.Interop.Tests {
         }
 
         [Fact]
+        public unsafe void RectMatchesNativeAndAbi111CallsRejectANullEngine() {
+            Assert.Equal(32, Unsafe.SizeOf<StrataRect>());
+            AssertLayout<StrataRect>(StrataAbi.StructRect, "x", "y", "width", "height", "color");
+            var rect = new StrataRect { width = 10, height = 10 };
+            Assert.Equal(1, StrataNative.strata_submit_rects(IntPtr.Zero, &rect, 1));  // STRATA_ERROR_INVALID_ARGUMENT
+            Assert.Equal(1, StrataNative.strata_submit_lines_ex(IntPtr.Zero, null, 0, StrataAbi.LinesOnTop));
+        }
+
+        [Fact]
         public unsafe void OverlaySubmitsRejectANullEngine() {
             var point = new StrataPoint { size_pixels = 2 };
             Assert.Equal(1, StrataNative.strata_submit_points(IntPtr.Zero, &point, 1));  // STRATA_ERROR_INVALID_ARGUMENT

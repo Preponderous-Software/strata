@@ -60,9 +60,13 @@
  *        mode (strata_update_texture_rgba8, StrataRayHit,
  *        strata_raycast_meshes, strata_set_relative_mouse_mode)
  *   1.9  depth readback (strata_read_depth_f32)
- *   1.10 nearest-texel texture filtering (STRATA_TEXTURE_NEAREST) */
+ *   1.10 nearest-texel texture filtering (STRATA_TEXTURE_NEAREST)
+ *   1.11 translucent meshes (STRATA_MESH_TRANSLUCENT), overlays drawn on top
+ *        of the scene (STRATA_LINES_ON_TOP, strata_submit_lines_ex,
+ *        STRATA_POINT_ON_TOP) and filled screen rectangles (StrataRect,
+ *        strata_submit_rects) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 10u
+#define STRATA_ABI_MINOR 11u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -310,6 +314,15 @@ typedef struct StrataMesh {
 /* StrataTexturedMesh.flags. */
 #define STRATA_MESH_UNLIT 0x1u /* drawn as its colour times its texture, with no lighting or fog, and casting no
                                   shadows: for things that glow, such as a star's surface */
+/* ABI 1.11. A translucent mesh: alpha blended over the opaque scene and the
+ * sky, with alpha = mesh.color[3] (0..1, also when per-vertex colours are
+ * given) times the texel's alpha. It is depth-tested against opaque geometry
+ * but writes no depth, both faces are drawn, and it casts no shadows (it
+ * receives them when lit). Translucent meshes are drawn after the sky, back to
+ * front by the distance from the eye to each mesh's bounding-box centre, which
+ * is exact for separate objects and approximate where they interpenetrate.
+ * Combines with STRATA_MESH_UNLIT. Not in strata_read_depth_f32's depth. */
+#define STRATA_MESH_TRANSLUCENT 0x2u
 
 /* ABI 1.7. A static mesh (as strata_add_mesh) with texture coordinates and a
  * texture. A sphere for a planet map is a latitude-longitude grid with u =
@@ -343,8 +356,9 @@ typedef struct StrataRayHit {
  *
  * Lines and points are in world space, tested against the scene's depth
  * (an opaque object in front hides them) but never write depth, and they are
- * not clipped by the far plane. Text is in pixels and drawn on top of
- * everything. */
+ * not clipped by the far plane; from ABI 1.11, STRATA_LINES_ON_TOP and
+ * STRATA_POINT_ON_TOP skip the depth test. Filled rectangles (1.11) and text
+ * are in pixels and drawn on top of everything, rectangles first. */
 
 /* One end of a line segment. 28 bytes. */
 typedef struct StrataLineVertex {
@@ -354,6 +368,8 @@ typedef struct StrataLineVertex {
 
 /* StrataPoint.flags. */
 #define STRATA_POINT_SOFT 0x1u /* a soft glow that fades to nothing at the edge, instead of a solid disc */
+#define STRATA_POINT_ON_TOP 0x2u /* ABI 1.11: not depth-tested, so it shows through the scene; drawn after the
+                                    depth-tested lines and points. Older libraries reject it as unknown */
 
 /* A round, camera-facing point. Its diameter on screen is the larger of
  * size_pixels and world_diameter as projected at the point's distance, so a
@@ -369,6 +385,19 @@ typedef struct StrataPoint {
 
 /* StrataText.flags. */
 #define STRATA_TEXT_SHADOW 0x1u /* draw a black copy one font pixel down and right first, for legibility */
+
+/* strata_submit_lines_ex flags (ABI 1.11). */
+#define STRATA_LINES_ON_TOP 0x1u /* not depth-tested: the lines show through the scene (an arc behind a hill) */
+
+/* ABI 1.11. A filled rectangle on screen, in pixels from the top-left of the
+ * drawable, alpha blended: a backing panel for text, a bar, a HUD block. A
+ * frame's rectangles are drawn in submission order, after every world overlay
+ * and before any text, so text sits on the panels. 32 bytes. */
+typedef struct StrataRect {
+    float x, y;          /* top-left corner, pixels */
+    float width, height; /* >= 0, pixels */
+    float color[4];      /* linear RGBA; alpha blends */
+} StrataRect;
 
 /* A run of text on screen in Strata's built-in 8 x 8 bitmap font (printable
  * ASCII; other bytes show as '?'; '\n' starts a new line). Every glyph is a
@@ -455,7 +484,8 @@ enum {
     STRATA_STRUCT_TEXT = 12,        /* ABI 1.5 */
     STRATA_STRUCT_SOLAR_POSITION = 13, /* ABI 1.6 */
     STRATA_STRUCT_TEXTURED_MESH = 14,  /* ABI 1.7 */
-    STRATA_STRUCT_RAY_HIT = 15         /* ABI 1.8 */
+    STRATA_STRUCT_RAY_HIT = 15,        /* ABI 1.8 */
+    STRATA_STRUCT_RECT = 16            /* ABI 1.11 */
 };
 
 /* Field ids for strata_struct_field_offset(STRATA_STRUCT_RENDER_ITEM, ...). */
@@ -635,6 +665,14 @@ STRATA_API StrataStatus strata_submit_primitives(StrataEngine* engine, const Str
 STRATA_API StrataStatus strata_submit_lines(StrataEngine* engine, const StrataLineVertex* vertices, int32_t count);
 STRATA_API StrataStatus strata_submit_points(StrataEngine* engine, const StrataPoint* points, int32_t count);
 STRATA_API StrataStatus strata_submit_text(StrataEngine* engine, const StrataText* texts, int32_t count);
+/* ABI 1.11. strata_submit_lines with STRATA_LINES_* flags (0 is the same as
+ * strata_submit_lines); an unknown bit is STRATA_ERROR_INVALID_ARGUMENT. */
+STRATA_API StrataStatus strata_submit_lines_ex(StrataEngine* engine, const StrataLineVertex* vertices, int32_t count,
+                                               uint32_t flags);
+/* ABI 1.11. Filled screen rectangles for this frame (see StrataRect). Every
+ * rectangle is checked first; on an invalid one nothing from the call is
+ * added. */
+STRATA_API StrataStatus strata_submit_rects(StrataEngine* engine, const StrataRect* rects, int32_t count);
 STRATA_API StrataStatus strata_end_frame(StrataEngine* engine);
 /* Window: swaps buffers. Headless and host context: no-op. */
 STRATA_API StrataStatus strata_present(StrataEngine* engine);

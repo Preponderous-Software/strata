@@ -106,7 +106,7 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
                 std::fprintf(stderr, "unknown texture '%s'\n", mesh.texture.c_str());
                 ok = false;
             }
-            textured.flags = mesh.unlit ? STRATA_MESH_UNLIT : 0u;
+            textured.flags = (mesh.unlit ? STRATA_MESH_UNLIT : 0u) | (mesh.translucent ? STRATA_MESH_TRANSLUCENT : 0u);
             ok = ok && check(strata_add_textured_mesh(engine, &textured, &id), "strata_add_textured_mesh");
         } else {
             ok = ok && check(strata_add_mesh(engine, &view, &id), "strata_add_mesh");
@@ -154,6 +154,15 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
         if (!scene.lines.empty()) {
             ok = ok && check(strata_submit_lines(engine, scene.lines.data(), static_cast<int32_t>(scene.lines.size())),
                              "strata_submit_lines");
+        }
+        if (!scene.linesOnTop.empty()) {
+            ok = ok && check(strata_submit_lines_ex(engine, scene.linesOnTop.data(),
+                                                    static_cast<int32_t>(scene.linesOnTop.size()), STRATA_LINES_ON_TOP),
+                             "strata_submit_lines_ex");
+        }
+        if (!scene.rects.empty()) {
+            ok = ok && check(strata_submit_rects(engine, scene.rects.data(), static_cast<int32_t>(scene.rects.size())),
+                             "strata_submit_rects");
         }
         if (!scene.points.empty()) {
             ok = ok && check(strata_submit_points(engine, scene.points.data(),

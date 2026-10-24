@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- ABI 1.11: translucency and on-top overlays, asked for by a faction-map
+  viewer proposal (translucent border fences; relation arcs that show through
+  hills) and RFC 0031 (a backing panel for text). All are compatible
+  additions.
+  - `STRATA_MESH_TRANSLUCENT` (`StrataTexturedMesh.flags`): alpha blended
+    with alpha `color[3]` times the texel's alpha, drawn in a new
+    `translucent` pass after the sky, back to front by bounding-box centre,
+    depth-tested without writing depth, both faces drawn, casting no shadows.
+    Lit or unlit (with `STRATA_MESH_UNLIT`).
+  - `strata_submit_lines_ex(engine, vertices, count, flags)` with
+    `STRATA_LINES_ON_TOP`, and `STRATA_POINT_ON_TOP` for points: drawn after
+    the depth-tested overlays with no depth test.
+  - `StrataRect` (`STRATA_STRUCT_RECT`, 32 bytes) and `strata_submit_rects`:
+    filled, alpha-blended screen rectangles, drawn before the frame's text.
+  - C# and Python declarations, with layout tests. New golden
+    `o2_translucent_on_top`; the scene format gains `mesh_translucent
+    <alpha>`, `rect`, and an `on_top` option for `line` and `point`.
 - A Python binding, `bindings/python/strata` (`pip install` from the
   repository's `bindings/python`): ctypes declarations of the whole C ABI,
   with no compiled code. Every struct is checked against the library's layout

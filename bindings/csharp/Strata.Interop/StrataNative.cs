@@ -9,8 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering.</summary>
-        public const uint Minor = 10;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles.</summary>
+        public const uint Minor = 11;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
@@ -26,10 +26,12 @@ namespace Strata.Interop {
             StructLineVertex = 10, StructPoint = 11, StructText = 12,  // ABI 1.5
             StructSolarPosition = 13,  // ABI 1.6
             StructTexturedMesh = 14,   // ABI 1.7
-            StructRayHit = 15;         // ABI 1.8
+            StructRayHit = 15,         // ABI 1.8
+            StructRect = 16;           // ABI 1.11
         public const uint TextureMipmaps = 0x1u, TextureClampU = 0x2u, TextureClampV = 0x4u;  // ABI 1.7
         public const uint TextureNearest = 0x8u;  // ABI 1.10
         public const uint MeshUnlit = 0x1u;  // ABI 1.7
+        public const uint MeshTranslucent = 0x2u;  // ABI 1.11
 
         public const int MaxPointLights = 32;  // ABI 1.1
         public const uint PointLightCastShadows = 0x1u;  // ABI 1.2
@@ -38,6 +40,8 @@ namespace Strata.Interop {
         public const int MaxMeshVertices = 16777216;     // ABI 1.4
 
         public const uint PointSoft = 0x1u;   // ABI 1.5
+        public const uint PointOnTop = 0x2u;  // ABI 1.11
+        public const uint LinesOnTop = 0x1u;  // ABI 1.11, strata_submit_lines_ex
         public const uint TextShadow = 0x1u;  // ABI 1.5
 
         public const int Ok = 0;
@@ -213,6 +217,14 @@ namespace Strata.Interop {
         public fixed float normal[3]; // unit, world space, facing the ray's origin
     }
 
+    /// <summary>StrataRect (ABI 1.11): 32 bytes. A filled screen rectangle in pixels from the top left.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct StrataRect {
+        public float x, y;
+        public float width, height;
+        public fixed float color[4];
+    }
+
     public static unsafe class StrataNative {
         public const string Library = "strata";
 
@@ -282,6 +294,10 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_submit_points(IntPtr engine, StrataPoint* points, int count);
         /// <summary>ABI 1.5.</summary>
         [DllImport(Library)] public static extern int strata_submit_text(IntPtr engine, StrataText* texts, int count);
+        /// <summary>ABI 1.11. strata_submit_lines with STRATA_LINES_* flags (LinesOnTop skips the depth test).</summary>
+        [DllImport(Library)] public static extern int strata_submit_lines_ex(IntPtr engine, StrataLineVertex* vertices, int count, uint flags);
+        /// <summary>ABI 1.11. Filled screen rectangles, drawn before this frame's text.</summary>
+        [DllImport(Library)] public static extern int strata_submit_rects(IntPtr engine, StrataRect* rects, int count);
         [DllImport(Library)] public static extern int strata_end_frame(IntPtr engine);
         [DllImport(Library)] public static extern int strata_present(IntPtr engine);
         [DllImport(Library)] public static extern int strata_get_frame_stats(IntPtr engine, StrataFrameStats* stats);

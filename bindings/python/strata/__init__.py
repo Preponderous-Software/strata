@@ -46,6 +46,7 @@ from ._abi import (
     Point,
     PointLight,
     RayHit,
+    Rect,
     RenderItem,
     SolarPosition,
     StrataAbiError,
@@ -396,10 +397,19 @@ class Engine:
         arr, count = _array(RenderItem, items)
         self._call("strata_submit_primitives", arr, count)
 
-    def submit_lines(self, vertices) -> None:
-        """ABI 1.5. An even number of LineVertex; each pair is one segment."""
+    def submit_lines(self, vertices, flags: int = 0) -> None:
+        """ABI 1.5. An even number of LineVertex; each pair is one segment.
+        flags (LINES_ON_TOP, ABI 1.11) go through strata_submit_lines_ex."""
         arr, count = _array(LineVertex, vertices)
-        self._call("strata_submit_lines", arr, count)
+        if flags:
+            self._call("strata_submit_lines_ex", arr, count, flags)
+        else:
+            self._call("strata_submit_lines", arr, count)
+
+    def submit_rects(self, rects) -> None:
+        """ABI 1.11. Filled screen rectangles, drawn before this frame's text."""
+        arr, count = _array(Rect, rects)
+        self._call("strata_submit_rects", arr, count)
 
     def submit_points(self, points) -> None:
         """ABI 1.5."""

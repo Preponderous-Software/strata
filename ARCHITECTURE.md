@@ -48,7 +48,8 @@ Emscripten builds always use GLES 3.0.
   1.6: a sun placed by date, time and place; 1.7: textures and textured,
   transformable meshes; 1.8: texture sub-region updates, mesh ray picking and
   relative mouse mode; 1.9: depth readback; 1.10: nearest-texel texture
-  filtering).
+  filtering; 1.11: translucent meshes, overlays on top of the scene and
+  filled screen rectangles).
 - **Layouts are checkable.** `strata_struct_size(id)` and
   `strata_struct_field_offset(id, field)` report every boundary struct. The C++
   unit tests `static_assert` the layouts. The C# tests
@@ -100,8 +101,9 @@ shadow:   instances, terrain, meshes, camera, lighting -> shadow_map
 point_shadow: instances, terrain, meshes, point_lights -> point_shadow_maps
 opaque:   instances, terrain, meshes, camera, lighting, point_lights, shadow_map, point_shadow_maps -> color, depth
 sky:      camera, lighting, depth -> color
+translucent: meshes, camera, lighting, point_lights, shadow_map, point_shadow_maps, depth -> color
 overlay:  lines, points, camera, depth -> color
-text:     text -> color
+text:     rects, text -> color
 readback: color -> pixels
 ```
 
@@ -109,8 +111,8 @@ readback: color -> pixels
 after a frame, like `readback`, and is described under
 [Depth readback](#depth-readback-abi-19).
 
-**Later** passes slot into this list: depth pre-pass, transparent geometry,
-post (tonemap) and UI.
+**Later** passes slot into this list: depth pre-pass, post (tonemap) and
+UI.
 
 **Instances.** `submit_primitives` partitions items by kind as they arrive. At
 `end_frame` the four ranges go into one instance buffer, back to back. The
@@ -290,6 +292,17 @@ work.
   normal goes back through the inverse transpose and is turned to face the
   ray's origin. The maths is GL-free (`src/render/ray_pick.cpp`) and
   unit-tested; it is a linear scan, with no BVH yet.
+- **Translucent meshes (ABI 1.11).** `STRATA_MESH_TRANSLUCENT` meshes are
+  left out of the opaque and shadow passes and drawn in a `translucent` pass
+  after the sky: alpha blended, depth-tested against the opaque scene without
+  writing depth, both faces drawn, back to front by the distance from the eye
+  to each mesh's world-space bounding-box centre (exact for separate
+  objects, approximate where they interpenetrate; there is no per-fragment
+  order-independent transparency). Their alpha is `color[3]` times the
+  texel's alpha, carried in a `vec4` added to the per-mesh uniform range. Lit
+  ones use the opaque pass's fragment shaders, so they receive sun and
+  point-light shadows; unlit ones are colour times texture. They cast no
+  shadows and are absent from `strata_read_depth_f32`.
 - This is a narrow precursor to RFC 0020 §9 (cooked meshes, instancing,
   materials): no tangents, normal maps, instancing or LOD.
 
@@ -309,6 +322,13 @@ drawing. They are frame inputs like primitives (submitted between
   marker, a true-size disc, or a true-size disc with a minimum size. Solid
   points get a one-pixel antialiased edge; `STRATA_POINT_SOFT` points are a
   quadratic glow blended additively after them.
+- **On top (ABI 1.11).** Lines submitted with `strata_submit_lines_ex` and
+  `STRATA_LINES_ON_TOP`, and points with `STRATA_POINT_ON_TOP`, go into
+  separate lists drawn after the depth-tested ones in the same pass, with the
+  depth test off, so an arc behind a hill still shows.
+- **Rectangles (ABI 1.11).** `strata_submit_rects` adds filled, alpha-blended
+  screen rectangles, drawn in the text pass as one instanced draw before the
+  glyphs, so a panel backs the text drawn over it.
 - **text** draws every glyph as an instanced quad with no depth test. The font
   is font8x8 (public domain, `third_party/font8x8`): printable ASCII in an
   8-pixel cell, uploaded once as a 760 × 8 `R8` texture and read with

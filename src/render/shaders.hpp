@@ -250,7 +250,11 @@ inline const char* kPointShadowFragment =
 // attributes plus a texture coordinate, a model matrix and the inverse
 // transpose of its upper 3x3 for normals (binding 3, one range per mesh).
 #define STRATA_MESH_BLOCK \
-    "layout(std140, binding = 3) uniform Mesh { mat4 uModel; mat4 uNormalMatrix; };\n"
+    "layout(std140, binding = 3) uniform Mesh { mat4 uModel; mat4 uNormalMatrix; vec4 uMeshParams; };\n"
+
+// The Mesh block for fragment shaders that read uMeshParams (x: the alpha of a
+// STRATA_MESH_TRANSLUCENT mesh, ABI 1.11).
+inline const char* kMeshBlock = STRATA_MESH_BLOCK;
 
 inline const char* kMeshVertex =
     "#version 450 core\n"
@@ -282,6 +286,19 @@ inline const char* kMeshUnlitFragment =
     "out vec4 fragColor;\n"
     "void main() {\n"
     "    fragColor = vec4(vColorIn.rgb * texture(uAlbedo, vUv).rgb, 1.0);\n"
+    "}\n";
+
+// ABI 1.11: STRATA_MESH_UNLIT | STRATA_MESH_TRANSLUCENT: colour times texture,
+// with the texel's alpha times the mesh's alpha.
+inline const char* kMeshUnlitTranslucentFragment =
+    "#version 450 core\n"
+    "in vec4 vColorIn;\n"
+    "in vec2 vUv;\n"
+    "layout(binding = 4) uniform sampler2D uAlbedo;\n" STRATA_MESH_BLOCK
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    vec4 texel = texture(uAlbedo, vUv);\n"
+    "    fragColor = vec4(vColorIn.rgb * texel.rgb, texel.a * uMeshParams.x);\n"
     "}\n";
 
 inline const char* kMeshShadowVertex =
@@ -439,6 +456,26 @@ inline const char* kTextFragment =
     "    if (texelFetch(uFont, texel, 0).r < 0.5) discard;\n"
     "    fragColor = vColor;\n"
     "}\n";
+
+// Filled rectangles (ABI 1.11): one quad per instance, in pixels with the
+// origin at the top left, drawn in the text pass before the glyphs.
+inline const char* kRectVertex =
+    "#version 450 core\n"
+    "layout(location = 0) in vec4 iRect;  // x, y, width, height\n"
+    "layout(location = 1) in vec4 iColor;\n" STRATA_OVERLAY_BLOCK
+    "out vec4 vColor;\n"
+    "const vec2 kCorners[6] = vec2[](vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 0), vec2(1, 1), vec2(0, 1));\n"
+    "void main() {\n"
+    "    vec2 pixel = iRect.xy + kCorners[gl_VertexID] * iRect.zw;\n"
+    "    vColor = iColor;\n"
+    "    gl_Position = vec4(pixel.x * 2.0 * uViewport.z - 1.0, 1.0 - pixel.y * 2.0 * uViewport.w, 0.0, 1.0);\n"
+    "}\n";
+
+inline const char* kRectFragment =
+    "#version 450 core\n"
+    "in vec4 vColor;\n"
+    "out vec4 fragColor;\n"
+    "void main() { fragColor = vColor; }\n";
 
 // Depth readback (ABI 1.9): a fullscreen triangle that copies the depth
 // attachment's float bits into RGBA8, low byte in red, so the value survives

@@ -62,6 +62,7 @@ constexpr uint32_t kInstanceStride = sizeof(StrataRenderItem);
 struct MeshUniforms {
     glm::mat4 model;
     glm::mat4 normalMatrix;  // inverse transpose of model's upper 3x3, in a mat4
+    glm::vec4 params;        // x: alpha of a STRATA_MESH_TRANSLUCENT mesh (ABI 1.11)
 };
 static_assert(kInstanceStride == 44, "StrataRenderItem must stay 44 bytes (Beyond Nations' RenderItem)");
 
@@ -70,7 +71,7 @@ bool finite(float v) { return std::isfinite(v); }
 // A lit fragment shader for static meshes: the same shader with its vColor
 // input renamed and replaced by the vertex colour times the mesh's texture
 // (unit 4), so lighting, shadows and fog stay one piece of GLSL.
-std::string withAlbedo(const char* fragment) {
+std::string withAlbedo(const char* fragment, bool translucent = false) {
     std::string s = fragment;
     auto replaceOnce = [&s](const std::string& from, const std::string& to) {
         const auto at = s.find(from);
@@ -80,8 +81,13 @@ std::string withAlbedo(const char* fragment) {
         s.replace(at, from.size(), to);
     };
     replaceOnce("in vec4 vColor;\n",
-                "in vec4 vColorIn;\nin vec2 vUv;\nlayout(binding = 4) uniform sampler2D uAlbedo;\nvec4 vColor;\n");
-    replaceOnce("void main() {\n", "void main() {\n    vColor = vColorIn * vec4(texture(uAlbedo, vUv).rgb, 1.0);\n");
+                std::string("in vec4 vColorIn;\nin vec2 vUv;\nlayout(binding = 4) uniform sampler2D uAlbedo;\n") +
+                    (translucent ? shaders::kMeshBlock : "") + "vec4 vColor;\n");
+    // Opaque meshes ignore alpha. Translucent ones (ABI 1.11) carry the
+    // texel's alpha times the mesh's, which the lit shaders pass through.
+    replaceOnce("void main() {\n",
+                translucent ? "void main() {\n    vColor = vColorIn * texture(uAlbedo, vUv) * vec4(1.0, 1.0, 1.0, uMeshParams.x);\n"
+                            : "void main() {\n    vColor = vColorIn * vec4(texture(uAlbedo, vUv).rgb, 1.0);\n");
     return s;
 }
 
@@ -177,6 +183,9 @@ Renderer::~Renderer() {
     device_.destroy(meshLegacyPipeline_);
     device_.destroy(meshSunPipeline_);
     device_.destroy(meshUnlitPipeline_);
+    device_.destroy(meshLegacyTranslucentPipeline_);
+    device_.destroy(meshSunTranslucentPipeline_);
+    device_.destroy(meshUnlitTranslucentPipeline_);
     device_.destroy(meshShadowPipeline_);
     device_.destroy(meshPointShadowPipeline_);
     for (auto target : shadowTargets_) device_.destroy(target);
@@ -310,6 +319,25 @@ void Renderer::buildPipelines() {
     mesh.name = "opaque.mesh.unlit";
     mesh.fragmentSource = shaders::kMeshUnlitFragment;
     meshUnlitPipeline_ = device_.createPipeline(mesh);
+
+    // ABI 1.11: translucent meshes, alpha blended over the opaque scene and
+    // the sky, depth-tested without writing depth, both faces drawn.
+    meshLegacyTranslucentFragment_ = withAlbedo(shaders::kLegacyFragment, true);
+    meshSunTranslucentFragment_ = withAlbedo(shaders::kSunFragment, true);
+    PipelineDesc translucent = mesh;
+    translucent.depthTest = DepthTest::Less;
+    translucent.depthWrite = false;
+    translucent.cull = CullMode::None;
+    translucent.blend = BlendMode::Alpha;
+    translucent.name = "translucent.mesh.legacy";
+    translucent.fragmentSource = meshLegacyTranslucentFragment_.c_str();
+    meshLegacyTranslucentPipeline_ = device_.createPipeline(translucent);
+    translucent.name = "translucent.mesh.sun";
+    translucent.fragmentSource = meshSunTranslucentFragment_.c_str();
+    meshSunTranslucentPipeline_ = device_.createPipeline(translucent);
+    translucent.name = "translucent.mesh.unlit";
+    translucent.fragmentSource = shaders::kMeshUnlitTranslucentFragment;
+    meshUnlitTranslucentPipeline_ = device_.createPipeline(translucent);
 
     PipelineDesc terrainShadow = shadow;
     terrainShadow.name = "shadow.terrain";
@@ -473,8 +501,11 @@ void Renderer::setTerrain(const StrataTerrainTile* tile) {
 uint32_t Renderer::addMesh(const StrataMesh& m) { return addMeshEntry(m, nullptr, 0, 0); }
 
 uint32_t Renderer::addTexturedMesh(const StrataTexturedMesh& m) {
-    if (m.flags & ~static_cast<uint32_t>(STRATA_MESH_UNLIT)) {
+    if (m.flags & ~static_cast<uint32_t>(STRATA_MESH_UNLIT | STRATA_MESH_TRANSLUCENT)) {
         fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: unknown flags 0x%x", m.flags);
+    }
+    if ((m.flags & STRATA_MESH_TRANSLUCENT) && !(m.mesh.color[3] >= 0.0f && m.mesh.color[3] <= 1.0f)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: a translucent mesh's alpha (color[3]) must be 0..1");
     }
     if (m.texture != 0 && !textureFor(m.texture)) {
         fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: no texture with id %u", m.texture);
@@ -498,6 +529,7 @@ uint32_t Renderer::addMeshEntry(const StrataMesh& m, const float* uvs, uint32_t 
     entry.indexCount = static_cast<uint32_t>(mesh.indices.size());
     entry.texture = texture;
     entry.flags = flags;
+    entry.alpha = (flags & STRATA_MESH_TRANSLUCENT) ? m.color[3] : 1.0f;
     const uint32_t id = nextMeshId_++;
     entry.id = id;
     meshes_.push_back(std::move(entry));
@@ -641,6 +673,7 @@ void Renderer::writeMeshUniforms() {
         MeshUniforms u;
         u.model = meshes_[i].model;
         u.normalMatrix = glm::mat4(glm::transpose(glm::inverse(glm::mat3(meshes_[i].model))));
+        u.params = glm::vec4(meshes_[i].alpha, 0.0f, 0.0f, 0.0f);
         std::memcpy(bytes.data() + i * meshUniformStride_, &u, sizeof u);
     }
     device_.updateBuffer(meshUniforms_, 0, bytes.size(), bytes.data());
@@ -754,6 +787,16 @@ void Renderer::submitPoints(const StrataPoint* points, size_t count) {
 void Renderer::submitText(const StrataText* texts, size_t count) {
     if (!frameOpen_) fail(STRATA_ERROR_INVALID_STATE, "submit_text called outside begin_frame/end_frame");
     overlay_->addText(texts, count);
+}
+
+void Renderer::submitLines(const StrataLineVertex* vertices, size_t count, uint32_t flags) {
+    if (!frameOpen_) fail(STRATA_ERROR_INVALID_STATE, "submit_lines_ex called outside begin_frame/end_frame");
+    overlay_->addLines(vertices, count, flags);
+}
+
+void Renderer::submitRects(const StrataRect* rects, size_t count) {
+    if (!frameOpen_) fail(STRATA_ERROR_INVALID_STATE, "submit_rects called outside begin_frame/end_frame");
+    overlay_->addRects(rects, count);
 }
 
 void Renderer::ensureOffscreenTarget(int width, int height) {
@@ -923,6 +966,7 @@ void Renderer::drawWorldMeshes(rhi::PipelineHandle terrainPipeline, rhi::Pipelin
         bool bound = false;
         for (size_t i = 0; i < meshes_.size(); ++i) {
             const MeshEntry& entry = meshes_[i];
+            if (entry.flags & STRATA_MESH_TRANSLUCENT) continue;  // the translucent pass draws these
             if (((entry.flags & STRATA_MESH_UNLIT) != 0) != (unlit != 0)) continue;
             if (!bound) {
                 device_.bindPipeline(unlit ? unlitPipeline : meshPipeline);
@@ -985,6 +1029,58 @@ void Renderer::opaquePass(int width, int height) {
     const bool legacy = lighting_.mode == STRATA_LIGHTING_LEGACY;
     drawWorldMeshes(legacy ? terrainLegacyPipeline_ : terrainSunPipeline_, legacy ? meshLegacyPipeline_ : meshSunPipeline_,
                     MeshPass::Opaque, meshUnlitPipeline_);
+    device_.endPass();
+}
+
+void Renderer::translucentPass(int width, int height) {
+    // Back to front by the distance from the eye to each mesh's world-space
+    // bounding-box centre: right for separate objects, approximate where
+    // translucent meshes interpenetrate.
+    const glm::vec3 eye = glm::make_vec3(camera_.eye);
+    std::vector<std::pair<float, size_t>> order;
+    for (size_t i = 0; i < meshes_.size(); ++i) {
+        const MeshEntry& entry = meshes_[i];
+        if (!(entry.flags & STRATA_MESH_TRANSLUCENT)) continue;
+        const glm::vec3 centre = 0.5f * (entry.pick.bounds.min + entry.pick.bounds.max);
+        const glm::vec3 world = glm::vec3(entry.model * glm::vec4(centre, 1.0f));
+        order.emplace_back(glm::dot(world - eye, world - eye), i);
+    }
+    if (order.empty()) return;
+    std::stable_sort(order.begin(), order.end(),
+                     [](const auto& a, const auto& b) { return a.first > b.first; });
+    rhi::PassDesc pass;
+    pass.name = "translucent";
+    pass.target = offscreenTarget_;
+    pass.width = width;
+    pass.height = height;
+    device_.beginPass(pass);
+    device_.bindUniformBuffer(0, frameUniforms_, 0, sizeof(FrameUniforms));
+    const bool legacy = lighting_.mode == STRATA_LIGHTING_LEGACY;
+    if (!legacy) {
+        device_.bindTexture(1, shadowMaps_);
+        device_.bindTexture(2, pointShadowMaps_);
+        device_.bindUniformBuffer(2, pointLightUniforms_, 0, sizeof(PointLightUniforms));
+    }
+    rhi::PipelineHandle bound;
+    for (const auto& item : order) {
+        const MeshEntry& entry = meshes_[item.second];
+        const rhi::PipelineHandle pipeline = (entry.flags & STRATA_MESH_UNLIT) ? meshUnlitTranslucentPipeline_
+                                             : legacy ? meshLegacyTranslucentPipeline_
+                                                      : meshSunTranslucentPipeline_;
+        if (pipeline != bound) {
+            device_.bindPipeline(pipeline);
+            bound = pipeline;
+        }
+        device_.bindUniformBuffer(3, meshUniforms_, item.second * meshUniformStride_, sizeof(MeshUniforms));
+        const rhi::TextureHandle texture = textureFor(entry.texture);
+        device_.bindTexture(4, texture ? texture : whiteTexture_);
+        device_.bindVertexBuffer(0, entry.vertices, 0);
+        device_.bindIndexBuffer(entry.indices);
+        rhi::DrawIndexed draw;
+        draw.indexCount = entry.indexCount;
+        device_.drawIndexed(draw);
+        ++stats_.draw_calls;
+    }
     device_.endPass();
 }
 
@@ -1079,6 +1175,8 @@ void Renderer::endFrame() {
     t = Clock::now();
     if (sun && (frame_.clear_flags & STRATA_CLEAR_SKY)) skyPass(width, height);
     stats_.cpu_ms_sky = msSince(t);
+
+    translucentPass(width, height);
 
     stats_.draw_calls += overlay_->drawWorld(offscreenTarget_, width, height, frameUniforms_, sizeof(FrameUniforms));
     stats_.draw_calls += overlay_->drawText(offscreenTarget_, width, height);

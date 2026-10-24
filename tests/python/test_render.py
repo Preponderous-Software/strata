@@ -132,6 +132,11 @@ class Render(unittest.TestCase):
                 [strata.LineVertex((-3, -3, 1), (1, 1, 0, 1)), strata.LineVertex((3, 3, 1), (1, 1, 0, 1))]
             )
             engine.submit_points([strata.Point((2, 2, 1), 6.0, 0.0, (1, 1, 1, 1), 0)])
+            engine.submit_lines(
+                [strata.LineVertex((-3, 3, -9), (1, 0, 1, 1)), strata.LineVertex((3, 3, -9), (1, 0, 1, 1))],
+                flags=strata.LINES_ON_TOP,
+            )
+            engine.submit_rects([strata.Rect(2, 2, 40, 12, (0, 0, 0, 0.5))])
             engine.submit_text([strata.Text(4, 4, 8, strata.TEXT_SHADOW, (1, 1, 1, 1), b"py")])
             engine.end_frame()
 
