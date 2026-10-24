@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Python binding: `KNOWN_RELEASES` gains v0.6.0 (`linux-x64` and `win-x64`),
+  so `strata.load_release("0.6.0")` needs no hash.
+
 ## 0.6.0
 
 What a playtesting harness needs to play a Strata game without a person at

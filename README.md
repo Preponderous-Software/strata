@@ -213,7 +213,7 @@ pip install "git+https://github.com/Preponderous-Software/strata@<tag>#subdirect
 ```python
 import strata
 
-lib = strata.load_release("0.5.0")  # fetched once, checked against a pinned SHA-256
+lib = strata.load_release("0.6.0")  # fetched once, checked against a pinned SHA-256
 # or strata.load("build/libstrata.so"), or STRATA_LIBRARY / STRATA_NATIVE_DIR
 with strata.Engine(lib, 640, 360) as engine:  # headless by default
     engine.set_camera(lib.look_at((13, 9, 15), (-1, 1.5, -1), aspect=640 / 360))
