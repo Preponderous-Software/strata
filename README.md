@@ -188,6 +188,47 @@ host does today, creates Strata with `STRATA_SURFACE_HOST_CONTEXT` and a
 `get_proc_address` callback. Strata then draws into that context and puts back
 the GL state it touched.
 
+## Using it from Python
+
+`bindings/python/strata` is a ctypes binding of the whole C ABI, with no
+compiled code. When it loads a library it checks every struct against
+`strata_struct_size` and `strata_struct_field_offset`, as the C# tests do,
+and refuses a library whose layouts differ. A small `Engine` class wraps the
+calls, and the raw functions stay available as `lib.raw.strata_*`. Functions
+newer than the loaded library raise `StrataError` naming the ABI minor they
+need.
+
+```sh
+pip install "git+https://github.com/Preponderous-Software/strata@<tag>#subdirectory=bindings/python"
+```
+
+```python
+import strata
+
+lib = strata.load_release("0.4.0")  # fetched once, checked against a pinned SHA-256
+# or strata.load("build/libstrata.so"), or STRATA_LIBRARY / STRATA_NATIVE_DIR
+with strata.Engine(lib, 640, 360) as engine:  # headless by default
+    engine.set_camera(lib.look_at((13, 9, 15), (-1, 1.5, -1), aspect=640 / 360))
+    engine.set_lighting(lib.lighting_defaults(strata.LIGHTING_LEGACY))
+    engine.begin_frame(clear_color=(0.45, 0.65, 0.9, 1))
+    engine.submit_primitives([strata.RenderItem(strata.PRIMITIVE_CUBE, (0, 0, 0), (1, 1, 1), (0.8, 0.2, 0.2, 1))])
+    engine.end_frame()
+    engine.save_screenshot_png("out.png")
+```
+
+The library is never bundled. `strata.load_release(version, sha256)`
+downloads the release's bare library (`libstrata-<v>-linux-x64.so` or
+`strata-<v>-win-x64.dll`) into a per-user cache. It checks the file against
+the SHA-256 from that release's `SHA256SUMS` and deletes it on a mismatch.
+Releases the binding already knows (`strata.KNOWN_RELEASES`) need no hash.
+CI runs `tests/python` against the CI-built library on llvmpipe, including
+drawing `bn_primitives_legacy` from Python against the same golden as C++ and
+C#. It also checks the layouts against the Windows DLL.
+
+The binding supports desktop Linux (x86-64) and Windows (x64). Python in a
+browser (Pyodide) is out of scope: the browser build is a static WebAssembly
+archive for C and C++ hosts.
+
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): layers, the C ABI rules, the pass list and

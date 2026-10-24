@@ -26,6 +26,7 @@ export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
 
 export STRATA_NATIVE_DIR=$PWD/build
 dotnet test tests/csharp/Strata.Interop.Tests -c Release
+STRATA_IMGCMP=$PWD/build/strata-imgcmp python3 -m unittest discover -s tests/python
 ```
 
 Useful switches:
@@ -46,12 +47,15 @@ Useful switches:
   - updating the `static_assert`s in `tests/unit/test_abi.cpp`;
   - updating the C# mirror in `bindings/csharp/Strata.Interop`;
   - updating the C# size and offset assertions in
-    `tests/csharp/Strata.Interop.Tests`.
+    `tests/csharp/Strata.Interop.Tests`;
+  - updating the Python mirror in `bindings/python/strata/_abi.py` and its
+    assertions in `tests/python/test_layout.py`.
 
-  The C# layout tests fail if one of these is missed. Adding a new function,
-  struct or enum value is not a break: bump `STRATA_ABI_MINOR` instead, add
-  the minor to the version list at the top of `strata.h`, mark each addition
-  with it, and update the same four places for any new struct.
+  The C# and Python layout tests fail if one of these is missed. Adding a new
+  function, struct or enum value is not a break: bump `STRATA_ABI_MINOR`
+  instead, add the minor to the version list at the top of `strata.h`, mark
+  each addition with it, and update the same places for any new struct. New functions go
+  into the C# and Python bindings too, with the minor they arrived in.
 - **Golden images.** A golden changes only in a PR that explains why and shows
   the before and after images. See
   [docs/GOLDEN_IMAGES.md](docs/GOLDEN_IMAGES.md).
@@ -66,7 +70,7 @@ Useful switches:
 
 - CI must be green. That means Linux build, unit tests, golden images on the
   headless and the Xvfb surface and through the GLES 3.0 device, the C# ABI
-  tests and harness, the sanitizer job, the Emscripten build with its browser
+  tests and harness, the Python binding tests, the sanitizer job, the Emscripten build with its browser
   goldens, and the Windows build.
 - Keep a PR to one milestone step.
 
