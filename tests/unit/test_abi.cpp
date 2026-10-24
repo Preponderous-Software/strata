@@ -81,6 +81,9 @@ static_assert(sizeof(StrataTexturedMesh) == 72, "64-bit targets");
 #endif
 static_assert(STRATA_TEXTURE_MIPMAPS == 0x1u && STRATA_TEXTURE_CLAMP_U == 0x2u && STRATA_TEXTURE_CLAMP_V == 0x4u, "");
 static_assert(STRATA_TEXTURE_NEAREST == 0x8u, "ABI 1.10");
+static_assert(sizeof(StrataRect) == 32, "ABI 1.11");
+static_assert(offsetof(StrataRect, width) == 8 && offsetof(StrataRect, color) == 16, "ABI 1.11");
+static_assert(STRATA_MESH_TRANSLUCENT == 0x2u && STRATA_POINT_ON_TOP == 0x2u && STRATA_LINES_ON_TOP == 0x1u, "ABI 1.11");
 static_assert(STRATA_MESH_UNLIT == 0x1u, "");
 // ABI 1.8
 static_assert(sizeof(StrataRayHit) == 36, "");
@@ -99,7 +102,7 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 10u);
+    CHECK(strata_abi_minor() >= 11u);
 }
 
 TEST(point_light_layout_is_queryable) {
@@ -188,7 +191,7 @@ TEST(abi_1_8_calls_reject_bad_arguments_without_a_context) {
     CHECK(strata_struct_field_offset(STRATA_STRUCT_RAY_HIT, 3) == 12);
     CHECK(strata_struct_field_offset(STRATA_STRUCT_RAY_HIT, 4) == 24);
     CHECK(strata_struct_field_offset(STRATA_STRUCT_RAY_HIT, 5) == -1);
-    CHECK(strata_struct_size(16) == -1);
+    CHECK(strata_struct_size(17) == -1);
     const uint8_t texel[4] = {255, 255, 255, 255};
     StrataEngine* engine = reinterpret_cast<StrataEngine*>(0x1);  // never dereferenced: pointers are checked first
     CHECK(strata_update_texture_rgba8(nullptr, 1, 0, 0, 1, 1, texel) == STRATA_ERROR_INVALID_ARGUMENT);
@@ -367,4 +370,22 @@ TEST(camera_look_at_builds_an_opengl_camera) {
     CHECK_NEAR(c.near_plane, 1.0, 0.0);
     CHECK(strata_camera_look_at(eye, target, up, 0.0f, 1.0f, 1.0f, 100.0f, &c) == STRATA_ERROR_INVALID_ARGUMENT);
     CHECK(strata_camera_look_at(eye, target, up, 60.0f, 1.0f, 5.0f, 1.0f, &c) == STRATA_ERROR_INVALID_ARGUMENT);
+}
+
+TEST(abi_1_11_overlay_calls_reject_bad_arguments_without_a_context) {
+    CHECK(strata_struct_size(STRATA_STRUCT_RECT) == 32);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_RECT, 0) == 0);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_RECT, 1) == 4);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_RECT, 2) == 8);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_RECT, 3) == 12);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_RECT, 4) == 16);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_RECT, 5) == -1);
+    const StrataRect rect{0, 0, 10, 10, {0, 0, 0, 0.5f}};
+    const StrataLineVertex v[2] = {};
+    StrataEngine* engine = reinterpret_cast<StrataEngine*>(0x1);  // never dereferenced: pointers are checked first
+    CHECK(strata_submit_rects(nullptr, &rect, 1) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_submit_rects(engine, nullptr, 1) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_submit_rects(engine, &rect, -1) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_submit_lines_ex(nullptr, v, 2, STRATA_LINES_ON_TOP) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_submit_lines_ex(engine, nullptr, 2, 0) == STRATA_ERROR_INVALID_ARGUMENT);
 }

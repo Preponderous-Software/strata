@@ -147,3 +147,25 @@ TEST(font_atlas_holds_the_public_domain_8x8_glyphs) {
     for (int row = 0; row < 8; ++row)
         for (int col = 0; col < 8; ++col) CHECK(atlas[static_cast<size_t>(row * width + col)] == 0);
 }
+
+TEST(on_top_point_flag_is_known) {
+    StrataPoint p = goodPoint();
+    p.flags = STRATA_POINT_ON_TOP | STRATA_POINT_SOFT;  // ABI 1.11
+    validatePoints(&p, 1);
+}
+
+TEST(rects_reject_negative_sizes_bad_colours_and_null) {
+    StrataRect r{10.0f, 20.0f, 100.0f, 40.0f, {0.0f, 0.0f, 0.0f, 0.6f}};
+    validateRects(&r, 1);
+    r.width = 0.0f;  // an empty rectangle is allowed and draws nothing
+    validateRects(&r, 1);
+    r.width = -1.0f;
+    CHECK(rejectsWith([&] { validateRects(&r, 1); }, "rect 0: width and height"));
+    r.width = 1.0f;
+    r.y = std::numeric_limits<float>::infinity();
+    CHECK(rejectsWith([&] { validateRects(&r, 1); }, "rect 0: position"));
+    r.y = 0.0f;
+    r.color[3] = 2.0f;
+    CHECK(rejectsWith([&] { validateRects(&r, 1); }, "rect 0: colour"));
+    CHECK(rejectsWith([&] { validateRects(nullptr, 1); }, "NULL"));
+}

@@ -129,6 +129,10 @@ const int32_t kTexturedMeshFields[] = {STRATA_OFFSET(StrataTexturedMesh, mesh), 
                                        STRATA_OFFSET(StrataTexturedMesh, texture),
                                        STRATA_OFFSET(StrataTexturedMesh, flags)};
 
+const int32_t kRectFields[] = {STRATA_OFFSET(StrataRect, x),     STRATA_OFFSET(StrataRect, y),
+                               STRATA_OFFSET(StrataRect, width), STRATA_OFFSET(StrataRect, height),
+                               STRATA_OFFSET(StrataRect, color)};
+
 #define STRATA_TABLE(type, fields) \
     FieldTable { static_cast<int32_t>(sizeof(type)), fields, static_cast<int32_t>(sizeof(fields) / sizeof(fields[0])) }
 
@@ -141,7 +145,8 @@ const FieldTable* fieldTable(int32_t structId) {
         STRATA_TABLE(StrataTerrainTile, kTerrainTileFields), STRATA_TABLE(StrataMesh, kMeshFields),
         STRATA_TABLE(StrataLineVertex, kLineVertexFields), STRATA_TABLE(StrataPoint, kPointFields),
         STRATA_TABLE(StrataText, kTextFields),             STRATA_TABLE(StrataSolarPosition, kSolarPositionFields),
-        STRATA_TABLE(StrataTexturedMesh, kTexturedMeshFields), STRATA_TABLE(StrataRayHit, kRayHitFields)};
+        STRATA_TABLE(StrataTexturedMesh, kTexturedMeshFields), STRATA_TABLE(StrataRayHit, kRayHitFields),
+        STRATA_TABLE(StrataRect, kRectFields)};
     if (structId < 0 || structId >= static_cast<int32_t>(sizeof tables / sizeof tables[0])) return nullptr;
     return &tables[structId];
 }
@@ -384,6 +389,21 @@ StrataStatus strata_submit_text(StrataEngine* engine, const StrataText* texts, i
     if (count < 0) return invalid("count is negative");
     if (count > 0 && !texts) return invalid("texts is NULL with a non-zero count");
     return guard([&] { engine->engine->submitText(texts, static_cast<size_t>(count)); });
+}
+
+StrataStatus strata_submit_lines_ex(StrataEngine* engine, const StrataLineVertex* vertices, int32_t count,
+                                    uint32_t flags) {
+    if (!engine) return invalid("engine is NULL");
+    if (count < 0) return invalid("count is negative");
+    if (count > 0 && !vertices) return invalid("vertices is NULL with a non-zero count");
+    return guard([&] { engine->engine->submitLines(vertices, static_cast<size_t>(count), flags); });
+}
+
+StrataStatus strata_submit_rects(StrataEngine* engine, const StrataRect* rects, int32_t count) {
+    if (!engine) return invalid("engine is NULL");
+    if (count < 0) return invalid("count is negative");
+    if (count > 0 && !rects) return invalid("rects is NULL with a non-zero count");
+    return guard([&] { engine->engine->submitRects(rects, static_cast<size_t>(count)); });
 }
 
 StrataStatus strata_end_frame(StrataEngine* engine) {

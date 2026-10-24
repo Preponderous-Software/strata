@@ -54,6 +54,8 @@ public:
     void submitLines(const StrataLineVertex* vertices, size_t count);
     void submitPoints(const StrataPoint* points, size_t count);
     void submitText(const StrataText* texts, size_t count);
+    void submitLines(const StrataLineVertex* vertices, size_t count, uint32_t flags);  // ABI 1.11
+    void submitRects(const StrataRect* rects, size_t count);                          // ABI 1.11
     void endFrame();
 
     const StrataFrameStats& stats() const { return stats_; }
@@ -89,6 +91,7 @@ private:
     void drawWorldMeshes(rhi::PipelineHandle terrainPipeline, rhi::PipelineHandle meshPipeline, MeshPass pass,
                          rhi::PipelineHandle unlitPipeline = {});
     void writeMeshUniforms();
+    void translucentPass(int width, int height);  // ABI 1.11
     uint32_t addMeshEntry(const StrataMesh& mesh, const float* uvs, uint32_t texture, uint32_t flags);
     void shadowPass(const Cascades& cascades);
     void ensurePointShadowMaps(int cubes);
@@ -128,6 +131,7 @@ private:
         glm::mat4 model{1.0f};
         uint32_t texture = 0;  // texture id; 0 or a destroyed id draws white
         uint32_t flags = 0;    // STRATA_MESH_*
+        float alpha = 1.0f;    // STRATA_MESH_TRANSLUCENT (ABI 1.11): color[3]
         // ABI 1.8: a CPU copy of the model-space positions and indices, and
         // their bounds, for picking.
         PickGeometry pick;
@@ -137,6 +141,9 @@ private:
     rhi::PipelineHandle meshLegacyPipeline_, meshSunPipeline_, meshUnlitPipeline_, meshShadowPipeline_,
         meshPointShadowPipeline_;
     std::string meshLegacyFragment_, meshSunFragment_;  // kept alive for the pipeline descriptions
+    // ABI 1.11: translucent meshes.
+    rhi::PipelineHandle meshLegacyTranslucentPipeline_, meshSunTranslucentPipeline_, meshUnlitTranslucentPipeline_;
+    std::string meshLegacyTranslucentFragment_, meshSunTranslucentFragment_;
     rhi::BufferHandle meshUniforms_;
     size_t meshUniformStride_ = 256;
 

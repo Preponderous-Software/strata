@@ -12,7 +12,8 @@
 namespace strata::render {
 namespace {
 
-constexpr uint32_t kKnownPointFlags = STRATA_POINT_SOFT;
+constexpr uint32_t kKnownPointFlags = STRATA_POINT_SOFT | STRATA_POINT_ON_TOP;
+constexpr uint32_t kKnownLineFlags = STRATA_LINES_ON_TOP;
 constexpr uint32_t kKnownTextFlags = STRATA_TEXT_SHADOW;
 constexpr float kMaxTextPixelSize = 512.0f;
 constexpr size_t kMaxTextBytes = 65536;
@@ -93,6 +94,22 @@ void validateTexts(const StrataText* texts, size_t count) {
     }
 }
 
+void validateRects(const StrataRect* rects, size_t count) {
+    if (count > 0 && !rects) fail(STRATA_ERROR_INVALID_ARGUMENT, "rects are NULL with a non-zero count");
+    for (size_t i = 0; i < count; ++i) {
+        const StrataRect& r = rects[i];
+        if (!std::isfinite(r.x) || !std::isfinite(r.y)) {
+            fail(STRATA_ERROR_INVALID_ARGUMENT, "rect %zu: position must be finite", i);
+        }
+        if (!std::isfinite(r.width) || !std::isfinite(r.height) || r.width < 0.0f || r.height < 0.0f) {
+            fail(STRATA_ERROR_INVALID_ARGUMENT, "rect %zu: width and height must be finite and >= 0", i);
+        }
+        if (!unitColor(r.color)) {
+            fail(STRATA_ERROR_INVALID_ARGUMENT, "rect %zu: colour must be finite and non-negative, alpha <= 1", i);
+        }
+    }
+}
+
 int glyphIndex(unsigned char c) {
     if (c < kFontFirstGlyph || c >= kFontFirstGlyph + kFontGlyphCount) c = '?';
     return c - kFontFirstGlyph;
@@ -163,6 +180,9 @@ Overlay::Overlay(rhi::GpuDevice& device) : device_(device) {
     line.cull = CullMode::None;
     line.blend = BlendMode::Alpha;
     linePipeline_ = device_.createPipeline(line);
+    line.name = "overlay.lines.on_top";
+    line.depthTest = DepthTest::Off;
+    lineOnTopPipeline_ = device_.createPipeline(line);
 
     PipelineDesc point;
     point.name = "overlay.points";
@@ -182,6 +202,13 @@ Overlay::Overlay(rhi::GpuDevice& device) : device_(device) {
     point.fragmentSource = shaders::kSoftPointFragment;
     point.blend = BlendMode::Additive;
     softPointPipeline_ = device_.createPipeline(point);
+    point.depthTest = DepthTest::Off;
+    point.name = "overlay.points.soft.on_top";
+    softPointOnTopPipeline_ = device_.createPipeline(point);
+    point.name = "overlay.points.on_top";
+    point.fragmentSource = shaders::kSolidPointFragment;
+    point.blend = BlendMode::Alpha;
+    solidPointOnTopPipeline_ = device_.createPipeline(point);
 
     PipelineDesc text;
     text.name = "overlay.text";
@@ -196,6 +223,15 @@ Overlay::Overlay(rhi::GpuDevice& device) : device_(device) {
     text.blend = BlendMode::Alpha;
     textPipeline_ = device_.createPipeline(text);
 
+    PipelineDesc rect = text;
+    rect.name = "overlay.rects";
+    rect.vertexSource = shaders::kRectVertex;
+    rect.fragmentSource = shaders::kRectFragment;
+    rect.buffers = {{0, sizeof(StrataRect), true}};
+    rect.attributes = {{0, 0, 4, AttribType::Float, offsetof(StrataRect, x)},
+                       {1, 0, 4, AttribType::Float, offsetof(StrataRect, color)}};
+    rectPipeline_ = device_.createPipeline(rect);
+
     const std::vector<uint8_t> atlas = buildFontAtlas();
     TextureDesc font;
     font.width = kFontGlyphCount * 8;
@@ -209,6 +245,7 @@ Overlay::Overlay(rhi::GpuDevice& device) : device_(device) {
     lineBuffer_ = device_.createBuffer(256 * sizeof(StrataLineVertex), nullptr, true, "strata.overlay-lines");
     pointBuffer_ = device_.createBuffer(256 * sizeof(StrataPoint), nullptr, true, "strata.overlay-points");
     glyphBuffer_ = device_.createBuffer(256 * sizeof(GlyphInstance), nullptr, true, "strata.overlay-glyphs");
+    rectBuffer_ = device_.createBuffer(64 * sizeof(StrataRect), nullptr, true, "strata.overlay-rects");
     viewportUniforms_ = device_.createBuffer(16, nullptr, true, "strata.overlay-viewport");
 }
 
@@ -217,6 +254,11 @@ Overlay::~Overlay() {
     device_.destroy(solidPointPipeline_);
     device_.destroy(softPointPipeline_);
     device_.destroy(textPipeline_);
+    device_.destroy(lineOnTopPipeline_);
+    device_.destroy(solidPointOnTopPipeline_);
+    device_.destroy(softPointOnTopPipeline_);
+    device_.destroy(rectPipeline_);
+    device_.destroy(rectBuffer_);
     device_.destroy(lineBuffer_);
     device_.destroy(pointBuffer_);
     device_.destroy(glyphBuffer_);
@@ -226,21 +268,39 @@ Overlay::~Overlay() {
 
 void Overlay::clear() {
     lines_.clear();
+    linesOnTop_.clear();
     solidPoints_.clear();
     softPoints_.clear();
+    solidPointsOnTop_.clear();
+    softPointsOnTop_.clear();
     glyphs_.clear();
+    rects_.clear();
 }
 
-void Overlay::addLines(const StrataLineVertex* vertices, size_t count) {
+void Overlay::addLines(const StrataLineVertex* vertices, size_t count, uint32_t flags) {
+    if (flags & ~kKnownLineFlags) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "lines: unknown flag bits 0x%x", flags & ~kKnownLineFlags);
+    }
     validateLineVertices(vertices, count);
-    lines_.insert(lines_.end(), vertices, vertices + count);
+    auto& to = (flags & STRATA_LINES_ON_TOP) ? linesOnTop_ : lines_;
+    to.insert(to.end(), vertices, vertices + count);
 }
 
 void Overlay::addPoints(const StrataPoint* points, size_t count) {
     validatePoints(points, count);
     for (size_t i = 0; i < count; ++i) {
-        (points[i].flags & STRATA_POINT_SOFT ? softPoints_ : solidPoints_).push_back(points[i]);
+        const bool soft = (points[i].flags & STRATA_POINT_SOFT) != 0;
+        if (points[i].flags & STRATA_POINT_ON_TOP) {
+            (soft ? softPointsOnTop_ : solidPointsOnTop_).push_back(points[i]);
+        } else {
+            (soft ? softPoints_ : solidPoints_).push_back(points[i]);
+        }
     }
+}
+
+void Overlay::addRects(const StrataRect* rects, size_t count) {
+    validateRects(rects, count);
+    rects_.insert(rects_.end(), rects, rects + count);
 }
 
 void Overlay::addText(const StrataText* texts, size_t count) {
@@ -263,7 +323,7 @@ void Overlay::writeViewport(int width, int height) {
 
 int Overlay::drawWorld(rhi::TargetHandle target, int width, int height, rhi::BufferHandle frameUniforms,
                        size_t frameBytes) {
-    if (lines_.empty() && solidPoints_.empty() && softPoints_.empty()) return 0;
+    if (lineVertexCount() == 0 && pointCount() == 0) return 0;
     writeViewport(width, height);
     int draws = 0;
     rhi::PassDesc pass;
@@ -274,65 +334,98 @@ int Overlay::drawWorld(rhi::TargetHandle target, int width, int height, rhi::Buf
     device_.beginPass(pass);
     device_.bindUniformBuffer(0, frameUniforms, 0, frameBytes);
     device_.bindUniformBuffer(3, viewportUniforms_, 0, 16);
-    if (!lines_.empty()) {
-        upload(lineBuffer_, lines_);
-        device_.bindPipeline(linePipeline_);
-        device_.bindVertexBuffer(0, lineBuffer_, 0);
-        rhi::DrawArrays draw;
-        draw.vertexCount = static_cast<uint32_t>(lines_.size());
-        device_.drawArrays(draw);
-        ++draws;
+    // One buffer each for lines and points; the depth-tested ones come
+    // first, then (ABI 1.11) the ones drawn on top of the scene.
+    if (lineVertexCount() > 0) {
+        const size_t bytes = lineVertexCount() * sizeof(StrataLineVertex);
+        if (bytes > device_.bufferSize(lineBuffer_)) {
+            device_.resizeBuffer(lineBuffer_, std::max(bytes, device_.bufferSize(lineBuffer_) * 2));
+        }
+        device_.updateBuffer(lineBuffer_, 0, lines_.size() * sizeof(StrataLineVertex), lines_.data());
+        device_.updateBuffer(lineBuffer_, lines_.size() * sizeof(StrataLineVertex),
+                             linesOnTop_.size() * sizeof(StrataLineVertex), linesOnTop_.data());
     }
-    if (!solidPoints_.empty() || !softPoints_.empty()) {
-        // Solid points first, soft (additive) glows over them, in one buffer.
+    if (pointCount() > 0) {
         const size_t bytes = pointCount() * sizeof(StrataPoint);
         if (bytes > device_.bufferSize(pointBuffer_)) {
             device_.resizeBuffer(pointBuffer_, std::max(bytes, device_.bufferSize(pointBuffer_) * 2));
         }
-        device_.updateBuffer(pointBuffer_, 0, solidPoints_.size() * sizeof(StrataPoint), solidPoints_.data());
-        device_.updateBuffer(pointBuffer_, solidPoints_.size() * sizeof(StrataPoint),
-                             softPoints_.size() * sizeof(StrataPoint), softPoints_.data());
-        const std::pair<rhi::PipelineHandle, size_t> batches[2] = {{solidPointPipeline_, solidPoints_.size()},
-                                                                   {softPointPipeline_, softPoints_.size()}};
-        uint32_t base = 0;
-        for (const auto& [pipeline, count] : batches) {
-            if (count > 0) {
-                device_.bindPipeline(pipeline);
-                device_.bindVertexBuffer(0, pointBuffer_, 0);
-                rhi::DrawArrays draw;
-                draw.vertexCount = 6;
-                draw.instanceCount = static_cast<uint32_t>(count);
-                draw.baseInstance = base;
-                device_.drawArrays(draw);
-                ++draws;
-            }
-            base += static_cast<uint32_t>(count);
+        size_t at = 0;
+        for (const auto* list : {&solidPoints_, &softPoints_, &solidPointsOnTop_, &softPointsOnTop_}) {
+            device_.updateBuffer(pointBuffer_, at * sizeof(StrataPoint), list->size() * sizeof(StrataPoint),
+                                 list->data());
+            at += list->size();
         }
     }
+    auto drawLines = [&](rhi::PipelineHandle pipeline, size_t first, size_t count) {
+        if (count == 0) return;
+        device_.bindPipeline(pipeline);
+        device_.bindVertexBuffer(0, lineBuffer_, 0);
+        rhi::DrawArrays draw;
+        draw.firstVertex = static_cast<uint32_t>(first);
+        draw.vertexCount = static_cast<uint32_t>(count);
+        device_.drawArrays(draw);
+        ++draws;
+    };
+    auto drawPoints = [&](rhi::PipelineHandle pipeline, size_t base, size_t count) {
+        if (count == 0) return;
+        // Solid points first, soft (additive) glows over them.
+        device_.bindPipeline(pipeline);
+        device_.bindVertexBuffer(0, pointBuffer_, 0);
+        rhi::DrawArrays draw;
+        draw.vertexCount = 6;
+        draw.instanceCount = static_cast<uint32_t>(count);
+        draw.baseInstance = static_cast<uint32_t>(base);
+        device_.drawArrays(draw);
+        ++draws;
+    };
+    drawLines(linePipeline_, 0, lines_.size());
+    drawPoints(solidPointPipeline_, 0, solidPoints_.size());
+    drawPoints(softPointPipeline_, solidPoints_.size(), softPoints_.size());
+    drawLines(lineOnTopPipeline_, lines_.size(), linesOnTop_.size());
+    const size_t onTop = solidPoints_.size() + softPoints_.size();
+    drawPoints(solidPointOnTopPipeline_, onTop, solidPointsOnTop_.size());
+    drawPoints(softPointOnTopPipeline_, onTop + solidPointsOnTop_.size(), softPointsOnTop_.size());
     device_.endPass();
     return draws;
 }
 
 int Overlay::drawText(rhi::TargetHandle target, int width, int height) {
-    if (glyphs_.empty()) return 0;
+    if (glyphs_.empty() && rects_.empty()) return 0;
     writeViewport(width, height);
-    upload(glyphBuffer_, glyphs_);
     rhi::PassDesc pass;
     pass.name = "text";
     pass.target = target;
     pass.width = width;
     pass.height = height;
     device_.beginPass(pass);
-    device_.bindPipeline(textPipeline_);
-    device_.bindUniformBuffer(3, viewportUniforms_, 0, 16);
-    device_.bindTexture(3, font_);
-    device_.bindVertexBuffer(0, glyphBuffer_, 0);
-    rhi::DrawArrays draw;
-    draw.vertexCount = 6;
-    draw.instanceCount = static_cast<uint32_t>(glyphs_.size());
-    device_.drawArrays(draw);
+    int draws = 0;
+    if (!rects_.empty()) {
+        // Panels first, so text submitted in the same frame sits on them.
+        upload(rectBuffer_, rects_);
+        device_.bindPipeline(rectPipeline_);
+        device_.bindUniformBuffer(3, viewportUniforms_, 0, 16);
+        device_.bindVertexBuffer(0, rectBuffer_, 0);
+        rhi::DrawArrays draw;
+        draw.vertexCount = 6;
+        draw.instanceCount = static_cast<uint32_t>(rects_.size());
+        device_.drawArrays(draw);
+        ++draws;
+    }
+    if (!glyphs_.empty()) {
+        upload(glyphBuffer_, glyphs_);
+        device_.bindPipeline(textPipeline_);
+        device_.bindUniformBuffer(3, viewportUniforms_, 0, 16);
+        device_.bindTexture(3, font_);
+        device_.bindVertexBuffer(0, glyphBuffer_, 0);
+        rhi::DrawArrays draw;
+        draw.vertexCount = 6;
+        draw.instanceCount = static_cast<uint32_t>(glyphs_.size());
+        device_.drawArrays(draw);
+        ++draws;
+    }
     device_.endPass();
-    return 1;
+    return draws;
 }
 
 }  // namespace strata::render

@@ -30,7 +30,7 @@ from ctypes import (
 #: The major version this binding was written against (STRATA_ABI_VERSION).
 ABI_VERSION = 1
 #: The newest minor whose additions this binding declares (STRATA_ABI_MINOR).
-ABI_MINOR = 10
+ABI_MINOR = 11
 
 # ---------------------------------------------------------------- status
 
@@ -79,8 +79,11 @@ TEXTURE_CLAMP_U = 0x2  # ABI 1.7
 TEXTURE_CLAMP_V = 0x4  # ABI 1.7
 TEXTURE_NEAREST = 0x8  # ABI 1.10
 MESH_UNLIT = 0x1  # ABI 1.7
+MESH_TRANSLUCENT = 0x2  # ABI 1.11
 
 POINT_SOFT = 0x1  # ABI 1.5
+POINT_ON_TOP = 0x2  # ABI 1.11
+LINES_ON_TOP = 0x1  # ABI 1.11, strata_submit_lines_ex
 TEXT_SHADOW = 0x1  # ABI 1.5
 
 CLEAR_COLOR = 1 << 0
@@ -328,6 +331,20 @@ class RayHit(Structure):
     ]
 
 
+class Rect(Structure):
+    """ABI 1.11. 32 bytes: a filled screen rectangle, pixels from the top left."""
+
+    STRUCT_ID = 16
+    ABI_MINOR = 11
+    _fields_ = [
+        ("x", c_float),
+        ("y", c_float),
+        ("width", c_float),
+        ("height", c_float),
+        ("color", float4),
+    ]
+
+
 #: Every boundary struct, in STRATA_STRUCT_* id order.
 STRUCTS = (
     RenderItem,
@@ -346,6 +363,7 @@ STRUCTS = (
     SolarPosition,
     TexturedMesh,
     RayHit,
+    Rect,
 )
 
 # ---------------------------------------------------------------- functions
@@ -407,6 +425,8 @@ FUNCTIONS = {
     "strata_submit_lines": (5, _status, [_engine, _p(LineVertex), c_int32]),
     "strata_submit_points": (5, _status, [_engine, _p(Point), c_int32]),
     "strata_submit_text": (5, _status, [_engine, _p(Text), c_int32]),
+    "strata_submit_lines_ex": (11, _status, [_engine, _p(LineVertex), c_int32, c_uint32]),
+    "strata_submit_rects": (11, _status, [_engine, _p(Rect), c_int32]),
     "strata_end_frame": (0, _status, [_engine]),
     "strata_present": (0, _status, [_engine]),
     "strata_get_frame_stats": (0, _status, [_engine, _p(FrameStats)]),

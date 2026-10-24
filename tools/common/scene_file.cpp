@@ -301,6 +301,10 @@ void parse(const std::string& path, Scene& scene, int depth) {
         } else if (word == "mesh_unlit") {
             if (scene.meshes.empty()) bad(where, "'mesh_unlit' before 'mesh'");
             scene.meshes.back().unlit = true;
+        } else if (word == "mesh_translucent") {
+            if (scene.meshes.empty()) bad(where, "'mesh_translucent' before 'mesh'");
+            read(in, scene.meshes.back().color[3], where, "alpha");
+            scene.meshes.back().translucent = true;
         } else if (word == "mesh_transform") {
             if (scene.meshes.empty()) bad(where, "'mesh_transform' before 'mesh'");
             float t[3], axis[3], tilt = 0, spin = 0, scale = 1;
@@ -397,8 +401,15 @@ void parse(const std::string& path, Scene& scene, int depth) {
             for (float& v : b.position) read(in, v, where, "end");
             for (float& v : a.color) read(in, v, where, "colour");
             std::memcpy(b.color, a.color, sizeof b.color);
-            scene.lines.push_back(a);
-            scene.lines.push_back(b);
+            std::string option;
+            bool onTop = false;
+            if (in >> option) {
+                if (option != "on_top") bad(where, "expected 'on_top' or nothing after the colour");
+                onTop = true;
+            }
+            auto& lines = onTop ? scene.linesOnTop : scene.lines;
+            lines.push_back(a);
+            lines.push_back(b);
         } else if (word == "circle") {
             float centre[3], radius = 0.0f, color[4];
             int segments = 0;
@@ -425,11 +436,20 @@ void parse(const std::string& path, Scene& scene, int depth) {
             read(in, p.world_diameter, where, "world diameter");
             for (float& v : p.color) read(in, v, where, "colour");
             std::string option;
-            if (in >> option) {
-                if (option != "soft") bad(where, "expected 'soft' or nothing after the colour");
-                p.flags |= STRATA_POINT_SOFT;
+            while (in >> option) {
+                if (option == "soft") p.flags |= STRATA_POINT_SOFT;
+                else if (option == "on_top") p.flags |= STRATA_POINT_ON_TOP;
+                else bad(where, "expected 'soft', 'on_top' or nothing after the colour");
             }
             scene.points.push_back(p);
+        } else if (word == "rect") {
+            StrataRect r{};
+            read(in, r.x, where, "x");
+            read(in, r.y, where, "y");
+            read(in, r.width, where, "width");
+            read(in, r.height, where, "height");
+            for (float& v : r.color) read(in, v, where, "colour");
+            scene.rects.push_back(r);
         } else if (word == "text") {
             Scene::Text t;
             read(in, t.text.x, where, "x");

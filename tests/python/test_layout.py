@@ -31,6 +31,7 @@ class FixedSizes(unittest.TestCase):
         self.assertEqual(ctypes.sizeof(strata.Point), 40)
         self.assertEqual(ctypes.sizeof(strata.SolarPosition), 32)
         self.assertEqual(ctypes.sizeof(strata.RayHit), 36)
+        self.assertEqual(ctypes.sizeof(strata.Rect), 32)
 
     @unittest.skipUnless(IS_64_BIT, "pointer-holding structs are documented for 64-bit targets")
     def test_pointer_holding_sizes_on_64_bit(self):
@@ -116,6 +117,7 @@ class NativeLayouts(unittest.TestCase):
         )
         self.assert_layout(strata.TexturedMesh, "mesh", "uvs", "texture", "flags")
         self.assert_layout(strata.RayHit, "mesh_id", "triangle", "distance", "point", "normal")
+        self.assert_layout(strata.Rect, "x", "y", "width", "height", "color")
 
     def test_calls_reject_a_null_engine(self):
         raw = self.lib.raw

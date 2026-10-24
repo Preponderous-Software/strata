@@ -18,9 +18,12 @@
 //   include <file>                (relative to the including file)
 //   item <cube|capsule|cylinder|sphere> <px py pz> <sx sy sz> <r g b> [a]
 //   lighting space <ambient>                                         (ABI 1.5)
-//   line <ax ay az> <bx by bz> <r g b a>                             (ABI 1.5)
+//   line <ax ay az> <bx by bz> <r g b a> [on_top]
+//                                 (ABI 1.5; on_top submits it with STRATA_LINES_ON_TOP, ABI 1.11)
+//   rect <x> <y> <w> <h> <r g b a> (ABI 1.11: a filled screen rectangle, pixels from the top left)
 //   circle <cx cy cz> <radius> <segments> <r g b a>  (line loop in the XZ plane)
-//   point <px py pz> <size_pixels> <world_diameter> <r g b a> [soft] (ABI 1.5)
+//   point <px py pz> <size_pixels> <world_diameter> <r g b a> [soft] [on_top]
+//                                 (ABI 1.5; on_top is STRATA_POINT_ON_TOP, ABI 1.11)
 //   text <x> <y> <pixel_size> <r g b a> [shadow] : <text to the end of the line>
 //   texture <name> checker <w> <h> <cells_u> <cells_v> <r g b> <r g b> [mipmaps] [clamp_v] [nearest]
 //                                 (ABI 1.7; nearest is STRATA_TEXTURE_NEAREST, ABI 1.10)
@@ -30,6 +33,7 @@
 //   uvs <u v ...>                 (the current mesh's texture coordinates)
 //   mesh_texture <name>           (the current mesh samples that texture)
 //   mesh_unlit                    (the current mesh is STRATA_MESH_UNLIT)
+//   mesh_translucent <alpha>      (ABI 1.11: the current mesh is STRATA_MESH_TRANSLUCENT with that alpha)
 //   mesh_transform <tx ty tz> <tilt axis x y z> <tilt_deg> <spin_deg> <scale>
 //                                 (model = translate * rotate(tilt axis) * rotate(+Y, spin) * scale)
 //   sun date <YYYY-MM-DD> <HH:MM> <utc_offset_hours> <latitude> <longitude>
@@ -62,9 +66,10 @@ struct SceneMesh {
     std::vector<float> uvs;   // ABI 1.7
     std::string texture;      // a scene texture's name, or empty
     bool unlit = false;
+    bool translucent = false;  // ABI 1.11; the alpha is color[3]
     bool hasTransform = false;
     float transform[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
-    bool textured() const { return !uvs.empty() || !texture.empty() || unlit; }
+    bool textured() const { return !uvs.empty() || !texture.empty() || unlit || translucent; }
 
     // A StrataMesh pointing into this mesh's vectors (normals computed by the engine).
     StrataMesh view() const;
@@ -86,6 +91,8 @@ struct Scene {
     StrataFrameDesc frame{};
     std::vector<StrataRenderItem> items;
     std::vector<StrataLineVertex> lines;
+    std::vector<StrataLineVertex> linesOnTop;  // ABI 1.11
+    std::vector<StrataRect> rects;             // ABI 1.11
     std::vector<StrataPoint> points;
     struct Text {
         StrataText text{};  // utf8 is set from `value` when submitted
