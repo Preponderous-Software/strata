@@ -41,6 +41,29 @@ match the one golden.
 
 Alpha is ignored.
 
+### strata-imgcmp from scripts
+
+```sh
+strata-imgcmp before.png after.png --diff diff.png [--always-diff] [--json] [--threshold DE] [--max-fraction F]
+```
+
+It exits 0 on a pass, 1 on a failure and 2 on a usage or I/O error. `--diff`
+writes the diff image (pixels over the threshold in red on the dimmed expected
+image) when the comparison fails. With `--always-diff` it writes one on a pass
+too, for reports that show a diff for every pair. `--json` prints one JSON
+object on stdout instead of the text line, with the same exit status:
+
+```json
+{"passed": false, "same_size": true, "expected": "before.png", "actual": "after.png",
+ "expected_size": [640, 360], "actual_size": [640, 360], "pixels": 230400, "pixels_over": 134451,
+ "fraction_over": 0.583554687, "max_delta_e": 71.3915621, "mean_delta_e": 27.7932224,
+ "threshold": 4, "max_fraction": 0.005, "diff": "diff.png"}
+```
+
+`diff` is `null` when no diff was written. On an I/O error the object is
+`{"passed": false, "error": "..."}`. `tests/tools/imgcmp_cli.cmake` (a CTest
+test) checks the exit codes and both flags.
+
 ### Why these numbers
 
 | Measured on llvmpipe | Pixels over ΔE 4 |
