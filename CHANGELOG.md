@@ -19,6 +19,15 @@
   - C# and Python declarations, with layout tests. New golden
     `o2_translucent_on_top`; the scene format gains `mesh_translucent
     <alpha>`, `rect`, and an `on_top` option for `line` and `point`.
+- `strata-imgcmp --json` prints the comparison as one JSON object (pass,
+  sizes, pixel counts, fraction over, max and mean ΔE, threshold, limit, diff
+  path, or an `error` member on an I/O error) with the same exit status, and
+  `--always-diff` writes the `--diff` image on a pass too. Asked for by
+  RFC 0028 (visual diffs for
+  [usd-asset-gate](https://github.com/Preponderous-Software/usd-asset-gate),
+  ask A2). A diff image that cannot be written is now exit 2 instead of being
+  ignored. A CTest test, `strata-imgcmp-cli`, checks the exit codes and both
+  flags.
 - A Python binding, `bindings/python/strata` (`pip install` from the
   repository's `bindings/python`): ctypes declarations of the whole C ABI,
   with no compiled code. Every struct is checked against the library's layout

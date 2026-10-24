@@ -274,6 +274,14 @@ endif()
 if(STRATA_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests/unit)
+    if(STRATA_BUILD_TOOLS AND NOT EMSCRIPTEN)
+        # strata-imgcmp's command line (--json, --always-diff, exit codes).
+        add_test(NAME strata-imgcmp-cli
+            COMMAND ${CMAKE_COMMAND} -DIMGCMP=$<TARGET_FILE:strata-imgcmp>
+                    -DGOLDEN=${CMAKE_CURRENT_SOURCE_DIR}/tests/golden
+                    -DOUT=${CMAKE_CURRENT_BINARY_DIR}/imgcmp-cli
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/tools/imgcmp_cli.cmake)
+    endif()
 endif()
 
 # ---------------------------------------------------------------- install
