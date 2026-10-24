@@ -26,6 +26,7 @@ is built now. Where the RFC plans more, that is called out as **later**.
 | `src/render/` | Primitive meshes, sun and sky model, cascade maths, point lights, terrain and static meshes, overlays, pass list, `Renderer` | no: draws through `GpuDevice` |
 | `src/image/` | PNG reading and writing (stb), golden-image comparison | no |
 | `tools/` | `strata-golden`, `strata-imgcmp`, the scene-file parser | no |
+| `bindings/` | `csharp/Strata.Interop` (P/Invoke) and `python/strata` (ctypes): declarations of the C ABI, each checked against the library's layout tables | no |
 | `modules/sim/` | Deterministic simulation building blocks: seeded RNG, entity-component registry, 2D fields with diffusion, fixed-step clock, state hash, colormaps. C++ only (`strata::sim`), not in the C ABI | no |
 
 `render/` never calls GL directly. Everything goes through `GpuDevice`, which
@@ -52,8 +53,9 @@ Emscripten builds always use GLES 3.0.
   `strata_struct_field_offset(id, field)` report every boundary struct. The C++
   unit tests `static_assert` the layouts. The C# tests
   (`tests/csharp/Strata.Interop.Tests`) assert `Unsafe.SizeOf` and
-  `Marshal.OffsetOf` against them. A field added on one side therefore fails a
-  test; it cannot silently corrupt the other side.
+  `Marshal.OffsetOf` against them, and the Python binding compares every
+  ctypes struct with them each time it loads a library. A field added on one
+  side therefore fails a test; it cannot silently corrupt the other side.
 - **`StrataRenderItem` is Beyond Nations' `RenderItem`.** It is 44 bytes: an
   `int32` kind, a `float[3]` position, a `float[3]` scale and a `float[4]`
   colour. The primitive kind values match BN's `PrimitiveKind`. A BN snapshot

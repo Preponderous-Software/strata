@@ -89,7 +89,7 @@ jobs:
           apt-get update --snapshot "$SNAPSHOT"
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --snapshot "$SNAPSHOT" \
             git libegl1 libegl-mesa0 libgl1-mesa-dri libglx-mesa0 libgl1 xvfb xauth \
-            dotnet-sdk-8.0
+            dotnet-sdk-8.0 python3
           dpkg-query -W libgl1-mesa-dri libegl-mesa0 dotnet-sdk-8.0
 
       - uses: actions/checkout@v4
@@ -124,6 +124,14 @@ jobs:
         env:
           STRATA_NATIVE_DIR: ${{ github.workspace }}/dist/lib
         run: dotnet test tests/csharp/Strata.Interop.Tests -c Release
+
+      - name: Python binding (layouts, release fetch, headless drawing)
+        env:
+          STRATA_NATIVE_DIR: ${{ github.workspace }}/dist/lib
+          STRATA_IMGCMP: ${{ github.workspace }}/dist/bin/strata-imgcmp
+        run: |
+          python3 --version
+          python3 -m unittest discover -s tests/python -v
 
       - name: C# primitives harness (skeleton exit criterion)
         run: |
@@ -269,6 +277,15 @@ jobs:
         run: cmake --build build --config Release -- /m:4
       - name: Unit tests
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Python binding layouts against strata.dll
+        shell: bash
+        env:
+          STRATA_NATIVE_DIR: ${{ github.workspace }}/build/Release
+          # No GL on the runner: layouts and calls that need no engine only.
+          STRATA_PY_NO_RENDER: "1"
+        run: |
+          python --version
+          python -m unittest discover -s tests/python -v
       - name: Stage binaries
         shell: bash
         run: |

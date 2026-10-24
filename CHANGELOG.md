@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- A Python binding, `bindings/python/strata` (`pip install` from the
+  repository's `bindings/python`): ctypes declarations of the whole C ABI,
+  with no compiled code. Every struct is checked against the library's layout
+  tables at load time, and a library whose layouts differ is refused. It has
+  a small `Engine` wrapper, `lib.raw.strata_*` for direct calls, and
+  per-function ABI minors, so a call newer than the loaded library raises
+  `StrataError` naming the minor it needs. The library is loaded from a path,
+  `STRATA_LIBRARY`, `STRATA_NATIVE_DIR`, or a release fetched by
+  `strata.load_release(version, sha256)`, which is verified against a pinned
+  SHA-256 and deleted on a mismatch. Desktop Linux and Windows only; Pyodide
+  is out of scope. `tests/python` (unittest) checks the layouts, the release
+  fetch (offline) and headless drawing, including `bn_primitives_legacy`
+  drawn from Python against its golden. CI runs it on llvmpipe, and the
+  layout tests also run against the Windows DLL. Shared by RFCs 0022, 0026,
+  0028 and 0031, and by a plugin-tooling RFC (headless previews).
 - ABI 1.9: `strata_read_depth_f32` reads the last frame's depth as float32,
   top row first: the planar distance along the view axis in world units, or
   +infinity where nothing was drawn. Headless surfaces only; a window, a host

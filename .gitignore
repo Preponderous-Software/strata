@@ -7,3 +7,6 @@ obj/
 .vscode/
 .idea/
 node_modules/
+__pycache__/
+*.egg-info/
+/bindings/python/build/
