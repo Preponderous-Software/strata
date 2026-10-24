@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- The Linux release tarball keeps the executable bit on `bin/strata-golden`
+  and `bin/strata-imgcmp`. In 0.4.0 they were mode 0644 (artifact uploads drop
+  Unix file modes), so they ran only after a `chmod +x`. A new CI job,
+  `Package release assets`, builds every release asset on every run, not
+  only on tags, sets the modes, and fails unless the tarball's tools are
+  executable and `strata-imgcmp` runs straight from it. The `Release` job
+  publishes that job's assets.
 - `strata.h` comments for `StrataPointLight`, `StrataTerrainTile` and
   `StrataMesh` now cover `STRATA_LIGHTING_SPACE` (ABI 1.5): point lights shade
   it, and the terrain and meshes are drawn under every lighting mode and take

@@ -282,15 +282,15 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-  release:
-    name: Release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-linux, golden-linux, sanitize, build-web, build-windows]
+  # Builds the release assets on every run, not only on tags, so a packaging
+  # mistake fails a pull request instead of shipping. Artifact uploads drop
+  # Unix file modes, so the executable bits are set again before tarring,
+  # and the tarball itself is checked.
+  package:
+    name: Package release assets
+    needs: [build-linux, build-web, build-windows]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: strata-linux-x64
@@ -305,7 +305,8 @@ jobs:
           path: web
       - name: Package
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then version="${GITHUB_REF_NAME#v}"; else version="0.0.0-ci"; fi
+          chmod 0755 linux/bin/strata-golden linux/bin/strata-imgcmp
           mkdir -p assets
           tar -C linux -czf "assets/strata-${version}-linux-x64.tar.gz" .
           (cd windows && zip -qr "../assets/strata-${version}-win-x64.zip" .)
@@ -317,10 +318,46 @@ jobs:
           cp windows/bin/strata.dll "assets/strata-${version}-win-x64.dll"
           (cd assets && sha256sum * > SHA256SUMS)
           cat assets/SHA256SUMS
+      - name: Check the Linux tarball keeps its executables executable
+        run: |
+          tar -tvzf assets/strata-*-linux-x64.tar.gz
+          mkdir unpacked && tar -C unpacked -xzf assets/strata-*-linux-x64.tar.gz
+          for tool in strata-golden strata-imgcmp; do
+            mode=$(stat -c '%a' "unpacked/bin/$tool")
+            if [ ! -x "unpacked/bin/$tool" ]; then
+              echo "::error::bin/$tool is mode $mode in the tarball, not executable"; exit 1
+            fi
+            echo "bin/$tool: mode $mode"
+          done
+          # Run one straight from the tarball, with no chmod first: with no
+          # arguments it prints its usage and exits 2 (126 would mean the
+          # file is not executable).
+          rc=0; unpacked/bin/strata-imgcmp || rc=$?
+          if [ "$rc" -ne 2 ]; then echo "::error::bin/strata-imgcmp from the tarball exited $rc, expected 2"; exit 1; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: assets/
+          if-no-files-found: error
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-linux, golden-linux, sanitize, build-web, build-windows, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: assets
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="${GITHUB_REF_NAME#v}"
+          cat assets/SHA256SUMS
           awk -v v="## ${version}" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md > notes.md
           gh release create "$GITHUB_REF_NAME" assets/* --title "Strata ${version}" --notes-file notes.md --verify-tag
