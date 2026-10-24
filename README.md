@@ -65,17 +65,20 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 
 ## Status
 
-`v0.5.0` adds depth readback (ABI 1.9), nearest-texel texture filtering
-(ABI 1.10), translucent meshes, on-top overlays and filled screen rectangles
-(ABI 1.11), an in-tree Python binding, and `strata-imgcmp --json` and
-`--always-diff`. Before it, `v0.4.0` added the browser (a WebGL 2 / GLES 3.0
-device built with Emscripten), a seasonal sun (ABI 1.6), textures and
-textured meshes (ABI 1.7), and picking, texture updates and relative mouse
-mode (ABI 1.8); `v0.3.0` static meshes (ABI 1.4), unlit overlays and space
-lighting (**O1**, ABI 1.5) and `modules/sim`; `v0.2.0` point lights
-(**L3**), point-light shadows (**L4**) and a terrain tile (**T1**); and
-`v0.1.0` the skeleton and lighting **L1–L2**. The C ABI is 1.11: each
-addition is compatible, and every ABI 1.0 host still works.
+`v0.6.0` adds injected events, a shared frame clock and the drive channel
+(ABI 1.12; see [docs/DRIVE.md](docs/DRIVE.md)), so a playtesting harness can
+play a Strata game without a person at the window. Before it, `v0.5.0` added
+depth readback (ABI 1.9), nearest-texel texture filtering (ABI 1.10),
+translucent meshes, on-top overlays and filled screen rectangles (ABI 1.11),
+an in-tree Python binding, and `strata-imgcmp --json` and `--always-diff`;
+`v0.4.0` the browser (a WebGL 2 / GLES 3.0 device built with Emscripten), a
+seasonal sun (ABI 1.6), textures and textured meshes (ABI 1.7), and picking,
+texture updates and relative mouse mode (ABI 1.8); `v0.3.0` static meshes
+(ABI 1.4), unlit overlays and space lighting (**O1**, ABI 1.5) and
+`modules/sim`; `v0.2.0` point lights (**L3**), point-light shadows (**L4**)
+and a terrain tile (**T1**); and `v0.1.0` the skeleton and lighting
+**L1–L2**. The C ABI is 1.12: each addition is compatible, and every ABI
+1.0 host still works.
 
 | Milestone | What it is | Golden images |
 |---|---|---|
@@ -93,6 +96,7 @@ addition is compatible, and every ABI 1.0 host still works.
 | Depth readback *(ABI 1.9)* | The last frame's depth as float32 planar view distance per pixel (`strata_read_depth_f32`), on headless surfaces, for labelled datasets and other offline uses | `depth_readback_planes` (its scene also checks depths) |
 | Nearest filtering *(ABI 1.10)* | `STRATA_TEXTURE_NEAREST`: textures sampled texel by texel, so cell fields and pixel art keep hard edges when magnified | `tex_nearest_field` |
 | Translucency and on-top overlays *(ABI 1.11)* | Alpha-blended translucent meshes (sorted back to front, lit or unlit), lines and points drawn on top of the scene, and filled screen rectangles as panels behind text | `o2_translucent_on_top` |
+| Drive channel *(ABI 1.12)* | Injected events (`strata_push_event`), a shared frame clock (`strata_frame_seconds`), `strata_is_driven`, and the `STRATA_DRIVE` socket a playtesting harness uses to inject input, step the clock (`STRATA_DRIVE_CLOCK`, `STRATA_DRIVE_STEP`), force a headless surface (`STRATA_DRIVE_SURFACE`) and take screenshots | none: `strata-drive-e2e` checks two stepped runs draw identical frames |
 
 Next come streaming and larger terrain (T2–T4), meshes and materials (M1–M4),
 and optional OpenUSD modules (`STRATA_WITH_USD`, off by default).
@@ -209,7 +213,7 @@ pip install "git+https://github.com/Preponderous-Software/strata@<tag>#subdirect
 ```python
 import strata
 
-lib = strata.load_release("0.4.0")  # fetched once, checked against a pinned SHA-256
+lib = strata.load_release("0.5.0")  # fetched once, checked against a pinned SHA-256
 # or strata.load("build/libstrata.so"), or STRATA_LIBRARY / STRATA_NATIVE_DIR
 with strata.Engine(lib, 640, 360) as engine:  # headless by default
     engine.set_camera(lib.look_at((13, 9, 15), (-1, 1.5, -1), aspect=640 / 360))
