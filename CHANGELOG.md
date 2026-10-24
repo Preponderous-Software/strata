@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.5.0
+
+What the Strata-adoption RFCs asked for: depth readback, nearest filtering,
+translucency and on-top overlays, a Python binding, machine-readable image
+comparison, and executable tools in the release tarball. Every ABI addition
+is compatible: `STRATA_ABI_VERSION` stays 1 and `STRATA_ABI_MINOR` is 11.
+
 - ABI 1.11: translucency and on-top overlays, asked for by a faction-map
   viewer proposal (translucent border fences; relation arcs that show through
   hills) and RFC 0031 (a backing panel for text). All are compatible

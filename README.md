@@ -65,14 +65,17 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 
 ## Status
 
-`v0.4.0` adds the browser (a WebGL 2 / GLES 3.0 device built with
-Emscripten), a seasonal sun (ABI 1.6), textures and textured meshes (ABI 1.7),
-and picking, texture updates and relative mouse mode (ABI 1.8) to `v0.3.0`'s
-static meshes (ABI 1.4), unlit overlays and space lighting (**O1**, ABI 1.5)
-and `modules/sim`, `v0.2.0`'s point lights (**L3**), point-light shadows
-(**L4**) and terrain tile (**T1**), and `v0.1.0`'s skeleton and lighting
-**L1–L2**. The C ABI is 1.8: each addition is compatible, and every ABI 1.0
-host still works.
+`v0.5.0` adds depth readback (ABI 1.9), nearest-texel texture filtering
+(ABI 1.10), translucent meshes, on-top overlays and filled screen rectangles
+(ABI 1.11), an in-tree Python binding, and `strata-imgcmp --json` and
+`--always-diff`. Before it, `v0.4.0` added the browser (a WebGL 2 / GLES 3.0
+device built with Emscripten), a seasonal sun (ABI 1.6), textures and
+textured meshes (ABI 1.7), and picking, texture updates and relative mouse
+mode (ABI 1.8); `v0.3.0` static meshes (ABI 1.4), unlit overlays and space
+lighting (**O1**, ABI 1.5) and `modules/sim`; `v0.2.0` point lights
+(**L3**), point-light shadows (**L4**) and a terrain tile (**T1**); and
+`v0.1.0` the skeleton and lighting **L1–L2**. The C ABI is 1.11: each
+addition is compatible, and every ABI 1.0 host still works.
 
 | Milestone | What it is | Golden images |
 |---|---|---|

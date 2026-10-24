@@ -60,7 +60,7 @@ from ._abi import (
 )
 from ._loader import KNOWN_RELEASES, StrataLoadError, fetch_release, open_library, resolve_library_path
 
-__version__ = "0.4.0.dev0"
+__version__ = "0.5.0"
 
 __all__ = _abi.__all__ + [
     "Engine",
