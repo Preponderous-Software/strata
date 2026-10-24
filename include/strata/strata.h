@@ -64,9 +64,12 @@
  *   1.11 translucent meshes (STRATA_MESH_TRANSLUCENT), overlays drawn on top
  *        of the scene (STRATA_LINES_ON_TOP, strata_submit_lines_ex,
  *        STRATA_POINT_ON_TOP) and filled screen rectangles (StrataRect,
- *        strata_submit_rects) */
+ *        strata_submit_rects)
+ *   1.12 injected input, a shared frame clock and the drive channel
+ *        (strata_push_event, strata_frame_seconds, strata_is_driven,
+ *        STRATA_DRIVE; see docs/DRIVE.md) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 11u
+#define STRATA_ABI_MINOR 12u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -529,8 +532,36 @@ STRATA_API void strata_destroy(StrataEngine* engine);
 STRATA_API const char* strata_gpu_description(const StrataEngine* engine);
 
 /* Pops one pending event. Returns 1 and fills *out, or 0 when the queue is
- * empty. Headless and host-context engines never produce events. */
+ * empty. Platform events come first, then injected ones (strata_push_event,
+ * the drive channel) first in, first out. Headless and host-context surfaces
+ * produce no platform events of their own. A driven engine with a stepped
+ * clock waits inside the first call of each frame until the harness grants
+ * the frame (docs/DRIVE.md). */
 STRATA_API int32_t strata_poll_event(StrataEngine* engine, StrataEvent* out);
+
+/* ABI 1.12. Queues a copy of *event; strata_poll_event returns it after any
+ * platform events already pending. Works on every surface. A type outside
+ * the STRATA_EVENT_* values is STRATA_ERROR_INVALID_ARGUMENT; when 4096
+ * injected events are already waiting it is STRATA_ERROR_INVALID_STATE and
+ * nothing is queued. text is copied up to its 32 bytes and NUL-terminated.
+ * While relative mouse mode is on, injected MOUSE_MOTION events have x and y
+ * set to 0. For tests, replays and scripted input. */
+STRATA_API StrataStatus strata_push_event(StrataEngine* engine, const StrataEvent* event);
+
+/* ABI 1.12. Writes the seconds to advance this frame to *out_seconds: the
+ * time since the previous call on a monotonic clock (0 on the first call), or,
+ * when a harness drives the engine with a stepped clock, exactly the step it
+ * granted (the call then waits for the grant if strata_poll_event has not).
+ * Call it once a frame in place of the game's own clock; a game that does is
+ * repeatable frame for frame under a stepped driver. */
+STRATA_API StrataStatus strata_frame_seconds(StrataEngine* engine, double* out_seconds);
+
+/* ABI 1.12. 1 if this engine was created with a drive channel connected
+ * (the STRATA_DRIVE environment variable; docs/DRIVE.md), else 0. It stays 1
+ * after the harness disconnects. A game uses it to keep a driven run away
+ * from the player's saves and records. The engine only ever connects to the
+ * socket STRATA_DRIVE names; it never listens. */
+STRATA_API int32_t strata_is_driven(const StrataEngine* engine);
 
 STRATA_API StrataStatus strata_get_drawable_size(const StrataEngine* engine, int32_t* width, int32_t* height);
 /* Headless and host-context surfaces: sets the drawable size. Window: resizes the window. */
@@ -649,7 +680,9 @@ STRATA_API StrataStatus strata_raycast_meshes(StrataEngine* engine, const float 
  * as relative movement only: dx and dy carry it, and x and y are 0. Zero
  * shows the cursor and goes back to absolute positions. Window surface only;
  * headless and host-context engines return STRATA_ERROR_UNSUPPORTED and
- * change nothing (a host that owns the window captures the mouse itself). In
+ * change nothing (a host that owns the window captures the mouse itself),
+ * except that from ABI 1.12 a driven engine (strata_is_driven) returns
+ * STRATA_OK on any surface and makes injected motion relative. In
  * a browser this is pointer lock, which the browser grants only from a user
  * gesture such as a click; SDL requests it on the next one. */
 STRATA_API StrataStatus strata_set_relative_mouse_mode(StrataEngine* engine, int32_t enabled);

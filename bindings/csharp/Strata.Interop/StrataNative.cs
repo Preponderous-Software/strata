@@ -1,4 +1,4 @@
-// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.8).
+// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.12).
 // Copyright (c) 2026 Daniel McCoy Stephenson. MIT licence; see LICENSE.
 using System;
 using System.IO;
@@ -9,8 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles.</summary>
-        public const uint Minor = 11;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles, 1.12 injected events, a shared frame clock and the drive channel.</summary>
+        public const uint Minor = 12;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
@@ -252,6 +252,12 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern void strata_destroy(IntPtr engine);
         [DllImport(Library)] public static extern IntPtr strata_gpu_description(IntPtr engine);
         [DllImport(Library)] public static extern int strata_poll_event(IntPtr engine, StrataEvent* evt);
+        /// <summary>ABI 1.12. Queues a copy of the event for strata_poll_event, on any surface.</summary>
+        [DllImport(Library)] public static extern int strata_push_event(IntPtr engine, StrataEvent* evt);
+        /// <summary>ABI 1.12. Seconds to advance this frame: measured, or the step a stepped driver granted.</summary>
+        [DllImport(Library)] public static extern int strata_frame_seconds(IntPtr engine, double* seconds);
+        /// <summary>ABI 1.12. 1 if a harness drove this engine (STRATA_DRIVE), else 0.</summary>
+        [DllImport(Library)] public static extern int strata_is_driven(IntPtr engine);
         [DllImport(Library)] public static extern int strata_get_drawable_size(IntPtr engine, int* width, int* height);
         [DllImport(Library)] public static extern int strata_resize(IntPtr engine, int width, int height);
         [DllImport(Library)] public static extern int strata_set_camera(IntPtr engine, StrataCamera* camera);

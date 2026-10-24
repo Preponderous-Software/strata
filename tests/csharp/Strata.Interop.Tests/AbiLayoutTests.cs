@@ -125,6 +125,15 @@ namespace Strata.Interop.Tests {
         }
 
         [Fact]
+        public unsafe void Abi112CallsRejectANullEngine() {
+            var evt = new StrataEvent { type = 2 };
+            double seconds = -1;
+            Assert.Equal(1, StrataNative.strata_push_event(IntPtr.Zero, &evt));  // STRATA_ERROR_INVALID_ARGUMENT
+            Assert.Equal(1, StrataNative.strata_frame_seconds(IntPtr.Zero, &seconds));
+            Assert.Equal(0, StrataNative.strata_is_driven(IntPtr.Zero));
+        }
+
+        [Fact]
         public unsafe void OverlaySubmitsRejectANullEngine() {
             var point = new StrataPoint { size_pixels = 2 };
             Assert.Equal(1, StrataNative.strata_submit_points(IntPtr.Zero, &point, 1));  // STRATA_ERROR_INVALID_ARGUMENT

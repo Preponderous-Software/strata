@@ -92,6 +92,8 @@ strata_set_warnings(strata_image)
 set(STRATA_ENGINE_SOURCES
     src/core/log.cpp
     src/core/error.cpp
+    src/core/drive.cpp
+    src/core/json_line.cpp
     src/platform/surface.cpp
     src/platform/host_surface.cpp
     src/rhi/gles3_device.cpp
@@ -281,6 +283,15 @@ if(STRATA_BUILD_TESTS)
                     -DGOLDEN=${CMAKE_CURRENT_SOURCE_DIR}/tests/golden
                     -DOUT=${CMAKE_CURRENT_BINARY_DIR}/imgcmp-cli
                     -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/tools/imgcmp_cli.cmake)
+    endif()
+    if(NOT WIN32 AND NOT EMSCRIPTEN)
+        # ABI 1.12's drive channel on a real headless engine. Skipped (77)
+        # where there is no EGL, such as the manylinux build container.
+        add_executable(strata-drive-e2e tests/drive/drive_e2e.cpp)
+        target_link_libraries(strata-drive-e2e PRIVATE strata_static)
+        strata_set_warnings(strata-drive-e2e)
+        add_test(NAME strata-drive-e2e COMMAND strata-drive-e2e)
+        set_tests_properties(strata-drive-e2e PROPERTIES SKIP_RETURN_CODE 77)
     endif()
 endif()
 

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- ABI 1.12, for playtesting harnesses (Preponderous RFC 0027): a Strata game
+  can be played by something other than a person at a window. All compatible
+  additions; every ABI 1.x host keeps working. See `docs/DRIVE.md`.
+  - `strata_push_event` / `Engine::pushEvent`: queue an event that
+    `strata_poll_event` returns after the platform's own, on any surface
+    (bounded at 4096).
+  - `strata_frame_seconds` / `Engine::frameSeconds`: the seconds to advance
+    this frame, from a monotonic clock, or the step a stepped driver granted.
+  - `strata_is_driven` / `Engine::driven`: whether a harness drove this
+    engine, so a game can keep a driven run away from the player's saves.
+  - The drive channel: with `STRATA_DRIVE` naming a Unix socket, the engine
+    connects (it never listens) and takes JSON lines that inject events, step
+    a stepped clock (`STRATA_DRIVE_CLOCK`, `STRATA_DRIVE_STEP`) and take
+    screenshots. `STRATA_DRIVE_SURFACE=headless` turns a driven game's window
+    into a headless surface. A failed or dropped connection runs undriven.
+  - `strata_set_relative_mouse_mode` returns `STRATA_OK` on a headless or
+    host-context surface when the engine is driven; injected motion is then
+    relative. Undriven, nothing changes.
+  - Tests: `test_drive.cpp` (the protocol over a socket pair, no GL) and
+    `strata-drive-e2e` (a real headless engine, two stepped runs drawing
+    identical frames; skipped where there is no EGL). C# P/Invokes and a test.
+
 ## 0.5.0
 
 What the Strata-adoption RFCs asked for: depth readback, nearest filtering,

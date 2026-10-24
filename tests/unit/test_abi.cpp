@@ -102,7 +102,7 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 11u);
+    CHECK(strata_abi_minor() >= 12u);
 }
 
 TEST(point_light_layout_is_queryable) {

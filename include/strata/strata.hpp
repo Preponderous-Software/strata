@@ -54,7 +54,21 @@ public:
 
     const std::string& gpuDescription() const;
 
+    // Platform events first, then injected ones (pushEvent, the drive
+    // channel). A stepped, driven engine waits here at the start of a frame.
     bool pollEvent(StrataEvent& out);
+    // ABI 1.12. Queues a copy of an event for pollEvent, on any surface.
+    // Throws INVALID_ARGUMENT for a type outside STRATA_EVENT_*, and
+    // INVALID_STATE when 4096 events are already queued.
+    void pushEvent(const StrataEvent& event);
+    // ABI 1.12. Seconds to advance this frame: since the previous call on a
+    // monotonic clock (0 the first time), or the step a driver granted when
+    // the engine is driven with a stepped clock. Call once a frame.
+    double frameSeconds();
+    // ABI 1.12. True if a harness drove this engine (STRATA_DRIVE, see
+    // docs/DRIVE.md). Stays true after it disconnects. Games use it to keep
+    // a driven run away from the player's saves.
+    bool driven() const;
     void drawableSize(int32_t& width, int32_t& height) const;
     void resize(int32_t width, int32_t height);
 
@@ -93,7 +107,8 @@ public:
     StrataRayHit raycastMeshes(const float origin[3], const float direction[3], float maxDistance) const;
     // ABI 1.8. Hides and captures the cursor so mouse motion arrives as dx/dy
     // only (first-person look). Window surface only: throws UNSUPPORTED on
-    // headless and host-context surfaces.
+    // headless and host-context surfaces, unless the engine is driven
+    // (ABI 1.12), when injected motion becomes relative instead.
     void setRelativeMouseMode(bool enabled);
 
     void beginFrame(const StrataFrameDesc& desc);
