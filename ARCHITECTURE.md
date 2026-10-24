@@ -49,7 +49,8 @@ Emscripten builds always use GLES 3.0.
   transformable meshes; 1.8: texture sub-region updates, mesh ray picking and
   relative mouse mode; 1.9: depth readback; 1.10: nearest-texel texture
   filtering; 1.11: translucent meshes, overlays on top of the scene and
-  filled screen rectangles).
+  filled screen rectangles; 1.12: injected events, a shared frame clock and
+  the drive channel, see [docs/DRIVE.md](docs/DRIVE.md)).
 - **Layouts are checkable.** `strata_struct_size(id)` and
   `strata_struct_field_offset(id, field)` report every boundary struct. The C++
   unit tests `static_assert` the layouts. The C# tests

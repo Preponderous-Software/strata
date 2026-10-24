@@ -242,6 +242,21 @@ int32_t strata_poll_event(StrataEngine* engine, StrataEvent* out) {
     return result;
 }
 
+StrataStatus strata_push_event(StrataEngine* engine, const StrataEvent* event) {
+    if (!engine || !event) return invalid("engine and event must not be NULL");
+    return guard([&] { engine->engine->pushEvent(*event); });
+}
+
+StrataStatus strata_frame_seconds(StrataEngine* engine, double* out_seconds) {
+    if (!engine || !out_seconds) return invalid("engine and out_seconds must not be NULL");
+    return guard([&] { *out_seconds = engine->engine->frameSeconds(); });
+}
+
+int32_t strata_is_driven(const StrataEngine* engine) {
+    if (!engine) return 0;
+    return engine->engine->driven() ? 1 : 0;
+}
+
 StrataStatus strata_get_drawable_size(const StrataEngine* engine, int32_t* width, int32_t* height) {
     if (!engine || !width || !height) return invalid("engine, width and height must not be NULL");
     return guard([&] { engine->engine->drawableSize(*width, *height); });

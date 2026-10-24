@@ -1,6 +1,7 @@
 add_executable(strata-unit-tests
     main.cpp
     test_abi.cpp
+    test_drive.cpp
     test_log.cpp
     test_primitive_mesh.cpp
     test_cascades.cpp

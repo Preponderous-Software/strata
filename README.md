@@ -243,6 +243,8 @@ archive for C and C++ hosts.
   the tolerances.
 - [docs/WEB.md](docs/WEB.md): building for the browser (Emscripten, WebGL 2),
   linking `libstrata.a`, and what differs from the desktop.
+- [docs/DRIVE.md](docs/DRIVE.md): injected input, the frame clock and the
+  drive channel (ABI 1.12), for tests, replays and playtesting harnesses.
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): dependency licences.
 
 ## Licence
