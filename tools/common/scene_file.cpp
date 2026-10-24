@@ -257,6 +257,7 @@ void parse(const std::string& path, Scene& scene, int depth) {
             while (in >> option) {
                 if (option == "mipmaps") t.flags |= STRATA_TEXTURE_MIPMAPS;
                 else if (option == "clamp_v") t.flags |= STRATA_TEXTURE_CLAMP_V;
+                else if (option == "nearest") t.flags |= STRATA_TEXTURE_NEAREST;
                 else bad(where, "unknown texture option '" + option + "'");
             }
             scene.textures.push_back(std::move(t));

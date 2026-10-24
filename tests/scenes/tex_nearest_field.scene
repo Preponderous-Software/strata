@@ -1,0 +1,24 @@
+# ABI 1.10: STRATA_TEXTURE_NEAREST. The same 8 x 8 texel checker, magnified
+# about 15 times, on two unlit panels: on the left with the default linear
+# filtering, which blends neighbouring texels into soft ramps, and on the
+# right with the nearest flag, which keeps every texel a hard-edged square,
+# as a cell field should look. The colours are mid-tones, so the image does
+# not hinge on how a driver rounds a high-contrast edge.
+size 320 180
+camera 0 0 5  0 0 0  60 0.1 50
+lighting legacy -0.3 -0.5 -0.8 0.45
+clear 0.16 0.17 0.19 1
+texture soft checker 8 8 8 8  0.62 0.52 0.36  0.36 0.50 0.58
+texture hard checker 8 8 8 8  0.62 0.52 0.36  0.36 0.50 0.58 nearest
+mesh 1 1 1
+vertices -4.3 -2 0  -0.3 -2 0  -0.3 2 0  -4.3 2 0
+uvs 0 1  1 1  1 0  0 0
+triangles 0 1 2  0 2 3
+mesh_texture soft
+mesh_unlit
+mesh 1 1 1
+vertices 0.3 -2 0  4.3 -2 0  4.3 2 0  0.3 2 0
+uvs 0 1  1 1  1 0  0 0
+triangles 0 1 2  0 2 3
+mesh_texture hard
+mesh_unlit

@@ -59,9 +59,10 @@
  *   1.8  texture sub-region updates, mesh ray picking and relative mouse
  *        mode (strata_update_texture_rgba8, StrataRayHit,
  *        strata_raycast_meshes, strata_set_relative_mouse_mode)
- *   1.9  depth readback (strata_read_depth_f32) */
+ *   1.9  depth readback (strata_read_depth_f32)
+ *   1.10 nearest-texel texture filtering (STRATA_TEXTURE_NEAREST) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 9u
+#define STRATA_ABI_MINOR 10u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -298,6 +299,13 @@ typedef struct StrataMesh {
 #define STRATA_TEXTURE_MIPMAPS 0x1u /* build a mip chain and filter trilinearly: for anything seen small or at a slant */
 #define STRATA_TEXTURE_CLAMP_U 0x2u /* clamp u to the edge instead of wrapping */
 #define STRATA_TEXTURE_CLAMP_V 0x4u /* clamp v to the edge instead of wrapping (a planet map's poles) */
+/* ABI 1.10. Sample the nearest texel instead of blending the four nearest, so
+ * each texel is a hard-edged square however far it is magnified: for cell
+ * fields, pixel art and lookup images. With STRATA_TEXTURE_MIPMAPS the
+ * nearest texel of each of the two nearest levels is taken and the levels are
+ * blended (GL_NEAREST_MIPMAP_LINEAR). A 1.7 to 1.9 library rejects the flag
+ * as unknown; check strata_abi_minor() >= 10 first. */
+#define STRATA_TEXTURE_NEAREST 0x8u
 
 /* StrataTexturedMesh.flags. */
 #define STRATA_MESH_UNLIT 0x1u /* drawn as its colour times its texture, with no lighting or fog, and casting no

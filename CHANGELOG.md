@@ -15,6 +15,14 @@
   `Engine::readDepth`; C# P/Invoke. New golden `depth_readback_planes` and a
   scene directive, `expect_depth <x> <y> <distance|inf>`, that checks the
   readback after the captured frame (skipped where unsupported).
+- ABI 1.10: `STRATA_TEXTURE_NEAREST` (`0x8`), a `strata_create_texture_rgba8`
+  flag for nearest-texel filtering, so a magnified texture keeps hard texel
+  edges (cell fields, pixel art). Both devices already supported it
+  internally for the overlay font; the flag exposes it. Asked for by RFC 0025
+  (a shared replay player, ask S1), whose fields are hard-edged cells. C#
+  `StrataAbi.TextureNearest`. New golden `tex_nearest_field` (the same
+  checker linear and nearest side by side) and a `nearest` texture option in
+  the scene format.
 - The Linux release tarball keeps the executable bit on `bin/strata-golden`
   and `bin/strata-imgcmp`. In 0.4.0 they were mode 0644 (artifact uploads drop
   Unix file modes), so they ran only after a `chmod +x`. A new CI job,

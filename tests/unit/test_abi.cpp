@@ -80,6 +80,7 @@ static_assert(offsetof(StrataTexturedMesh, flags) == 68, "64-bit targets");
 static_assert(sizeof(StrataTexturedMesh) == 72, "64-bit targets");
 #endif
 static_assert(STRATA_TEXTURE_MIPMAPS == 0x1u && STRATA_TEXTURE_CLAMP_U == 0x2u && STRATA_TEXTURE_CLAMP_V == 0x4u, "");
+static_assert(STRATA_TEXTURE_NEAREST == 0x8u, "ABI 1.10");
 static_assert(STRATA_MESH_UNLIT == 0x1u, "");
 // ABI 1.8
 static_assert(sizeof(StrataRayHit) == 36, "");
@@ -98,7 +99,7 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 9u);
+    CHECK(strata_abi_minor() >= 10u);
 }
 
 TEST(point_light_layout_is_queryable) {

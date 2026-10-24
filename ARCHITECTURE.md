@@ -46,7 +46,8 @@ Emscripten builds always use GLES 3.0.
   terrain tile; 1.4: static meshes; 1.5: unlit overlays and space lighting;
   1.6: a sun placed by date, time and place; 1.7: textures and textured,
   transformable meshes; 1.8: texture sub-region updates, mesh ray picking and
-  relative mouse mode; 1.9: depth readback).
+  relative mouse mode; 1.9: depth readback; 1.10: nearest-texel texture
+  filtering).
 - **Layouts are checkable.** `strata_struct_size(id)` and
   `strata_struct_field_offset(id, field)` report every boundary struct. The C++
   unit tests `static_assert` the layouts. The C# tests
@@ -266,6 +267,11 @@ work.
   and cube-shadow passes. `STRATA_MESH_UNLIT` meshes are drawn last in the
   opaque pass as colour times texture, with no lights or fog, and are left
   out of every shadow pass, so a star's surface can sit around a point light.
+- **Nearest filtering (ABI 1.10).** `STRATA_TEXTURE_NEAREST` sets
+  `TextureDesc::nearest`, which both devices already had for the overlay
+  font: `GL_NEAREST` magnification, and `GL_NEAREST` (or, with mip maps,
+  `GL_NEAREST_MIPMAP_LINEAR`) minification. A field of cells drawn as one
+  small texture then keeps hard cell edges at any size, with no CPU upscale.
 - **Texture updates (ABI 1.8).** `strata_update_texture_rgba8` replaces a
   rectangle of an existing texture through `GpuDevice::updateTexture`
   (`glTextureSubImage2D` on GL 4.5, `glTexSubImage2D` on the GLES device's
