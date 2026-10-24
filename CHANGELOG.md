@@ -22,7 +22,8 @@
     relative. Undriven, nothing changes.
   - Tests: `test_drive.cpp` (the protocol over a socket pair, no GL) and
     `strata-drive-e2e` (a real headless engine, two stepped runs drawing
-    identical frames; skipped where there is no EGL). C# P/Invokes and a test.
+    identical frames; skipped where there is no EGL). C# P/Invokes and Python
+    declarations (`Engine.push_event`, `frame_seconds`, `driven`), with tests.
 
 ## 0.5.0
 

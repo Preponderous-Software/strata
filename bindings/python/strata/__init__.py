@@ -272,6 +272,20 @@ class Engine:
         event = Event()
         return event if self._raw.strata_poll_event(self.handle, ctypes.byref(event)) else None
 
+    def push_event(self, event: Event) -> None:
+        """ABI 1.12. Queues a copy of an event for poll_event, on any surface."""
+        self._call("strata_push_event", ctypes.byref(event))
+
+    def frame_seconds(self) -> float:
+        """ABI 1.12. Seconds to advance this frame: measured, or a stepped driver's step (docs/DRIVE.md)."""
+        seconds = ctypes.c_double()
+        self._call("strata_frame_seconds", ctypes.byref(seconds))
+        return seconds.value
+
+    def driven(self) -> bool:
+        """ABI 1.12. True if a harness drove this engine (STRATA_DRIVE)."""
+        return bool(self.lib.require("strata_is_driven")(self.handle))
+
     def frame_stats(self) -> FrameStats:
         stats = FrameStats()
         self._call("strata_get_frame_stats", ctypes.byref(stats))

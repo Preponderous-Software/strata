@@ -131,6 +131,11 @@ class NativeLayouts(unittest.TestCase):
             raw.strata_read_depth_f32(None, depth, 16, ctypes.byref(w), ctypes.byref(h)), strata.ERROR_INVALID_ARGUMENT
         )
         self.assertIn("NULL", self.lib.last_error())
+        event = strata.Event(type=2)
+        seconds = ctypes.c_double()
+        self.assertEqual(raw.strata_push_event(None, ctypes.byref(event)), strata.ERROR_INVALID_ARGUMENT)
+        self.assertEqual(raw.strata_frame_seconds(None, ctypes.byref(seconds)), strata.ERROR_INVALID_ARGUMENT)
+        self.assertEqual(raw.strata_is_driven(None), 0)
 
     def test_calls_that_need_no_engine(self):
         # 2026-06-21 12:00 UTC on the prime meridian at 40 N: the June solstice
