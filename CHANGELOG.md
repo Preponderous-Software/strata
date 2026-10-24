@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.6.0
+
+What a playtesting harness needs to play a Strata game without a person at
+the window: injected events, a shared frame clock and the drive channel
+(`STRATA_DRIVE`, with `STRATA_DRIVE_SURFACE`, `STRATA_DRIVE_CLOCK` and
+`STRATA_DRIVE_STEP`). The ABI addition is compatible: `STRATA_ABI_VERSION`
+stays 1 and `STRATA_ABI_MINOR` is 12. The Python binding also knows the
+v0.5.0 libraries' SHA-256s.
+
 - ABI 1.12, for playtesting harnesses (Preponderous RFC 0027): a Strata game
   can be played by something other than a person at a window. All compatible
   additions; every ABI 1.x host keeps working. See `docs/DRIVE.md`.
@@ -24,6 +33,8 @@
     `strata-drive-e2e` (a real headless engine, two stepped runs drawing
     identical frames; skipped where there is no EGL). C# P/Invokes and Python
     declarations (`Engine.push_event`, `frame_seconds`, `driven`), with tests.
+- Python binding: `KNOWN_RELEASES` gains v0.5.0 (`linux-x64` and `win-x64`),
+  so `strata.load_release("0.5.0")` needs no hash.
 
 ## 0.5.0
 
