@@ -419,6 +419,24 @@ StrataStatus strata_read_pixels_rgba8(StrataEngine* engine, uint8_t* dst, int32_
     });
 }
 
+StrataStatus strata_read_depth_f32(StrataEngine* engine, float* dst, int32_t capacity_bytes, int32_t* out_width,
+                                   int32_t* out_height) {
+    if (!engine || !dst || !out_width || !out_height) return invalid("engine, dst, out_width and out_height must not be NULL");
+    return guard([&] {
+        std::vector<float> depth;
+        int32_t width = 0, height = 0;
+        engine->engine->readDepth(depth, width, height);
+        const size_t bytes = depth.size() * sizeof(float);
+        if (capacity_bytes < 0 || bytes > static_cast<size_t>(capacity_bytes)) {
+            strata::fail(STRATA_ERROR_INVALID_ARGUMENT, "dst holds %d bytes but the frame's depth needs %zu",
+                         capacity_bytes, bytes);
+        }
+        std::memcpy(dst, depth.data(), bytes);
+        *out_width = width;
+        *out_height = height;
+    });
+}
+
 StrataStatus strata_save_screenshot_png(StrataEngine* engine, const char* utf8_path) {
     if (!engine || !utf8_path || !*utf8_path) return invalid("engine and a non-empty path are required");
     return guard([&] { engine->engine->saveScreenshotPng(utf8_path); });

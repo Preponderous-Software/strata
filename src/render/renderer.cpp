@@ -8,6 +8,7 @@
 
 #include "core/error.hpp"
 #include "core/log.hpp"
+#include "render/depth_readback.hpp"
 #include "render/lights.hpp"
 #include "render/pass_list.hpp"
 #include "render/primitive_mesh.hpp"
@@ -183,6 +184,9 @@ Renderer::~Renderer() {
     device_.destroy(offscreenTarget_);
     device_.destroy(offscreenColor_);
     device_.destroy(offscreenDepth_);
+    device_.destroy(depthPackTarget_);
+    device_.destroy(depthPackColor_);
+    device_.destroy(depthPackPipeline_);
     device_.destroy(legacyPipeline_);
     device_.destroy(sunPipeline_);
     device_.destroy(shadowPipeline_);
@@ -340,6 +344,15 @@ void Renderer::buildPipelines() {
     sky.depthWrite = false;
     sky.cull = CullMode::None;
     skyPipeline_ = device_.createPipeline(sky);
+
+    PipelineDesc depthPack;
+    depthPack.name = "depth_pack";
+    depthPack.vertexSource = shaders::kDepthPackVertex;
+    depthPack.fragmentSource = shaders::kDepthPackFragment;
+    depthPack.depthTest = DepthTest::Off;
+    depthPack.depthWrite = false;
+    depthPack.cull = CullMode::None;
+    depthPackPipeline_ = device_.createPipeline(depthPack);
 }
 
 void Renderer::validateCamera(const StrataCamera& c) {
@@ -754,6 +767,9 @@ void Renderer::ensureOffscreenTarget(int width, int height) {
     offscreenColor_ = device_.createTexture(color);
     rhi::TextureDesc depth = color;
     depth.format = rhi::TextureFormat::Depth32F;
+    // Nearest: a float depth texture is only complete with nearest filtering
+    // on GLES 3.0, and the depth readback (ABI 1.9) samples it.
+    depth.nearest = true;
     depth.debugName = "strata.offscreen-depth";
     offscreenDepth_ = device_.createTexture(depth);
     rhi::TargetDesc target;
@@ -1001,6 +1017,7 @@ void Renderer::endFrame() {
     surface_.drawableSize(width, height);
     lastWidth_ = width;
     lastHeight_ = height;
+    std::memcpy(lastProjection_, camera_.projection, sizeof lastProjection_);
     if (width <= 0 || height <= 0) {
         // A minimised window: nothing to draw into, and not an error.
         return;
@@ -1085,6 +1102,59 @@ void Renderer::readPixels(std::vector<uint8_t>& rgbaTopDown, int& width, int& he
     for (int y = 0; y < height; ++y) {
         std::memcpy(rgbaTopDown.data() + static_cast<size_t>(y) * rowBytes,
                     bottomUp.data() + static_cast<size_t>(height - 1 - y) * rowBytes, rowBytes);
+    }
+}
+
+void Renderer::readDepth(std::vector<float>& depthTopDown, int& width, int& height) {
+    if (!surface_.needsOffscreenTarget()) {
+        fail(STRATA_ERROR_UNSUPPORTED,
+             "depth readback needs a headless (offscreen) surface; this surface draws into a window or host framebuffer");
+    }
+    width = lastWidth_;
+    height = lastHeight_;
+    if (width <= 0 || height <= 0 || !offscreenTarget_) {
+        fail(STRATA_ERROR_INVALID_STATE, "no frame has been rendered to read back");
+    }
+    if (!depthPackTarget_ || depthPackWidth_ != width || depthPackHeight_ != height) {
+        device_.destroy(depthPackTarget_);
+        device_.destroy(depthPackColor_);
+        rhi::TextureDesc color;
+        color.width = width;
+        color.height = height;
+        color.format = rhi::TextureFormat::RGBA8;
+        color.nearest = true;
+        color.debugName = "strata.depth-pack";
+        depthPackColor_ = device_.createTexture(color);
+        rhi::TargetDesc target;
+        target.color.texture = depthPackColor_;
+        target.debugName = "strata.depth-pack";
+        depthPackTarget_ = device_.createTarget(target);
+        depthPackWidth_ = width;
+        depthPackHeight_ = height;
+    }
+    // GLES 3.0 / WebGL 2 cannot glReadPixels a depth attachment, so on every
+    // device a fullscreen pass copies its float bits into RGBA8 texels.
+    rhi::PassDesc pass;
+    pass.name = "depth_pack";
+    pass.target = depthPackTarget_;
+    pass.width = width;
+    pass.height = height;
+    device_.beginPass(pass);
+    device_.bindPipeline(depthPackPipeline_);
+    device_.bindTexture(0, offscreenDepth_);
+    device_.drawFullscreenTriangle();
+    device_.endPass();
+
+    const size_t pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
+    std::vector<uint8_t> bottomUp(pixels * 4);
+    device_.readPixels(depthPackTarget_, 0, 0, width, height, bottomUp.data());
+    depthTopDown.resize(pixels);
+    for (int y = 0; y < height; ++y) {
+        const uint8_t* row = bottomUp.data() + static_cast<size_t>(height - 1 - y) * static_cast<size_t>(width) * 4;
+        float* out = depthTopDown.data() + static_cast<size_t>(y) * static_cast<size_t>(width);
+        for (int x = 0; x < width; ++x) {
+            out[x] = planarDepth(lastProjection_, unpackDepthTexel(row + static_cast<size_t>(x) * 4));
+        }
     }
 }
 

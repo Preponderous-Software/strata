@@ -39,6 +39,7 @@ code on both:
 | Base vertex and base instance in draws | Folded into the vertex attribute offsets at draw time | None |
 | `layout(binding = N)` in GLSL | Set through the API after linking | None |
 | Debug output and object labels | Not available | `STRATA_FLAG_DEBUG_CONTEXT` logs nothing extra |
+| Depth readback (`strata_read_depth_f32`, ABI 1.9) | Not available: a browser's headless request is a hidden window, which has no offscreen depth target | Returns `STRATA_ERROR_UNSUPPORTED`. The `depth_pack` draw itself runs on the GLES device: natively under `STRATA_GL_API=gles3` it reads the same depths |
 
 Browsers differ from the desktop only in rasterisation detail at polygon
 edges: in headless Chromium (SwiftShader) the 22 golden scenes differ from the

@@ -87,6 +87,7 @@ host still works.
 | Seasonal sun *(ABI 1.6)* | The sun placed from a real date, time, latitude and longitude (NOAA solar position), alongside the time-of-day sun | `sun_june_noon`, `sun_december_noon`, `sun_december_afternoon` |
 | Textures *(ABI 1.7)* | RGBA8 textures with mip maps, textured meshes (planet maps on latitude-longitude spheres), unlit emissive meshes, and a model matrix per mesh for spinning about a tilted axis | `tex_globe_sun`, `tex_space_planets` |
 | Picking and texture updates *(ABI 1.8)* | Sub-rectangle texture updates (grime cleaned patch by patch), the nearest static-mesh triangle along a ray through each mesh's model matrix, and relative mouse mode for first-person look | `tex_update_grime` (its scene also checks rays) |
+| Depth readback *(ABI 1.9)* | The last frame's depth as float32 planar view distance per pixel (`strata_read_depth_f32`), on headless surfaces, for labelled datasets and other offline uses | `depth_readback_planes` (its scene also checks depths) |
 
 Next come streaming and larger terrain (T2–T4), meshes and materials (M1–M4),
 and optional OpenUSD modules (`STRATA_WITH_USD`, off by default).

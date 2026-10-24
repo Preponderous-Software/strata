@@ -58,9 +58,10 @@
  *        STRATA_MESH_UNLIT)
  *   1.8  texture sub-region updates, mesh ray picking and relative mouse
  *        mode (strata_update_texture_rgba8, StrataRayHit,
- *        strata_raycast_meshes, strata_set_relative_mouse_mode) */
+ *        strata_raycast_meshes, strata_set_relative_mouse_mode)
+ *   1.9  depth readback (strata_read_depth_f32) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 8u
+#define STRATA_ABI_MINOR 9u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -636,6 +637,20 @@ STRATA_API StrataStatus strata_get_frame_stats(const StrataEngine* engine, Strat
  * capacity_bytes must be at least width * height * 4. */
 STRATA_API StrataStatus strata_read_pixels_rgba8(StrataEngine* engine, uint8_t* dst, int32_t capacity_bytes,
                                                  int32_t* out_width, int32_t* out_height);
+/* ABI 1.9. Reads the last rendered frame's depth as tightly packed float32,
+ * top row first, the same pixels as strata_read_pixels_rgba8: the distance
+ * along the camera's view axis in world units (planar, not radial: a plane
+ * facing the camera reads the same value in every pixel), or +infinity where
+ * nothing was drawn. It is computed from the depth buffer with the projection
+ * the frame was drawn with (either depth convention), so its precision is the
+ * depth buffer's (32-bit float). Only primitives, the terrain tile and static
+ * meshes, unlit ones included, write depth; the sky and overlays never do, so
+ * they read as whatever is behind them. capacity_bytes must be at least
+ * width * height * 4. Headless surfaces only (EGL on Linux): a window,
+ * a host context, and a headless request that fell back to a hidden window
+ * (Windows, browsers) return STRATA_ERROR_UNSUPPORTED. */
+STRATA_API StrataStatus strata_read_depth_f32(StrataEngine* engine, float* dst, int32_t capacity_bytes,
+                                              int32_t* out_width, int32_t* out_height);
 /* Writes the last rendered frame to a PNG file (RGB, top row first). */
 STRATA_API StrataStatus strata_save_screenshot_png(StrataEngine* engine, const char* utf8_path);
 

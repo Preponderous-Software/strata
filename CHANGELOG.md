@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- ABI 1.9: `strata_read_depth_f32` reads the last frame's depth as float32,
+  top row first: the planar distance along the view axis in world units, or
+  +infinity where nothing was drawn. Headless surfaces only; a window, a host
+  context, and a headless request that fell back to a hidden window return
+  `STRATA_ERROR_UNSUPPORTED`. Asked for by RFC 0026 (headless rendering for
+  [usd-synth-data](https://github.com/Preponderous-Software/usd-synth-data)).
+  A `depth_pack` draw copies the depth attachment's float bits into RGBA8,
+  so it is exact on the GL 4.5 and GLES 3.0 devices alike, and
+  `src/render/depth_readback.cpp` linearises it with the frame's projection
+  (either depth convention, or orthographic), with unit tests.
+  `Engine::readDepth`; C# P/Invoke. New golden `depth_readback_planes` and a
+  scene directive, `expect_depth <x> <y> <distance|inf>`, that checks the
+  readback after the captured frame (skipped where unsupported).
 - The Linux release tarball keeps the executable bit on `bin/strata-golden`
   and `bin/strata-imgcmp`. In 0.4.0 they were mode 0644 (artifact uploads drop
   Unix file modes), so they ran only after a `chmod +x`. A new CI job,
