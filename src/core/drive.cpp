@@ -25,7 +25,9 @@
 namespace strata::drive {
 namespace {
 
+#if defined(STRATA_DRIVE_POSIX)
 constexpr size_t kMaxLineBytes = 1u << 20;
+#endif
 constexpr long long kMaxStepFrames = 1000000;
 
 struct TypeName {
