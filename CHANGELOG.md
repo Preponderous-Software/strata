@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `strata.h` comments for `StrataPointLight`, `StrataTerrainTile` and
+  `StrataMesh` now cover `STRATA_LIGHTING_SPACE` (ABI 1.5): point lights shade
+  it, and the terrain and meshes are drawn under every lighting mode and take
+  point-light shadows in it. The mesh comment no longer says meshes share the
+  terrain's vertex format, which gained a uv in ABI 1.7. Comments only; no
+  layout or signature changes.
+
 ## 0.4.0
 
 The browser (WebGL 2 through Emscripten), a seasonal sun, textures, picking

@@ -219,7 +219,8 @@ typedef struct StrataSolarPosition {
 
 /* ABI 1.1. A light that shines equally in every direction from a point. Point
  * lights shade STRATA_LIGHTING_SUN scenes, on top of the sun or moon and
- * before fog; STRATA_LIGHTING_LEGACY ignores them. With x = distance / range,
+ * before fog, and (1.5) STRATA_LIGHTING_SPACE scenes, on top of their flat
+ * ambient; STRATA_LIGHTING_LEGACY ignores them. With x = distance / range,
  * the light falls off as
  *   intensity * window^2 / (1 + 16 x^2),  window = clamp(1 - x^4, 0, 1)
  * so it is `intensity` at the light, about a fifth of that at half the range,
@@ -239,8 +240,9 @@ typedef struct StrataPointLight {
  * samples_z grid (x fastest) spaced cell_size apart from `origin` along +X and
  * +Z; each height is added to origin[1]. The engine copies the data into a
  * mesh (normals from central differences), so the arrays need not outlive the
- * call. The tile is drawn in the opaque pass under both lighting modes, and in
- * STRATA_LIGHTING_SUN it casts and receives sun and point-light shadows.
+ * call. The tile is drawn in the opaque pass under every lighting mode. In
+ * STRATA_LIGHTING_SUN it casts and receives sun and point-light shadows, and
+ * in STRATA_LIGHTING_SPACE point-light shadows.
  * 56 bytes on 64-bit targets. */
 typedef struct StrataTerrainTile {
     float origin[3];      /* world position of sample (0, 0) */
@@ -262,9 +264,10 @@ typedef struct StrataTerrainTile {
 /* ABI 1.4. Arbitrary static geometry already in world space: an indexed
  * triangle list with a normal and a colour per vertex. The engine copies the
  * data into GPU buffers, so the arrays need not outlive the call. Meshes are
- * drawn in the opaque pass exactly like the terrain tile (same vertex format,
- * same shaders): under both lighting modes, and in STRATA_LIGHTING_SUN they
- * cast and receive sun and point-light shadows. Back faces are culled in the
+ * drawn in the opaque pass like the terrain tile (its lighting, with a uv per
+ * vertex since 1.7): under every lighting mode, casting and receiving sun and
+ * point-light shadows in STRATA_LIGHTING_SUN and point-light shadows in
+ * STRATA_LIGHTING_SPACE. Back faces are culled in the
  * opaque pass, so triangles must wind counter-clockwise seen from outside (the
  * side the normal points to); computed normals follow the same winding. Shadow
  * passes draw both faces, so an open surface still casts. Colours are linear RGB,
