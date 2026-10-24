@@ -148,6 +148,8 @@ void Drive::connectFromEnvironment() {
     adopt(fd, mode, step);
     logf(LogLevel::Info, "driven through %s (%s clock, step %g s)", path, modeName(mode_), step_);
 #else
+    (void)mode;
+    (void)step;
     logf(LogLevel::Warning, "STRATA_DRIVE is set, but the drive channel needs Linux; running undriven");
 #endif
 }

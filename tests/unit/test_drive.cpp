@@ -82,7 +82,12 @@ bool has(const std::string& line, const char* fragment) { return line.find(fragm
 TEST(json_line_parses_a_flat_object) {
     strata::json::Object o;
     std::string error;
-    REQUIRE(strata::json::parseObject(R"({"op":"event","type":"key_down","scancode":80,"x":-1.5e1,"ok":true,"n":null,"t":"a\"é\n"})", o, &error));
+    // Raw strings stay out of the CHECK macros (MSVC mis-stringifies them), and
+    // the source stays ASCII (the JSON escape u00e9 is an e-acute).
+    const std::string line =
+        "{\"op\":\"event\",\"type\":\"key_down\",\"scancode\":80,\"x\":-1.5e1,\"ok\":true,\"n\":null,"
+        "\"t\":\"a\\\"\\u00e9\\n\"}";
+    REQUIRE(strata::json::parseObject(line, o, &error));
     CHECK(o["op"].text == "event");
     CHECK(o["scancode"].number == 80.0);
     CHECK(o["x"].number == -15.0);
@@ -96,11 +101,13 @@ TEST(json_line_parses_a_flat_object) {
 TEST(json_line_rejects_what_the_protocol_does_not_use) {
     strata::json::Object o;
     std::string error;
-    CHECK(!strata::json::parseObject(R"({"a":{"b":1}})", o, &error));
+    const std::string nested = R"({"a":{"b":1}})", array = R"({"a":[1]})", trailing = R"({"a":1} x)",
+                      unterminated = R"({"a":"unterminated)";
+    CHECK(!strata::json::parseObject(nested, o, &error));
     CHECK(!error.empty());
-    CHECK(!strata::json::parseObject(R"({"a":[1]})", o, &error));
-    CHECK(!strata::json::parseObject(R"({"a":1} x)", o, &error));
-    CHECK(!strata::json::parseObject(R"({"a":"unterminated)", o, &error));
+    CHECK(!strata::json::parseObject(array, o, &error));
+    CHECK(!strata::json::parseObject(trailing, o, &error));
+    CHECK(!strata::json::parseObject(unterminated, o, &error));
     CHECK(!strata::json::parseObject("[]", o, &error));
     CHECK(!strata::json::parseObject("", o, &error));
 }
@@ -113,7 +120,8 @@ TEST(json_line_writer_escapes_and_orders_fields) {
                                  .field("w", 640)
                                  .field("step", 0.5)
                                  .str();
-    CHECK(line == R"({"ok":true,"op":"shot","path":"a\"b\\c\n","w":640,"step":0.5})");
+    const std::string expected = R"({"ok":true,"op":"shot","path":"a\"b\\c\n","w":640,"step":0.5})";
+    CHECK(line == expected);
     strata::json::Object back;
     REQUIRE(strata::json::parseObject(line, back, nullptr));
     CHECK(back["path"].text == "a\"b\\c\n");
