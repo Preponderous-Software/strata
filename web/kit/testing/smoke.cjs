@@ -11,7 +11,8 @@
 //     CSS size times the (capped) device pixel ratio;
 //   - the frame is not one flat colour (a CDP capture, OUT_DIR/dpr<N>.png);
 //   - tap == pick: for each target the page lists (__strataKit.targets(),
-//     viewport CSS pixels), a real tap or click there selects exactly what
+//     viewport CSS pixels) that the canvas is the top element at, a real tap
+//     or click there selects exactly what
 //     a direct pick at that point returns. This is what catches a pointer
 //     scaled by the drawing buffer instead of CSS pixels, which only shows
 //     at a capped DPR (3 here, with the kit's default cap of 2);
@@ -121,13 +122,19 @@ async function runDpr(browser, o, dpr) {
 }
 
 async function tapEqualsPick(page, o, label, touch) {
-  const targets = (await page.evaluate(() => window.__strataKit.targets()))
-    .filter((t) => t && t.x > 2 && t.y > 2 && t.x < page.viewportSize().width - 2 && t.y < page.viewportSize().height - 2)
+  // Only targets the canvas itself is under: a point covered by the page's
+  // own HTML (a panel, a card) is not the canvas's to answer.
+  const targets = (await page.evaluate(() => {
+    const c = window.__strataKit.kit.canvas;
+    return window.__strataKit.targets().filter((t) => t && document.elementFromPoint(t.x, t.y) === c);
+  })).filter((t) => t.x > 2 && t.y > 2 && t.x < page.viewportSize().width - 2 && t.y < page.viewportSize().height - 2)
     .slice(0, o.maxTargets);
   if (!check(targets.length >= o.minTargets, `${label}: ${targets.length} target(s) on screen (need ${o.minTargets})`)) return;
   let same = 0, onTarget = 0;
   const bad = [];
   for (const t of targets) {
+    // A card the last tap opened may now cover this point.
+    if (!(await page.evaluate(([x, y]) => document.elementFromPoint(x, y) === window.__strataKit.kit.canvas, [t.x, t.y]))) continue;
     const direct = await page.evaluate(([x, y]) => window.__strataKit.pickAt(x, y), [t.x, t.y]);
     await page.evaluate(() => { window.__strataKit.kit.lastTapId = '__no-tap__'; });
     if (touch) await page.touchscreen.tap(t.x, t.y);
@@ -137,10 +144,11 @@ async function tapEqualsPick(page, o, label, touch) {
     if (tapped === direct) same++; else bad.push(`${t.id}: tap ${tapped} != pick ${direct}`);
     if (direct === t.id) onTarget++;
   }
-  check(same === targets.length, `${label}: tap == pick at ${same}/${targets.length} targets${bad.length ? ' (' + bad.slice(0, 3).join('; ') + ')' : ''}`);
+  const tried = same + bad.length;
+  check(tried >= o.minTargets && same === tried, `${label}: tap == pick at ${same}/${tried} targets${bad.length ? ' (' + bad.slice(0, 3).join('; ') + ')' : ''}`);
   // Informational: a target can sit behind another thing, so a pick there
   // may rightly return the nearer one.
-  console.log(`     ${label}: the pick at a target's own point returned it for ${onTarget}/${targets.length}`);
+  console.log(`     ${label}: the pick at a target's own point returned it for ${onTarget}/${tried}`);
 }
 
 (async () => {

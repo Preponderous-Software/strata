@@ -38,6 +38,10 @@
    load() resolves with the module, or rejects with an Error whose `code` is
    "no-webgl2", "network" or "engine" after the fallback is already showing.
 
+   Colours follow the page through CSS custom properties on :root (or any
+   ancestor): --sk-loader-bg, --sk-loader-fg, --sk-loader-panel and
+   --sk-loader-accent.
+
    MIT licensed, as Strata. */
 (function () {
   "use strict";
@@ -52,7 +56,7 @@
   filter:blur(14px) brightness(.55);transform:scale(1.06)}
 .sk-loader .sk-media{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .sk-loader .sk-box{position:relative;box-sizing:border-box;max-width:min(420px,100%);width:100%;text-align:center;
-  background:rgba(0,0,0,.45);border-radius:12px;padding:16px 18px;
+  background:var(--sk-loader-panel,rgba(0,0,0,.45));border-radius:12px;padding:16px 18px;
   -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .sk-loader.sk-fallback .sk-box{position:absolute;left:16px;right:16px;bottom:max(16px,env(safe-area-inset-bottom));
   width:auto;max-width:420px;margin:0 auto}

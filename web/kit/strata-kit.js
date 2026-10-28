@@ -72,8 +72,12 @@
     const forced = q.get("quality");
     const forcedQuality = forced != null && forced !== "" ? Math.min(Math.max(parseInt(forced, 10) || 0, 0), 2) : null;
     const driven = q.get("drive") === "1" || !!opts.driven;
-    const limits = Object.assign({minPitch: 0.12, maxPitch: 1.45, minDist: 4, maxDist: 120}, opts.limits || {});
-    const cam = Object.assign({yaw: 0.8, pitch: 0.6, dist: 30, tx: 0, ty: 0, tz: 0}, opts.camera || {});
+    // The page's own camera and limits objects are used (and given defaults
+    // for what they leave out), so the page can move the camera by writing
+    // to them: kit.cam === opts.camera.
+    const withDefaults = (o, d) => { for (const k of Object.keys(d)) if (o[k] == null) o[k] = d[k]; return o; };
+    const limits = withDefaults(opts.limits || {}, {minPitch: 0.12, maxPitch: 1.45, minDist: 4, maxDist: 120});
+    const cam = withDefaults(opts.camera || {}, {yaw: 0.8, pitch: 0.6, dist: 30, tx: 0, ty: 0, tz: 0});
     const slowMs = opts.slowMs || 28, windowMs = opts.windowMs || 1500, settleMs = opts.settleMs || 2500;
     const idle = opts.idleOrbit === false ? null : Object.assign({afterMs: 20000, rate: 0.0006}, opts.idleOrbit || {});
 
