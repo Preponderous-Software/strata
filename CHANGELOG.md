@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- The web kit (`web/kit/`, shipped in the wasm32-emscripten tarball as
+  `kit/`; docs/WEB.md, "The web kit"): the shell around a Strata scene
+  embedded in a page's own WebGL 2 context, so hosts stop copying it. No ABI
+  change; the kit uses only the C ABI and carries its own version (1.0).
+  - `strata_kit.h`: header-only host shell. Context and engine creation
+    (`preserveDrawingBuffer` on), resize, three quality tiers, an orbit
+    camera and its view-projection export, the sun, per-frame batches with
+    the point-alpha clamp and prioritised point lights, frame stats, and
+    rebuilding the engine after a lost context (`sk_restore`). Natively the
+    same header opens a headless engine and saves PNGs.
+  - `strata-kit.js`: dependency-free page shell. DPR-capped sizing, adaptive
+    quality (pixel density first, then shadows; reset on a hidden tab),
+    orbit/pan/pinch/keyboard camera, project and pick in CSS pixels,
+    `webglcontextlost`/`restored`, `?quality=`, `?fps=1`, `?drive=1` with
+    `drive(t)`, and label placement with hysteresis.
+  - `strata-loader.js`: the loading shell. Poster backdrop, byte-accurate
+    progress with the size, and a fallback to the trailer or poster when
+    WebGL 2 is missing, the engine fails, the context is gone or the device
+    is too slow.
+  - `build-kit.sh` (parameterised, SHA-checked, byte-reproducible),
+    `ci-snippet.yml`, and `testing/` (`smoke.cjs`: tap == pick at DPR 1/2/3,
+    context loss; `capture.cjs`: frames from `drive(t)`).
+  - CI builds `web/kit/example` with the kit against its own `libstrata.a`,
+    runs the smoke test on it in Chromium, and checks the tarball carries
+    the kit.
 - Python binding: `KNOWN_RELEASES` gains v0.6.0 (`linux-x64` and `win-x64`),
   so `strata.load_release("0.6.0")` needs no hash.
 

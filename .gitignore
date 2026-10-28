@@ -10,3 +10,5 @@ node_modules/
 __pycache__/
 *.egg-info/
 /bindings/python/build/
+/web/kit/example/out/
+.strata-kit-build/

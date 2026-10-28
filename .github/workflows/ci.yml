@@ -226,6 +226,13 @@ jobs:
             echo "::error::libstrata.a is missing C ABI functions"; cat missing.txt; exit 1
           fi
 
+      - name: Build the web kit's example scene
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          # The kit's own build script, against this build's libstrata.a.
+          KIT_OUT=build-web/kit-example STRATA_LIB=build-web/libstrata.a STRATA_INCLUDE=include \
+            web/kit/build-kit.sh web/kit/example/kit.conf
+
       - name: Install Playwright and Chromium
         run: |
           npm install --no-save --prefix tests/web "playwright@$PLAYWRIGHT_VERSION"
@@ -242,10 +249,22 @@ jobs:
       - name: Browser against the desktop goldens (default tolerance)
         run: node tests/web/run_goldens.cjs build-web golden-out/web-vs-desktop --platform linux-llvmpipe
 
+      - name: Web kit smoke test (tap == pick at DPR 1/2/3, context loss)
+        env:
+          NODE_PATH: ${{ github.workspace }}/tests/web/node_modules
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory build-web/kit-example &
+          node web/kit/testing/smoke.cjs http://127.0.0.1:8765/index.html golden-out/kit-smoke --context-loss
+
       - name: Stage web build
         if: always()
         run: |
-          mkdir -p dist-web/lib dist-web/include/strata dist-web/demo
+          mkdir -p dist-web/lib dist-web/include/strata dist-web/demo dist-web/kit/testing dist-web/kit/example
+          # The web kit (docs/WEB.md, "The web kit"): its sources, not a build.
+          cp web/kit/strata_kit.h web/kit/strata-kit.js web/kit/strata-loader.js web/kit/build-kit.sh \
+            web/kit/ci-snippet.yml dist-web/kit/
+          cp web/kit/testing/*.cjs dist-web/kit/testing/
+          cp web/kit/example/main.cpp web/kit/example/index.html web/kit/example/kit.conf dist-web/kit/example/
           cp build-web/libstrata.a dist-web/lib/ || true
           cp include/strata/strata.h dist-web/include/strata/
           cp build-web/strata-village-day.html build-web/strata-village-day.js build-web/strata-village-day.wasm \
@@ -323,7 +342,7 @@ jobs:
       - name: Package
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then version="${GITHUB_REF_NAME#v}"; else version="0.0.0-ci"; fi
-          chmod 0755 linux/bin/strata-golden linux/bin/strata-imgcmp
+          chmod 0755 linux/bin/strata-golden linux/bin/strata-imgcmp web/kit/build-kit.sh
           mkdir -p assets
           tar -C linux -czf "assets/strata-${version}-linux-x64.tar.gz" .
           (cd windows && zip -qr "../assets/strata-${version}-win-x64.zip" .)
@@ -351,6 +370,15 @@ jobs:
           # file is not executable).
           rc=0; unpacked/bin/strata-imgcmp || rc=$?
           if [ "$rc" -ne 2 ]; then echo "::error::bin/strata-imgcmp from the tarball exited $rc, expected 2"; exit 1; fi
+      - name: Check the wasm tarball carries the web kit
+        run: |
+          mkdir unpacked-web && tar -C unpacked-web -xzf assets/strata-*-wasm32-emscripten.tar.gz
+          for f in kit/strata_kit.h kit/strata-kit.js kit/strata-loader.js kit/build-kit.sh kit/ci-snippet.yml \
+                   kit/testing/smoke.cjs kit/testing/capture.cjs kit/testing/lib.cjs kit/example/main.cpp; do
+            if [ ! -f "unpacked-web/$f" ]; then echo "::error::$f is missing from the wasm tarball"; exit 1; fi
+          done
+          if [ ! -x unpacked-web/kit/build-kit.sh ]; then echo "::error::kit/build-kit.sh is not executable"; exit 1; fi
+          echo "the wasm tarball carries the web kit"
       - uses: actions/upload-artifact@v4
         with:
           name: release-assets
