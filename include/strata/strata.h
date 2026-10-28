@@ -132,7 +132,9 @@ typedef struct StrataEngine StrataEngine;
 
 enum {
     STRATA_SURFACE_WINDOW = 0,      /* SDL3 window with its own GL 4.5 core context (browser: WebGL 2 on the canvas) */
-    STRATA_SURFACE_HEADLESS = 1,    /* no window: EGL surfaceless context + offscreen target (browser: hidden window) */
+    STRATA_SURFACE_HEADLESS = 1,    /* no window: EGL surfaceless context + offscreen target (browser: hidden window).
+                                       On WSL2 (/dev/dxg) with no Mesa driver chosen in the environment, the engine
+                                       sets GALLIUM_DRIVER=llvmpipe first; GALLIUM_DRIVER=d3d12 opts back in */
     STRATA_SURFACE_HOST_CONTEXT = 2 /* draw into the GL context current on the calling thread */
 };
 

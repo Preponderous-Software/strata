@@ -11,10 +11,18 @@
 //   3. the default display            (whatever libEGL offers)
 // On Mesa, LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe selects llvmpipe.
 // With libglvnd, __EGL_VENDOR_LIBRARY_FILENAMES can force the Mesa vendor.
+//
+// WSL2: where /dev/dxg exists and the host has chosen no Mesa driver, the
+// surface sets GALLIUM_DRIVER=llvmpipe before eglInitialize, because Mesa's
+// d3d12 driver there can segfault inside eglInitialize (see
+// headlessMesaDriverOverride in surface.hpp). GALLIUM_DRIVER=d3d12 opts back in.
 #include <glad/egl.h>
 
+#include <cstdlib>
 #include <cstring>
 #include <vector>
+
+#include <unistd.h>
 
 #include "core/error.hpp"
 #include "core/log.hpp"
@@ -22,6 +30,8 @@
 
 namespace strata::platform {
 namespace {
+
+const char* envVar(const char* name) { return std::getenv(name); }
 
 bool hasExtension(const char* list, const char* name) {
     if (!list) return false;
@@ -42,6 +52,15 @@ public:
         gles_ = api == GlApi::Gles3;
         width_ = desc.width;
         height_ = desc.height;
+
+        // Before libEGL is loaded, so Mesa sees it when it picks a driver.
+        if (const char* driver = headlessMesaDriverOverride(::access("/dev/dxg", F_OK) == 0, envVar)) {
+            ::setenv("GALLIUM_DRIVER", driver, 0);
+            logf(LogLevel::Info,
+                 "headless surface: /dev/dxg (WSL2) and no Mesa driver chosen, so GALLIUM_DRIVER=%s "
+                 "(Mesa's d3d12 driver can crash in eglInitialize there; set GALLIUM_DRIVER=d3d12 to use it)",
+                 driver);
+        }
 
         if (!gladLoaderLoadEGL(EGL_NO_DISPLAY)) {
             fail(STRATA_ERROR_PLATFORM, "could not load libEGL (is an EGL implementation such as Mesa installed?)");

@@ -7,6 +7,15 @@
   `latitude_degrees`, `shadow_distance` and `split_lambda`, the same way the
   cascade, shadow-map-size, camera, point-light and terrain checks already
   do. No ABI or pixel change.
+- The headless surface no longer crashes on WSL2 with a GPU. There, Mesa
+  picks its d3d12 driver, and with Mesa 21.2 and the NVIDIA WSL driver
+  `eglInitialize` segfaulted inside it, so `strata_create` killed the host
+  instead of returning an error. Where `/dev/dxg` exists and none of
+  `GALLIUM_DRIVER`, `LIBGL_ALWAYS_SOFTWARE` or `MESA_LOADER_DRIVER_OVERRIDE`
+  is set, the headless surface now sets `GALLIUM_DRIVER=llvmpipe` before
+  loading EGL and logs that it did; `GALLIUM_DRIVER=d3d12` opts back in.
+  Elsewhere nothing changes. No ABI or pixel change. A unit test covers the
+  choice (`test_headless_driver.cpp`).
 - Web kit 1.1 (`web/kit/`; docs/WEB.md, "The web kit"). No ABI or pixel
   change.
   - `StrataLoader.show(options)` and `StrataLoader.progress(fraction,

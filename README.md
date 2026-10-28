@@ -144,6 +144,12 @@ export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
 ./build/strata-golden check tests/scenes tests/golden build/golden-out
 ```
 
+On WSL2 with a GPU (`/dev/dxg` exists), the headless surface asks Mesa for
+llvmpipe itself when none of `GALLIUM_DRIVER`, `LIBGL_ALWAYS_SOFTWARE` or
+`MESA_LOADER_DRIVER_OVERRIDE` is set: Mesa's d3d12 driver there has been seen
+to segfault inside `eglInitialize` (Mesa 21.2 with the NVIDIA WSL driver),
+which would take the host down with it. `GALLIUM_DRIVER=d3d12` opts back in.
+
 The default surface is EGL surfaceless, so no display is needed. To test the
 SDL3 window path instead, start Xvfb **with the llvmpipe variables in its own
 environment** and pass `--surface window`:

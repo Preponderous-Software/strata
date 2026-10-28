@@ -59,6 +59,17 @@ public:
     virtual const char* kind() const = 0;
 };
 
+// The Mesa driver the headless (EGL) surface asks for before it initialises
+// EGL, or nullptr to leave Mesa's own choice alone. On WSL2 with a GPU
+// (has_dxg: /dev/dxg exists), Mesa picks its d3d12 driver, and with Mesa
+// 21.2 and the NVIDIA WSL driver eglInitialize segfaults inside it, taking
+// the host with it. So there Strata asks for llvmpipe, unless the host has
+// already chosen a driver: any of GALLIUM_DRIVER, LIBGL_ALWAYS_SOFTWARE or
+// MESA_LOADER_DRIVER_OVERRIDE set (even to an empty string) is left as it is.
+// GALLIUM_DRIVER=d3d12 therefore opts back in to the GPU. env is getenv, or a
+// stand-in for tests.
+const char* headlessMesaDriverOverride(bool has_dxg, const char* (*env)(const char* name));
+
 // Picks the implementation for desc->surface. Throws strata::Error.
 std::unique_ptr<Surface> createSurface(const StrataEngineDesc& desc, GlApi api);
 
