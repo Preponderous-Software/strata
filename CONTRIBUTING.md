@@ -74,6 +74,27 @@ Useful switches:
   goldens, and the Windows build.
 - Keep a PR to one milestone step.
 
+## Releases
+
+The owner tags releases. A release-prep pull request moves the version in
+`CMakeLists.txt`, `bindings/python/strata/__init__.py` and `CHANGELOG.md`, and
+pins the release's own libraries in the Python binding, so that
+`strata.load_release("<version>")` works with the binding from that very tag:
+
+1. Wait for the pull request's CI. Its `package` job's step "Check the Python
+   binding pins these libraries" prints the `KNOWN_RELEASES` lines and warns
+   that they are missing; its `release-assets` artifact has the `SHA256SUMS`.
+2. `python3 tools/known_releases.py pin <version> SHA256SUMS`, then commit
+   `bindings/python/strata/_loader.py`. The binding is not part of the
+   libraries, and both builds are reproducible (`/Brepro` on MSVC), so this
+   does not change the hashes; the next run's step passes.
+3. Merge nothing that changes the libraries between that and the tag. If
+   something does, the step warns again on `main`; pin again.
+
+On the tag, the same step runs with `--require` and fails the workflow before
+the release job if an entry is missing or differs, so no release ships a
+binding that cannot load it.
+
 ## Licence
 
 By contributing you agree that your contribution is licensed under the MIT

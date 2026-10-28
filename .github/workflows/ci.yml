@@ -327,6 +327,13 @@ jobs:
     needs: [build-linux, build-web, build-windows]
     runs-on: ubuntu-latest
     steps:
+      # Only for tools/known_releases.py and the binding's KNOWN_RELEASES.
+      - uses: actions/checkout@v4
+        with:
+          path: src
+          sparse-checkout: |
+            tools
+            bindings/python
       - uses: actions/download-artifact@v4
         with:
           name: strata-linux-x64
@@ -354,6 +361,25 @@ jobs:
           cp windows/bin/strata.dll "assets/strata-${version}-win-x64.dll"
           (cd assets && sha256sum * > SHA256SUMS)
           cat assets/SHA256SUMS
+      - name: Check the Python binding pins these libraries (KNOWN_RELEASES)
+        run: |
+          # A release's binding must load_release() its own version with no
+          # hash, so a tag fails here, before the release job, unless
+          # KNOWN_RELEASES pins exactly the libraries just built. The builds
+          # are reproducible, so the hashes this prints on the release-prep
+          # pull request are the ones the tag publishes: pin them there with
+          # `python3 tools/known_releases.py pin <version> SHA256SUMS`.
+          tool=src/tools/known_releases.py
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            python3 "$tool" check "${GITHUB_REF_NAME#v}" assets/SHA256SUMS --require
+          else
+            version="$(python3 "$tool" version)"
+            if git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}" "refs/tags/v${version}" >/dev/null; then
+              echo "v${version} is already released; nothing to pin until the next release prep"
+            elif ! python3 "$tool" check "$version" assets/SHA256SUMS --require; then
+              echo "::warning::KNOWN_RELEASES does not pin these libraries as v${version}; tagging v${version} from this commit would fail. Pin them with tools/known_releases.py pin (see this step's log for the lines)."
+            fi
+          fi
       - name: Check the Linux tarball keeps its executables executable
         run: |
           tar -tvzf assets/strata-*-linux-x64.tar.gz

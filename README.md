@@ -242,7 +242,9 @@ The library is never bundled. `strata.load_release(version, sha256)`
 downloads the release's bare library (`libstrata-<v>-linux-x64.so` or
 `strata-<v>-win-x64.dll`) into a per-user cache. It checks the file against
 the SHA-256 from that release's `SHA256SUMS` and deletes it on a mismatch.
-Releases the binding already knows (`strata.KNOWN_RELEASES`) need no hash.
+Releases the binding already knows (`strata.KNOWN_RELEASES`) need no hash,
+and from v0.7.0 on that includes the binding's own release: the release job
+refuses a tag whose `KNOWN_RELEASES` does not pin the libraries it built.
 CI runs `tests/python` against the CI-built library on llvmpipe, including
 drawing `bn_primitives_legacy` from Python against the same golden as C++ and
 C#. It also checks the layouts against the Windows DLL.
