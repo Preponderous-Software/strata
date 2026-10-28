@@ -65,9 +65,14 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 
 ## Status
 
-`v0.6.0` adds injected events, a shared frame clock and the drive channel
+`v0.7.0` adds the web kit: the shell around a Strata scene embedded in a web
+page (a header-only C++ host, a page shell, a loading shell, a reproducible
+build script and browser smoke tests), shipped in the release's
+`wasm32-emscripten` tarball as `kit/` (see
+[docs/WEB.md](docs/WEB.md#the-web-kit)). The C ABI did not change. Before it,
+`v0.6.0` added injected events, a shared frame clock and the drive channel
 (ABI 1.12; see [docs/DRIVE.md](docs/DRIVE.md)), so a playtesting harness can
-play a Strata game without a person at the window. Before it, `v0.5.0` added
+play a Strata game without a person at the window; `v0.5.0`
 depth readback (ABI 1.9), nearest-texel texture filtering (ABI 1.10),
 translucent meshes, on-top overlays and filled screen rectangles (ABI 1.11),
 an in-tree Python binding, and `strata-imgcmp --json` and `--always-diff`;
@@ -97,6 +102,7 @@ and a terrain tile (**T1**); and `v0.1.0` the skeleton and lighting
 | Nearest filtering *(ABI 1.10)* | `STRATA_TEXTURE_NEAREST`: textures sampled texel by texel, so cell fields and pixel art keep hard edges when magnified | `tex_nearest_field` |
 | Translucency and on-top overlays *(ABI 1.11)* | Alpha-blended translucent meshes (sorted back to front, lit or unlit), lines and points drawn on top of the scene, and filled screen rectangles as panels behind text | `o2_translucent_on_top` |
 | Drive channel *(ABI 1.12)* | Injected events (`strata_push_event`), a shared frame clock (`strata_frame_seconds`), `strata_is_driven`, and the `STRATA_DRIVE` socket a playtesting harness uses to inject input, step the clock (`STRATA_DRIVE_CLOCK`, `STRATA_DRIVE_STEP`), force a headless surface (`STRATA_DRIVE_SURFACE`) and take screenshots | none: `strata-drive-e2e` checks two stepped runs draw identical frames |
+| Web kit *(no ABI change)* | `kit/` in the wasm tarball: `strata_kit.h` (WebGL 2 context, engine, quality tiers, orbit camera, lost-context restore), `strata-kit.js` (sizing, adaptive quality, camera input, project and pick in CSS pixels), `strata-loader.js` (progress and fallbacks), `build-kit.sh`, and smoke and capture tests | none: CI builds `web/kit/example` and runs `testing/smoke.cjs` on it (tap == pick at DPR 1/2/3, context loss) |
 
 Next come streaming and larger terrain (T2–T4), meshes and materials (M1–M4),
 and optional OpenUSD modules (`STRATA_WITH_USD`, off by default).
@@ -172,7 +178,9 @@ your own page, the demo, and a web page of the golden-image checker. CI draws
 every golden scene in headless Chromium and compares the result with both a
 browser golden set and the desktop goldens. Desktop builds keep OpenGL 4.5 as
 the default. [docs/WEB.md](docs/WEB.md) covers linking, surfaces, the frame
-loop, what WebGL 2 emulates and how, and notes for .NET `browser-wasm` hosts.
+loop, what WebGL 2 emulates and how, notes for .NET `browser-wasm` hosts, and
+the web kit that a page embedding one scene can start from (in the release's
+wasm tarball as `kit/` since `v0.7.0`).
 
 ## Using it from C#
 

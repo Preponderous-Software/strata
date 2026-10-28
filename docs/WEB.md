@@ -144,7 +144,8 @@ leaves the scene alone: no scene graph, no data-to-3D mapping. Games that use
 `STRATA_SURFACE_WINDOW` and SDL's input can still use its loading shell and
 its browser tools.
 
-The release's `strata-<v>-wasm32-emscripten.tar.gz` carries it as `kit/`:
+Each release's `strata-<v>-wasm32-emscripten.tar.gz` carries it as `kit/`,
+from `v0.7.0` on (older tarballs have no `kit/`):
 
 | File | What it is |
 |---|---|
@@ -225,9 +226,11 @@ Rules the kit keeps, which a hand-written shell tends to lose:
 
 The kit has its own version (`STRATA_KIT_VERSION_STRING`, `StrataKit.version`;
 1.0 now), and `strata-kit.js` warns when the page's and the wasm's major
-versions differ. A host that needs a kit fix before the next Strata release
-can vendor `web/kit/` at a pinned commit and link the last release's
-`libstrata.a`: the kit uses only the C ABI.
+versions differ. A host that pins a release takes the kit from that release's tarball
+(`kit/build-kit.sh`, with `STRATA_VERSION` and `STRATA_SHA256` set to the
+same release) and needs no vendored copy. A host that needs a kit fix before
+the next Strata release can vendor `web/kit/` at a pinned commit and link the
+last release's `libstrata.a`: the kit uses only the C ABI.
 
 ## Beyond Nations (.NET `browser-wasm`)
 
