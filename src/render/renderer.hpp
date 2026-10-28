@@ -1,5 +1,6 @@
-// The renderer: BN's primitives through the fixed pass list (shadow, opaque,
-// sky, readback), drawn with GpuDevice only.
+// The renderer: BN's primitives through the fixed pass list in pass_list.cpp
+// (shadow, point_shadow, opaque, sky, translucent, overlay, text, readback),
+// drawn with GpuDevice only.
 #pragma once
 
 #include <array>

@@ -399,7 +399,8 @@ void Renderer::validateLighting(const StrataLighting& l) {
     }
     if (l.mode == STRATA_LIGHTING_SPACE) {
         if (!(l.legacy_ambient >= 0.0f && l.legacy_ambient <= 1.0f)) {
-            fail(STRATA_ERROR_INVALID_ARGUMENT, "space ambient (legacy_ambient) must be in [0, 1]");
+            fail(STRATA_ERROR_INVALID_ARGUMENT, "space ambient (legacy_ambient) must be in [0, 1] (got %g)",
+                 static_cast<double>(l.legacy_ambient));
         }
         return;
     }
@@ -409,12 +410,15 @@ void Renderer::validateLighting(const StrataLighting& l) {
             fail(STRATA_ERROR_INVALID_ARGUMENT, "legacy light direction must be a finite, non-zero vector");
         }
         if (!(l.legacy_ambient >= 0.0f && l.legacy_ambient <= 1.0f)) {
-            fail(STRATA_ERROR_INVALID_ARGUMENT, "legacy ambient must be in [0, 1]");
+            fail(STRATA_ERROR_INVALID_ARGUMENT, "legacy ambient must be in [0, 1] (got %g)",
+                 static_cast<double>(l.legacy_ambient));
         }
         return;
     }
     if (!finite(l.time_of_day) || !finite(l.latitude_degrees) || std::fabs(l.latitude_degrees) > 90.0f) {
-        fail(STRATA_ERROR_INVALID_ARGUMENT, "time of day must be finite and latitude within [-90, 90]");
+        fail(STRATA_ERROR_INVALID_ARGUMENT,
+             "time of day must be finite and latitude within [-90, 90] (got time_of_day %g, latitude %g)",
+             static_cast<double>(l.time_of_day), static_cast<double>(l.latitude_degrees));
     }
     if (l.cascade_count < 0 || l.cascade_count > kMaxCascades) {
         fail(STRATA_ERROR_INVALID_ARGUMENT, "cascade_count must be 0..%d (got %d)", kMaxCascades, l.cascade_count);
@@ -424,10 +428,12 @@ void Renderer::validateLighting(const StrataLighting& l) {
             fail(STRATA_ERROR_INVALID_ARGUMENT, "shadow_map_size must be 256..4096 (got %d)", l.shadow_map_size);
         }
         if (!(l.shadow_distance > 0.0f) || !finite(l.shadow_distance)) {
-            fail(STRATA_ERROR_INVALID_ARGUMENT, "shadow_distance must be positive");
+            fail(STRATA_ERROR_INVALID_ARGUMENT, "shadow_distance must be positive (got %g)",
+                 static_cast<double>(l.shadow_distance));
         }
         if (!(l.split_lambda >= 0.0f && l.split_lambda <= 1.0f)) {
-            fail(STRATA_ERROR_INVALID_ARGUMENT, "split_lambda must be in [0, 1]");
+            fail(STRATA_ERROR_INVALID_ARGUMENT, "split_lambda must be in [0, 1] (got %g)",
+                 static_cast<double>(l.split_lambda));
         }
     }
 }
