@@ -7,6 +7,23 @@
   `latitude_degrees`, `shadow_distance` and `split_lambda`, the same way the
   cascade, shadow-map-size, camera, point-light and terrain checks already
   do. No ABI or pixel change.
+- Web kit 1.1 (`web/kit/`; docs/WEB.md, "The web kit"). No ABI or pixel
+  change.
+  - `StrataLoader.show(options)` and `StrataLoader.progress(fraction,
+    label)`: a host whose own loader knows its progress (a .NET
+    `browser-wasm` or Unity-style boot) shows the loading shell and drives
+    its bar without `load()`'s fetch. The fraction is clamped to 0..1 and
+    the bar never moves back; the label, or the percentage, replaces the size
+    line.
+  - `StrataLoader.slow()` is idempotent: a second call while its bar is
+    showing no longer adds another.
+  - `sk_stats` / `kit.stats()` count meshes (`meshes`, as the host sets
+    `Host::meshes`), and `?fps=1` shows them. A 1.0 wasm reports 0.
+  - The gate's reduced-motion message now reads "This device asks for
+    reduced motion. The live view is a 3.4 MB download and is animated."
+  - `testing/smoke.cjs` checks the loading shell on a blank page first:
+    `progress()` clamps, stays monotonic and shows its label, and `slow()`
+    twice shows one bar.
 
 ## 0.7.0
 

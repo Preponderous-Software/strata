@@ -149,12 +149,12 @@ from `v0.7.0` on (older tarballs have no `kit/`):
 
 | File | What it is |
 |---|---|
-| `strata_kit.h` | Header-only C++ host shell. Creates the WebGL 2 context (`preserveDrawingBuffer` on, so frames can be read back) and the engine; resizing; three quality tiers (sun cascades, shadow map size, point-light budget, point thinning); an orbit camera and its view-projection matrix; the sun from latitude, longitude and time; per-frame batches of primitives, points (alpha clamped), lines and prioritised point lights; frame stats. Exports `sk_init`, `sk_restore`, `sk_resize`, `sk_set_quality`, `sk_set_camera`, `sk_set_sun`, `sk_view_proj`, `sk_stats`, `sk_frame` and `sk_kit_version`. Natively (no Emscripten) the same file opens a headless engine: `sk_init_headless` and `sk_save_png`, so a scene also renders stills |
+| `strata_kit.h` | Header-only C++ host shell. Creates the WebGL 2 context (`preserveDrawingBuffer` on, so frames can be read back) and the engine; resizing; three quality tiers (sun cascades, shadow map size, point-light budget, point thinning); an orbit camera and its view-projection matrix; the sun from latitude, longitude and time; per-frame batches of primitives, points (alpha clamped), lines and prioritised point lights; frame stats (`sk_stats`: primitives, points, lines, lights, terrain samples and, from kit 1.1, the meshes the host counts in `Host::meshes`). Exports `sk_init`, `sk_restore`, `sk_resize`, `sk_set_quality`, `sk_set_camera`, `sk_set_sun`, `sk_view_proj`, `sk_stats`, `sk_frame` and `sk_kit_version`. Natively (no Emscripten) the same file opens a headless engine: `sk_init_headless` and `sk_save_png`, so a scene also renders stills |
 | `strata-kit.js` | Dependency-free page shell (`window.StrataKit`): canvas sizing with a capped device pixel ratio; adaptive quality (pixel density first, then the tier, with settle windows, reset when the tab is hidden); orbit, pan, pinch, wheel and keyboard camera; `project()` and `pick()` in CSS pixels; `webglcontextlost`/`webglcontextrestored`; `?quality=`, `?fps=1` and `?drive=1`; label placement with collision and hysteresis (`StrataKit.placeLabels`); `window.__strataKit` for tools |
-| `strata-loader.js` | The loading shell (`window.StrataLoader`): the poster as a blurred backdrop, byte-accurate download progress with the size, and a fallback to the trailer clip or the poster, with the reason in words, when WebGL 2 is missing, the engine fails, a lost context does not come back, or the device is too slow at the lowest tier |
+| `strata-loader.js` | The loading shell (`window.StrataLoader`): the poster as a blurred backdrop, byte-accurate download progress with the size (or, for a host that boots its own way, `StrataLoader.show()` and `StrataLoader.progress(fraction, label)`: see below), and a fallback to the trailer clip or the poster, with the reason in words, when WebGL 2 is missing, the engine fails, a lost context does not come back, or the device is too slow at the lowest tier |
 | `build-kit.sh` | One parameterised build: emsdk version check, the Strata tarball's SHA-256 (or a source build's `libstrata.a`), fixed flags (`-O2 -fwasm-exceptions`, WebGL 2 only, `MODULARIZE`) and the export list. Copies the page scripts beside the `.wasm` |
 | `ci-snippet.yml` | A GitHub Actions job for a host that commits its build: rebuild, `git diff --exit-code`, and the smoke test |
-| `testing/smoke.cjs` | Playwright smoke test: at DPR 1, 2 and 3 (desktop mouse, tablet and phone touch) the frame is not one flat colour, the drawing buffer matches the capped DPR, and a real tap at each of the page's targets selects exactly what a direct pick there returns. `--context-loss` also loses and restores the context |
+| `testing/smoke.cjs` | Playwright smoke test: at DPR 1, 2 and 3 (desktop mouse, tablet and phone touch) the frame is not one flat colour, the drawing buffer matches the capped DPR, and a real tap at each of the page's targets selects exactly what a direct pick there returns. `--context-loss` also loses and restores the context. First, on a blank page, the loading shell: `progress()` clamps, stays monotonic and shows its label, and `slow()` twice shows one bar |
 | `testing/capture.cjs` | Steps scene time with `drive(t)` and saves frames (PNG, and GIF or MP4 through ffmpeg) |
 | `example/` | The smallest host: six pickable pillars. CI builds it with `build-kit.sh` against its own `libstrata.a` and runs the smoke test on it |
 
@@ -204,6 +204,24 @@ The page loads the module through the loader and hands it to the kit:
 </script>
 ```
 
+A host whose own loader already knows how far it has got, such as a .NET
+`browser-wasm` app (below) or a Unity-style boot that fetches its own files,
+skips `load()` and drives the same overlay itself. `show()` takes `load()`'s
+display options (`title`, `poster`, `trailer`, `fallback`, `mount`) and
+returns false, with the fallback already showing, when WebGL 2 is missing.
+`progress(fraction, label)` clamps the fraction to 0..1, never moves the bar
+back (a later, lower value is ignored), and shows the label, or the
+percentage, under the bar; it does nothing once `done()` or a fallback has
+run. `slow()` shows its bar once: a second call while it is up does nothing.
+
+```js
+if (StrataLoader.show({title: "the game", poster: "poster.jpg", fallback: {href: "/", text: "Back"}})) {
+  runtime.onProgress = (loaded, total) => StrataLoader.progress(loaded / total, `${loaded} of ${total} files`);
+  await runtime.start();
+  StrataLoader.done();
+}
+```
+
 Rules the kit keeps, which a hand-written shell tends to lose:
 
 - **Pointer maths stay in CSS pixels.** `project()` maps to the canvas's
@@ -225,7 +243,7 @@ Rules the kit keeps, which a hand-written shell tends to lose:
   a minute, or no restore within 5 s, falls back.
 
 The kit has its own version (`STRATA_KIT_VERSION_STRING`, `StrataKit.version`;
-1.0 now), and `strata-kit.js` warns when the page's and the wasm's major
+1.1 now), and `strata-kit.js` warns when the page's and the wasm's major
 versions differ. A host that pins a release takes the kit from that release's tarball
 (`kit/build-kit.sh`, with `STRATA_VERSION` and `STRATA_SHA256` set to the
 same release) and needs no vendored copy. A host that needs a kit fix before
