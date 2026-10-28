@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- `strata_set_lighting` errors now include the rejected value for
+  `legacy_ambient` (legacy and space modes), `time_of_day` and
+  `latitude_degrees`, `shadow_distance` and `split_lambda`, the same way the
+  cascade, shadow-map-size, camera, point-light and terrain checks already
+  do. No ABI or pixel change.
+
 ## 0.7.0
 
 The web kit: the shell around a Strata scene embedded in a web page, shipped
