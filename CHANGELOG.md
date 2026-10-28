@@ -24,6 +24,14 @@
   - `testing/smoke.cjs` checks the loading shell on a blank page first:
     `progress()` clamps, stays monotonic and shows its label, and `slow()`
     twice shows one bar.
+- The web kit no longer downloads the scene's `.wasm` twice.
+  `strata-loader.js` streams the file for its progress bar and hands the
+  bytes over as `Module.wasmBinary`, but emsdk 6.0.11's default
+  `INCOMING_MODULE_JS_API` leaves `wasmBinary` out, so the glue that
+  `build-kit.sh` built ignored them and fetched the file again.
+  `build-kit.sh` now passes that list with `wasmBinary` added (the example's
+  `.wasm` is unchanged; its `.js` reads `Module.wasmBinary`), and
+  `testing/smoke.cjs` fails when any `.wasm` is requested more than once.
 
 ## 0.7.0
 

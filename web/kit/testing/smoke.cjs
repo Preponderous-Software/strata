@@ -17,7 +17,9 @@
 //     scaled by the drawing buffer instead of CSS pixels, which only shows
 //     at a capped DPR (3 here, with the kit's default cap of 2);
 //   - with --context-loss, the WebGL context is lost and restored
-//     (WEBGL_lose_context) and the page draws and picks again.
+//     (WEBGL_lose_context) and the page draws and picks again;
+//   - every .wasm the page loads is requested exactly once (cache hits
+//     count): the loader's own fetch is handed to the glue, not repeated.
 // Before the scene, the loading shell (../strata-loader.js, when it is beside
 // this file) is checked on a blank page: progress() clamps to 0..1, never
 // moves the bar back and shows its label; slow() called twice shows one bar.
@@ -73,6 +75,15 @@ async function runDpr(browser, o, dpr) {
     if (m.type() === 'error') errors.push(m.text());
     if (process.env.STRATA_KIT_VERBOSE) console.log(`  page: ${m.text()}`);
   });
+  // Every .wasm the page asks for, cache hits included: the loader streams
+  // the file once and hands the bytes to the glue (Module.wasmBinary), so a
+  // second request means the glue ignored them and downloaded it again.
+  const wasmRequests = new Map();
+  page.on('request', (r) => {
+    let pathname = '';
+    try { pathname = new URL(r.url()).pathname; } catch (e) { return; }
+    if (pathname.endsWith('.wasm')) wasmRequests.set(pathname, (wasmRequests.get(pathname) || 0) + 1);
+  });
   const label = `DPR ${dpr} (${device.viewport.width}x${device.viewport.height}${device.hasTouch ? ', touch' : ''})`;
   console.log(`-- ${label}`);
   try {
@@ -117,6 +128,9 @@ async function runDpr(browser, o, dpr) {
         await tapEqualsPick(page, o, label + ' after restore', device.hasTouch);
       }
     }
+    const fetched = [...wasmRequests].map(([p, n]) => `${p.split('/').pop()} x${n}`).join(', ') || 'none';
+    check(wasmRequests.size > 0 && [...wasmRequests.values()].every((n) => n === 1),
+      `${label}: each .wasm is requested once (${fetched})`);
     check(errors.length === 0, `${label}: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
   } catch (e) {
     check(false, `${label}: ${String(e).split('\n')[0]}`);
