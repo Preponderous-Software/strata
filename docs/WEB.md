@@ -134,6 +134,101 @@ per callback instead: `emscripten_set_main_loop_arg` (as the demo does), or
 `requestAnimationFrame` in JavaScript calling an exported function. Present is
 a no-op in a browser: the canvas is shown when the callback returns.
 
+## The web kit
+
+`web/kit/` is a shell for pages that embed one Strata scene in the page's own
+WebGL 2 context (`STRATA_SURFACE_HOST_CONTEXT`): data views, dashboards and
+viewers, where the page owns the data, the HTML around the canvas and the
+input, and a small C++ file draws. It covers the shell around the scene and
+leaves the scene alone: no scene graph, no data-to-3D mapping. Games that use
+`STRATA_SURFACE_WINDOW` and SDL's input can still use its loading shell and
+its browser tools.
+
+The release's `strata-<v>-wasm32-emscripten.tar.gz` carries it as `kit/`:
+
+| File | What it is |
+|---|---|
+| `strata_kit.h` | Header-only C++ host shell. Creates the WebGL 2 context (`preserveDrawingBuffer` on, so frames can be read back) and the engine; resizing; three quality tiers (sun cascades, shadow map size, point-light budget, point thinning); an orbit camera and its view-projection matrix; the sun from latitude, longitude and time; per-frame batches of primitives, points (alpha clamped), lines and prioritised point lights; frame stats. Exports `sk_init`, `sk_restore`, `sk_resize`, `sk_set_quality`, `sk_set_camera`, `sk_set_sun`, `sk_view_proj`, `sk_stats`, `sk_frame` and `sk_kit_version`. Natively (no Emscripten) the same file opens a headless engine: `sk_init_headless` and `sk_save_png`, so a scene also renders stills |
+| `strata-kit.js` | Dependency-free page shell (`window.StrataKit`): canvas sizing with a capped device pixel ratio; adaptive quality (pixel density first, then the tier, with settle windows, reset when the tab is hidden); orbit, pan, pinch, wheel and keyboard camera; `project()` and `pick()` in CSS pixels; `webglcontextlost`/`webglcontextrestored`; `?quality=`, `?fps=1` and `?drive=1`; label placement with collision and hysteresis (`StrataKit.placeLabels`); `window.__strataKit` for tools |
+| `strata-loader.js` | The loading shell (`window.StrataLoader`): the poster as a blurred backdrop, byte-accurate download progress with the size, and a fallback to the trailer clip or the poster, with the reason in words, when WebGL 2 is missing, the engine fails, a lost context does not come back, or the device is too slow at the lowest tier |
+| `build-kit.sh` | One parameterised build: emsdk version check, the Strata tarball's SHA-256 (or a source build's `libstrata.a`), fixed flags (`-O2 -fwasm-exceptions`, WebGL 2 only, `MODULARIZE`) and the export list. Copies the page scripts beside the `.wasm` |
+| `ci-snippet.yml` | A GitHub Actions job for a host that commits its build: rebuild, `git diff --exit-code`, and the smoke test |
+| `testing/smoke.cjs` | Playwright smoke test: at DPR 1, 2 and 3 (desktop mouse, tablet and phone touch) the frame is not one flat colour, the drawing buffer matches the capped DPR, and a real tap at each of the page's targets selects exactly what a direct pick there returns. `--context-loss` also loses and restores the context |
+| `testing/capture.cjs` | Steps scene time with `drive(t)` and saves frames (PNG, and GIF or MP4 through ffmpeg) |
+| `example/` | The smallest host: six pickable pillars. CI builds it with `build-kit.sh` against its own `libstrata.a` and runs the smoke test on it |
+
+### A host in three parts
+
+The C++ side includes the header once with `STRATA_KIT_MAIN` defined and
+defines three hooks. Its own setters (the data it draws) are ordinary exports:
+
+```cpp
+#define STRATA_KIT_MAIN
+#include "strata_kit.h"
+
+void strata_kit_configure(strata_kit::Options& o) { o.name = "garden"; }
+void strata_kit_engine_ready(strata_kit::Host& h) { /* terrain, meshes: again after a lost context */ }
+void strata_kit_build(strata_kit::Host& h, double t) {
+    h.add(STRATA_PRIMITIVE_CUBE, 0, 0.5f, 0, 1, 1, 1, {0.6f, 0.3f, 0.2f});
+    h.light(0, 2, 0, 6.0f, {1, 0.8f, 0.5f}, 1.5f, /*priority*/ 1);
+}
+STRATA_KIT_EXPORT void my_set_rows(const float* rows, int n) { /* keep them */ }
+```
+
+`build-kit.sh` builds it (settings from the environment or a sourced file;
+see the script's header):
+
+```sh
+KIT_SOURCE=scene/main.cpp KIT_OUT=web KIT_NAME=scene KIT_EXPORT_NAME=createScene \
+KIT_EXPORTS=_my_set_rows STRATA_VERSION=<v> STRATA_SHA256=<from SHA256SUMS> kit/build-kit.sh
+```
+
+The page loads the module through the loader and hands it to the kit:
+
+```html
+<canvas id="view"></canvas>
+<script src="strata-loader.js"></script>
+<script src="strata-kit.js"></script>
+<script>
+(async () => {
+  const module = await StrataLoader.load({script: "scene.js", factory: "createScene", wasm: "scene.wasm",
+    title: "the scene", poster: "poster.jpg", trailer: {webm: "clip.webm", mp4: "clip.mp4"}});
+  const kit = StrataKit.create({module, canvas: document.getElementById("view"),
+    frame(t) { /* write this frame's rows: module._my_set_rows(...) */ },
+    pick(x, y, radius) { /* nearest thing to (x, y) by kit.project(...) */ },
+    onTap(hit) {}, onSlow: () => StrataLoader.slow(), onFatal: (c, m) => StrataLoader.fallback(c, m)});
+  kit.start();
+  StrataLoader.done();
+})().catch(() => {});  // the loader already shows why
+</script>
+```
+
+Rules the kit keeps, which a hand-written shell tends to lose:
+
+- **Pointer maths stay in CSS pixels.** `project()` maps to the canvas's
+  CSS size and `pick()` takes client coordinates minus the canvas's rectangle,
+  so the drawing buffer's size, and so the device pixel ratio and its cap,
+  never enter picking. The smoke test's tap == pick check at DPR 3 (above the
+  default cap of 2) is what fails if that is broken.
+- **Pixel density is given up before shadows.** Frames over `slowMs`
+  (default 28 ms) averaged over 1.5 s first lower the DPR cap by a quarter,
+  down to 1, then the tier; each step waits 2.5 s to settle. Only then does
+  `onSlow` fire, once.
+- **Animation comes from scene time.** Under `?drive=1` the frame loop does
+  not run and `__strataKit.drive(t)` draws time `t` synchronously, so captures
+  and tests repeat.
+- **A lost context is rebuilt, not reloaded.** On `webglcontextrestored` the
+  kit calls `sk_restore`, which destroys the old engine (its GL objects died
+  with the context), makes a new context handle on the same canvas and a new
+  engine, and runs `strata_kit_engine_ready` again. Losing it a third time in
+  a minute, or no restore within 5 s, falls back.
+
+The kit has its own version (`STRATA_KIT_VERSION_STRING`, `StrataKit.version`;
+1.0 now), and `strata-kit.js` warns when the page's and the wasm's major
+versions differ. A host that needs a kit fix before the next Strata release
+can vendor `web/kit/` at a pinned commit and link the last release's
+`libstrata.a`: the kit uses only the C ABI.
+
 ## Beyond Nations (.NET `browser-wasm`)
 
 Notes for linking Strata into a .NET WebAssembly app (`wasm-tools` workload,
@@ -197,5 +292,7 @@ Playwright version pins Chromium and therefore SwiftShader. To bless new web
 goldens, add `--bless`: they are written to `<out>/golden/`. Bless from CI's
 pinned Chromium, as for the desktop goldens (see
 [GOLDEN_IMAGES.md](GOLDEN_IMAGES.md)).
+
+| The web kit | `web/kit/build-kit.sh web/kit/example/kit.conf` (with `KIT_OUT`, `STRATA_LIB`, `STRATA_INCLUDE`), then `node web/kit/testing/smoke.cjs <url> out --context-loss` | none: the checks are behavioural |
 
 The README's browser images come from `tools/make_web_media.py build-web`.

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Strata web kit example</title>
+<style>
+  :root { color-scheme: light dark; --bg: #101712; --fg: #e3ece4; --panel: rgba(18, 24, 20, 0.84); }
+  @media (prefers-color-scheme: light) { :root { --bg: #c9dcc0; --fg: #1d2a1f; --panel: rgba(255, 255, 255, 0.86); } }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+  #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .label { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font-size: 12px;
+    padding: 2px 8px; border-radius: 999px; background: var(--panel); }
+  #picked { position: fixed; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top));
+    background: var(--panel); padding: 6px 10px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="view" tabindex="0" role="img" aria-label="Six pillars round a lamp, drawn by Strata"></canvas>
+<div id="labels" aria-hidden="true"></div>
+<div id="picked" aria-live="polite">Tap a pillar.</div>
+<script src="strata-loader.js"></script>
+<script src="strata-kit.js"></script>
+<script>
+"use strict";
+const PILLARS = ["red", "amber", "green", "blue", "violet", "stone"].map((name, i) => {
+  const a = i * 2 * Math.PI / 6;
+  return {id: name, i, x: Math.cos(a) * 5, z: Math.sin(a) * 5, h: 1.5 + 0.5 * (i % 3)};
+});
+const labels = PILLARS.map((p) => {
+  const el = Object.assign(document.createElement("div"), {className: "label", textContent: p.id});
+  document.getElementById("labels").appendChild(el);
+  return el;
+});
+let kit = null, selected = null;
+
+function pick(x, y, radius) {
+  let best = null, bestD = radius * radius;
+  for (const p of PILLARS) {
+    for (const yy of [p.h * 0.4, p.h + 0.35]) {
+      const s = kit.project(p.x, yy, p.z);
+      if (!s) continue;
+      const d = (s.x - x) ** 2 + (s.y - y) ** 2;
+      if (d < bestD) { bestD = d; best = p; }
+    }
+  }
+  return best;
+}
+
+(async () => {
+  let mod;
+  try {
+    mod = await StrataLoader.load({script: "example.js", factory: "createKitExample", wasm: "example.wasm",
+      title: "the kit example"});
+  } catch (e) { return; }  // the loader is already showing why
+  const canvas = document.getElementById("view");
+  try {
+    kit = StrataKit.create({
+      module: mod, canvas,
+      camera: {yaw: 0.9, pitch: 0.55, dist: 18, tx: 0, ty: 0.8, tz: 0},
+      limits: {maxDist: 60},
+      pick,
+      idOf: (p) => p.id,
+      onTap(p) {
+        selected = p;
+        kit.selected = p;
+        mod._ex_set_selected(p ? p.i : -1);
+        document.getElementById("picked").textContent = p ? `Picked: ${p.id}` : "Tap a pillar.";
+      },
+      onSlow: () => StrataLoader.slow(),
+      onFatal: (code, msg) => StrataLoader.fallback(code, msg),
+      after() {
+        StrataKit.placeLabels(PILLARS.map((p, i) => ({el: labels[i], q: kit.project(p.x, p.h + 1.0, p.z),
+          rank: p === selected ? 0 : 2})));
+      },
+      targets: () => PILLARS.map((p) => {
+        const s = kit.project(p.x, p.h * 0.4, p.z);
+        const r = canvas.getBoundingClientRect();
+        return s && {id: p.id, x: s.x + r.left, y: s.y + r.top};
+      }).filter(Boolean),
+    });
+  } catch (e) {
+    return StrataLoader.fallback(e.code === "no-webgl2" ? "no-webgl2" : "engine");
+  }
+  // A fixed mid-morning sun, so captures repeat.
+  kit.setSun(Date.UTC(2026, 5, 21, 15, 0, 0) / 1000, 40, -105);
+  kit.start();
+  if (kit.driven) kit.drive(0);
+  StrataLoader.done();
+  canvas.focus({preventScroll: true});
+})();
+</script>
+</body>
+</html>

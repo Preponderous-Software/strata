@@ -1,0 +1,32 @@
+# A GitHub Actions job for a host that commits a web-kit build (its .js,
+# .wasm, strata-kit.js and strata-loader.js), so that it can be served with
+# no build step. CI rebuilds it and fails if the committed files differ:
+# the build is byte-reproducible for a pinned emsdk and Strata.
+#
+# Copy it under `jobs:` in a workflow and change the three paths. It uses
+# first-party actions only. The smoke test is optional; it needs a page that
+# serves without the host's backend, or a host that can start one here.
+  strata-scene:
+    runs-on: ubuntu-latest
+    env:
+      EMSDK_VERSION: "6.0.11"          # Strata's; everything in one .wasm must agree
+      PLAYWRIGHT_VERSION: "1.61.1"     # pins Chromium, and so SwiftShader
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install emsdk
+        run: |
+          git clone --depth 1 --branch "$EMSDK_VERSION" https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install "$EMSDK_VERSION"
+          "$RUNNER_TEMP/emsdk/emsdk" activate "$EMSDK_VERSION"
+      - name: Rebuild and compare
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          scene/build.sh                                  # 1: your script; it runs build-kit.sh
+          git diff --stat --exit-code -- web/             # 2: where the build is committed
+      - name: Smoke test (tap == pick at DPR 1, 2 and 3)
+        run: |
+          npm install --no-save --prefix "$RUNNER_TEMP/pw" "playwright@$PLAYWRIGHT_VERSION"
+          npx --prefix "$RUNNER_TEMP/pw" playwright install --with-deps chromium
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory web &
+          NODE_PATH="$RUNNER_TEMP/pw/node_modules" \
+            node scene/strata-kit/testing/smoke.cjs http://127.0.0.1:8765/index.html smoke-out   # 3: the kit and the page
