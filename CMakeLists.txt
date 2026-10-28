@@ -57,6 +57,17 @@ if(EMSCRIPTEN)
         -sSTACK_SIZE=1MB)
 endif()
 
+if(MSVC)
+    # Deterministic objects and DLL: no time stamps, so the same sources give
+    # the same strata.dll on every run (as the Linux build already gives the
+    # same libstrata.so), and its SHA-256 can be pinned in the Python
+    # binding's KNOWN_RELEASES before a release is tagged
+    # (tools/known_releases.py). Set before the dependencies, so SDL3's objects
+    # are deterministic too.
+    add_compile_options(/Brepro)
+    add_link_options(/Brepro)
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(StrataDependencies)
 include(StrataWarnings)

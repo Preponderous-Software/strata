@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- A release's Python binding can `load_release` its own version with no
+  hash. Until now `KNOWN_RELEASES` gained a version's SHA-256s only after
+  that release was published, so the binding at tag v0.6.0 stopped at 0.5.0.
+  The libraries are now reproducible on every platform (MSVC builds with
+  `/Brepro`; the Linux build already was), so the release-prep pull request
+  pins its own hashes with the new `tools/known_releases.py pin`, and the
+  `package` job checks them: on a tag, a missing or different entry fails
+  the workflow before the release job; on other runs of an untagged version
+  it warns with the lines to pin. Tests in `tests/python/test_known_releases.py`
+  cover the tool, check that every earlier release (0.4.0 on) is pinned and
+  that the binding's version is the project's. CONTRIBUTING.md has the
+  release steps. No ABI or pixel change.
 - `strata_set_lighting` errors now include the rejected value for
   `legacy_ambient` (legacy and space modes), `time_of_day` and
   `latitude_degrees`, `shadow_distance` and `split_lambda`, the same way the
