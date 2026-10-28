@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <initializer_list>
 
 #include "core/error.hpp"
 #include "core/log.hpp"
@@ -17,6 +18,14 @@ GlApi requestedGlApi() {
     if (std::strcmp(value, "gles3") == 0) return GlApi::Gles3;
     fail(STRATA_ERROR_INVALID_ARGUMENT, "STRATA_GL_API must be gl45 or gles3 (got '%s')", value);
 #endif
+}
+
+const char* headlessMesaDriverOverride(bool has_dxg, const char* (*env)(const char* name)) {
+    if (!has_dxg) return nullptr;
+    for (const char* chosen : {"GALLIUM_DRIVER", "LIBGL_ALWAYS_SOFTWARE", "MESA_LOADER_DRIVER_OVERRIDE"}) {
+        if (env(chosen) != nullptr) return nullptr;
+    }
+    return "llvmpipe";
 }
 
 void Surface::setRelativeMouseMode(bool enabled) {
