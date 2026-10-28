@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.7.0
+
+The web kit: the shell around a Strata scene embedded in a web page, shipped
+in the release's `strata-0.7.0-wasm32-emscripten.tar.gz` as `kit/`, so hosts
+stop copying it from one another. The engine and its C ABI are unchanged:
+`STRATA_ABI_VERSION` stays 1 and `STRATA_ABI_MINOR` stays 12, and the
+libraries draw what 0.6.0 drew. The kit carries its own version (1.0). The
+Python binding also knows the v0.6.0 libraries' SHA-256s.
+
 - The web kit (`web/kit/`, shipped in the wasm32-emscripten tarball as
   `kit/`; docs/WEB.md, "The web kit"): the shell around a Strata scene
   embedded in a page's own WebGL 2 context, so hosts stop copying it. No ABI
