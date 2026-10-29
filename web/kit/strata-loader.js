@@ -374,8 +374,12 @@
     bar.setAttribute("role", "status");
     bar.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom));" +
       "z-index:21;background:rgba(0,0,0,.7);color:#fff;padding:8px 12px;border-radius:8px;" +
-      "font:13px system-ui,sans-serif;display:flex;gap:10px;align-items:center;max-width:calc(100vw - 32px)";
+      "font:13px system-ui,sans-serif;display:flex;flex-wrap:wrap;gap:10px;align-items:center;max-width:calc(100vw - 32px)";
     bar.appendChild(el("span", "", "This device is drawing slowly."));
+    // The buttons wrap under the text together when the row is too narrow
+    // (a 390 px phone), rather than squeezing it onto several lines.
+    const buttons = el("div", "");
+    buttons.style.cssText = "display:flex;gap:10px;margin-left:auto";
     const b = el("button", "", opts.trailer ? "Show the clip" : (opts.fallback.text || "Open the simpler view"));
     b.type = "button";
     b.style.cssText = "font:inherit;min-height:36px;padding:4px 10px;border-radius:6px;border:0;cursor:pointer";
@@ -388,8 +392,9 @@
     x.setAttribute("aria-label", "Dismiss");
     x.style.cssText = b.style.cssText;
     x.addEventListener("click", () => bar.remove());
-    bar.appendChild(b);
-    bar.appendChild(x);
+    buttons.appendChild(b);
+    buttons.appendChild(x);
+    bar.appendChild(buttons);
     document.body.appendChild(bar);
   }
 

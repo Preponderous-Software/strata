@@ -154,7 +154,7 @@ from `v0.7.0` on (older tarballs have no `kit/`):
 | `strata-loader.js` | The loading shell (`window.StrataLoader`): the poster as a blurred backdrop, byte-accurate download progress with the size (or, for a host that boots its own way, `StrataLoader.show()` and `StrataLoader.progress(fraction, label)`: see below), and a fallback to the trailer clip or the poster, with the reason in words, when WebGL 2 is missing, the engine fails, a lost context does not come back, or the device is too slow at the lowest tier |
 | `build-kit.sh` | One parameterised build: emsdk version check, the Strata tarball's SHA-256 (or a source build's `libstrata.a`), fixed flags (`-O2 -fwasm-exceptions`, WebGL 2 only, `MODULARIZE`, and `INCOMING_MODULE_JS_API` with `wasmBinary`, so the glue takes the bytes `strata-loader.js` already fetched instead of downloading the `.wasm` again) and the export list. Copies the page scripts beside the `.wasm`. A host that links its own glue with `strata-loader.js` needs `wasmBinary` in `-sINCOMING_MODULE_JS_API` too: emsdk 6.0.11's default list leaves it out |
 | `ci-snippet.yml` | A GitHub Actions job for a host that commits its build: rebuild, `git diff --exit-code`, and the smoke test |
-| `testing/smoke.cjs` | Playwright smoke test: at DPR 1, 2 and 3 (desktop mouse, tablet and phone touch) the frame is not one flat colour, the drawing buffer matches the capped DPR, and a real tap at each of the page's targets selects exactly what a direct pick there returns. `--context-loss` also loses and restores the context. Every `.wasm` the page loads must be requested once (cache hits count). First, on a blank page, the loading shell: `progress()` clamps, stays monotonic and shows its label, and `slow()` twice shows one bar |
+| `testing/smoke.cjs` | Playwright smoke test: at DPR 1, 2 and 3 (desktop mouse, tablet and phone touch) the frame is not one flat colour, the drawing buffer matches the capped DPR, and a real tap at each of the page's targets selects exactly what a direct pick there returns. `--context-loss` also loses and restores the context. Every `.wasm` the page loads must be requested once (cache hits count). First, on a blank page, the loading shell: `progress()` clamps, stays monotonic and shows its label, `slow()` twice shows one bar, and at 390 px the slow bar's text and buttons keep one line each |
 | `testing/capture.cjs` | Steps scene time with `drive(t)` and saves frames (PNG, and GIF or MP4 through ffmpeg) |
 | `example/` | The smallest host: six pickable pillars. CI builds it with `build-kit.sh` against its own `libstrata.a` and runs the smoke test on it |
 
@@ -213,6 +213,7 @@ returns false, with the fallback already showing, when WebGL 2 is missing.
 back (a later, lower value is ignored), and shows the label, or the
 percentage, under the bar; it does nothing once `done()` or a fallback has
 run. `slow()` shows its bar once: a second call while it is up does nothing.
+On a narrow screen (a 390 px phone) the bar's buttons wrap under its text.
 
 ```js
 if (StrataLoader.show({title: "the game", poster: "poster.jpg", fallback: {href: "/", text: "Back"}})) {
