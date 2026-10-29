@@ -85,6 +85,7 @@ static_assert(sizeof(StrataRect) == 32, "ABI 1.11");
 static_assert(offsetof(StrataRect, width) == 8 && offsetof(StrataRect, color) == 16, "ABI 1.11");
 static_assert(STRATA_MESH_TRANSLUCENT == 0x2u && STRATA_POINT_ON_TOP == 0x2u && STRATA_LINES_ON_TOP == 0x1u, "ABI 1.11");
 static_assert(STRATA_MESH_UNLIT == 0x1u, "");
+static_assert(STRATA_MESH_COLORS_RGBA == 0x4u, "ABI 1.15");
 // ABI 1.8
 static_assert(sizeof(StrataRayHit) == 36, "");
 static_assert(offsetof(StrataRayHit, mesh_id) == 0, "");
@@ -109,7 +110,7 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 14u);
+    CHECK(strata_abi_minor() >= 15u);
 }
 
 TEST(point_light_layout_is_queryable) {

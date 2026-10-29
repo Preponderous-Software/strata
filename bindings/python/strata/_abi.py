@@ -30,7 +30,7 @@ from ctypes import (
 #: The major version this binding was written against (STRATA_ABI_VERSION).
 ABI_VERSION = 1
 #: The newest minor whose additions this binding declares (STRATA_ABI_MINOR).
-ABI_MINOR = 14
+ABI_MINOR = 15
 
 # ---------------------------------------------------------------- status
 
@@ -80,6 +80,7 @@ TEXTURE_CLAMP_V = 0x4  # ABI 1.7
 TEXTURE_NEAREST = 0x8  # ABI 1.10
 MESH_UNLIT = 0x1  # ABI 1.7
 MESH_TRANSLUCENT = 0x2  # ABI 1.11
+MESH_COLORS_RGBA = 0x4  # ABI 1.15
 
 POINT_SOFT = 0x1  # ABI 1.5
 POINT_ON_TOP = 0x2  # ABI 1.11

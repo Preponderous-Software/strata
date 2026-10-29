@@ -71,9 +71,10 @@
  *   1.13 wide lines (StrataWideLineVertex, strata_submit_wide_lines,
  *        STRATA_LINES_ROUND_CAPS)
  *   1.14 world-to-screen projection and world-anchored text
- *        (strata_project_point, strata_submit_world_text) */
+ *        (strata_project_point, strata_submit_world_text)
+ *   1.15 per-vertex RGBA mesh colours (STRATA_MESH_COLORS_RGBA) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 14u
+#define STRATA_ABI_MINOR 15u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -294,7 +295,8 @@ typedef struct StrataTerrainTile {
 typedef struct StrataMesh {
     const float* positions;  /* vertex_count xyz, world space */
     const float* normals;    /* NULL (the engine computes area-weighted smooth normals) or vertex_count xyz */
-    const float* colors;     /* NULL (use color) or vertex_count linear RGB triples */
+    const float* colors;     /* NULL (use color) or vertex_count linear RGB triples (RGB, not RGBA:
+                                RGBA here is misread without an error; see STRATA_MESH_COLORS_RGBA) */
     const uint32_t* indices; /* index_count indices; triangles wind counter-clockwise seen from outside */
     int32_t vertex_count;    /* 3..STRATA_MAX_MESH_VERTICES */
     int32_t index_count;     /* > 0, a multiple of 3, every index < vertex_count */
@@ -335,6 +337,14 @@ typedef struct StrataMesh {
  * is exact for separate objects and approximate where they interpenetrate.
  * Combines with STRATA_MESH_UNLIT. Not in strata_read_depth_f32's depth. */
 #define STRATA_MESH_TRANSLUCENT 0x2u
+/* ABI 1.15. mesh.colors holds vertex_count RGBA quadruples (16 bytes a vertex)
+ * instead of RGB triples, for a host whose vertex colours are RGBA already.
+ * The fourth component is validated like the others (finite, >= 0) and then
+ * ignored: a mesh's alpha is still mesh.color[3] (STRATA_MESH_TRANSLUCENT).
+ * strata_add_mesh has no flags, so it always reads RGB; pass the mesh through
+ * strata_add_textured_mesh with texture 0 to use this. A 1.7 to 1.12 library
+ * rejects the flag as unknown; check strata_abi_minor() >= 15 first. */
+#define STRATA_MESH_COLORS_RGBA 0x4u
 
 /* ABI 1.7. A static mesh (as strata_add_mesh) with texture coordinates and a
  * texture. A sphere for a planet map is a latitude-longitude grid with u =

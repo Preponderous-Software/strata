@@ -8,7 +8,10 @@
 
 namespace strata::render {
 
-void validateStaticMesh(const StrataMesh& m) {
+void validateStaticMesh(const StrataMesh& m, int colorComponents) {
+    if (colorComponents != 3 && colorComponents != 4) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: colour components must be 3 or 4 (got %d)", colorComponents);
+    }
     if (!m.positions) fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: positions is NULL");
     if (!m.indices) fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: indices is NULL");
     if (m.vertex_count < kMeshMinVertices || m.vertex_count > kMeshMaxVertices) {
@@ -40,10 +43,11 @@ void validateStaticMesh(const StrataMesh& m) {
         }
     }
     if (m.colors) {
-        for (size_t i = 0; i < vertices * 3; ++i) {
+        const size_t stride = static_cast<size_t>(colorComponents);
+        for (size_t i = 0; i < vertices * stride; ++i) {
             if (!(m.colors[i] >= 0.0f) || !std::isfinite(m.colors[i])) {
                 fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: colour of vertex %lu must be finite and >= 0",
-                     static_cast<unsigned long>(i / 3));
+                     static_cast<unsigned long>(i / stride));
             }
         }
     } else {
@@ -59,8 +63,8 @@ void validateStaticMesh(const StrataMesh& m) {
     }
 }
 
-StaticMesh buildStaticMesh(const StrataMesh& m, const float* uvs) {
-    validateStaticMesh(m);
+StaticMesh buildStaticMesh(const StrataMesh& m, const float* uvs, int colorComponents) {
+    validateStaticMesh(m, colorComponents);
     const size_t count = static_cast<size_t>(m.vertex_count);
     if (uvs) {
         for (size_t i = 0; i < count * 2; ++i) {
@@ -96,7 +100,7 @@ StaticMesh buildStaticMesh(const StrataMesh& m, const float* uvs) {
     StaticMesh mesh;
     mesh.vertices.reserve(count * StaticMesh::kFloatsPerVertex);
     for (size_t v = 0; v < count; ++v) {
-        const float* rgb = m.colors ? m.colors + v * 3 : m.color;
+        const float* rgb = m.colors ? m.colors + v * static_cast<size_t>(colorComponents) : m.color;
         const float out[StaticMesh::kFloatsPerVertex] = {m.positions[v * 3], m.positions[v * 3 + 1], m.positions[v * 3 + 2],
                                                          normals[v].x,       normals[v].y,           normals[v].z,
                                                          rgb[0],             rgb[1],                 rgb[2],

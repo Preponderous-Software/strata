@@ -85,7 +85,7 @@ and does not disconnect.
 
 | Harness sends | Fields | Engine replies |
 |---|---|---|
-| `hello` | `protocol: 1` | `protocol`, `strata` (version), `abi` (`"1.<STRATA_ABI_MINOR>"`, e.g. `"1.14"`), `width`, `height`, `surface`, `clock`, `step`, `frame` |
+| `hello` | `protocol: 1` | `protocol`, `strata` (version), `abi` (`"1.<STRATA_ABI_MINOR>"`, e.g. `"1.15"`), `width`, `height`, `surface`, `clock`, `step`, `frame` |
 | `event` | `type` (`quit`, `key_down`, `key_up`, `mouse_motion`, `mouse_button_down`, `mouse_button_up`, `mouse_wheel`, `resized`, `text_input`), and any of `scancode`, `modifiers`, `repeat`, `button`, `width`, `height`, `x`, `y`, `dx`, `dy`, `text` (at most 31 bytes) | `queued`: the events now waiting |
 | `clock` | `mode: "free"` or `"stepped"`, optional `step` (seconds) | `clock`, `step` |
 | `step` | `frames` (1 to 1000000) | after the last granted frame's `present`: `frame` (frames presented so far) and `frames_run`. Stepped clock only |

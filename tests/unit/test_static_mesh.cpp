@@ -97,6 +97,42 @@ TEST(static_mesh_uses_host_normals_and_colours) {
     }
 }
 
+TEST(static_mesh_reads_rgba_vertex_colours_with_four_components) {
+    // ABI 1.15 (STRATA_MESH_COLORS_RGBA): RGBA quadruples give each vertex the
+    // same colour as the RGB triples; the alpha is skipped.
+    std::vector<float> rgb(12), rgba(16);
+    for (int v = 0; v < 4; ++v) {
+        for (int c = 0; c < 3; ++c) {
+            const float x = 0.1f * static_cast<float>(v * 3 + c);
+            rgb[static_cast<size_t>(v * 3 + c)] = x;
+            rgba[static_cast<size_t>(v * 4 + c)] = x;
+        }
+        rgba[static_cast<size_t>(v * 4 + 3)] = 0.5f;
+    }
+    StrataMesh a = mesh(kQuad, kQuadIndices), b = mesh(kQuad, kQuadIndices);
+    a.colors = rgb.data();
+    b.colors = rgba.data();
+    const StaticMesh fromRgb = buildStaticMesh(a);
+    const StaticMesh fromRgba = buildStaticMesh(b, nullptr, 4);
+    CHECK(fromRgb.vertices == fromRgba.vertices);
+    CHECK(fromRgba.vertices[StaticMesh::kFloatsPerVertex + 6] == rgb[3]);  // vertex 1 starts at rgba[4], not rgba[3]
+
+    // The alpha is validated like the other components, naming the vertex.
+    rgba[2 * 4 + 3] = -1.0f;
+    try {
+        validateStaticMesh(b, 4);
+        CHECK(false);
+    } catch (const strata::Error& e) {
+        CHECK(std::strstr(e.what(), "colour of vertex 2") != nullptr);
+    }
+    try {
+        validateStaticMesh(a, 5);
+        CHECK(false);
+    } catch (const strata::Error& e) {
+        CHECK(std::strstr(e.what(), "3 or 4") != nullptr);
+    }
+}
+
 TEST(static_mesh_rejects_bad_meshes_naming_the_field) {
     const float nan = std::numeric_limits<float>::quiet_NaN();
     StrataMesh m = mesh(kQuad, kQuadIndices);

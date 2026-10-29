@@ -211,6 +211,30 @@ class Render(unittest.TestCase):
             with self.assertRaises(ValueError):
                 engine.submit_world_text([strata.Text(0, 0, 8, 0, (1, 1, 1, 1), b"x")], [])
 
+    def test_rgba_vertex_colours_with_the_flag_draw_as_rgb(self):
+        # ABI 1.15: the same quad, coloured per vertex as RGB triples and as
+        # RGBA quadruples with MESH_COLORS_RGBA, draws the same pixels.
+        quad = dict(positions=[-30, -20, -5, 30, -20, -5, 30, 20, -5, -30, 20, -5], indices=[0, 1, 2, 0, 2, 3])
+        rgb = [0.9, 0.1, 0.1, 0.1, 0.9, 0.1, 0.1, 0.1, 0.9, 0.9, 0.9, 0.1]
+        rgba = [c for v in range(4) for c in rgb[v * 3 : v * 3 + 3] + [0.5]]
+        frames = []
+        for colors, flags in ((rgb, 0), (rgba, strata.MESH_COLORS_RGBA)):
+            with strata.Engine(self.lib, 64, 36) as engine:
+                engine.set_camera(self.lib.look_at((0, 0, 10), (0, 0, 0), fov_y_degrees=60, aspect=64 / 36, far_plane=50))
+                engine.set_lighting(self.lib.lighting_defaults(strata.LIGHTING_LEGACY))
+                engine.add_mesh(colors=colors, flags=flags, **quad)
+                engine.begin_frame(clear_color=(0, 0, 0, 1))
+                engine.end_frame()
+                frames.append(engine.read_pixels()[0])
+        self.assertEqual(frames[0], frames[1])
+        corners = {frames[0][i * 4 : i * 4 + 3] for i in (0, 63, 35 * 64, 35 * 64 + 63)}
+        self.assertEqual(len(corners), 4)  # four different corner colours: the colours are per vertex
+        with strata.Engine(self.lib, 16, 16) as engine:
+            with self.assertWarns(RuntimeWarning):
+                engine.add_mesh(colors=rgba, **quad)  # RGBA without the flag: read as RGB
+            with self.assertRaises(ValueError):
+                engine.add_mesh(colors=rgb[:-3], **quad)  # one vertex short
+
     def test_errors_carry_status_and_text(self):
         with strata.Engine(self.lib, 32, 32) as engine:
             with self.assertRaises(strata.StrataError) as caught:

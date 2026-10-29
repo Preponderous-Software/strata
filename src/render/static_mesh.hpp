@@ -31,11 +31,12 @@ struct StaticMesh {
 // a NULL positions or indices array, vertex_count outside 3..16777216,
 // index_count not a positive multiple of 3, an index out of range, a
 // non-finite position or normal, a zero-length normal, or a non-finite or
-// negative colour.
-void validateStaticMesh(const StrataMesh& mesh);
+// negative colour. colorComponents is 3 (mesh.colors is RGB triples) or 4
+// (RGBA quadruples, STRATA_MESH_COLORS_RGBA, ABI 1.15; the alpha is ignored).
+void validateStaticMesh(const StrataMesh& mesh, int colorComponents = 3);
 
 // Validates, then builds the mesh. uvs is NULL (every vertex at 0, 0) or
 // vertex_count finite (u, v) pairs.
-StaticMesh buildStaticMesh(const StrataMesh& mesh, const float* uvs = nullptr);
+StaticMesh buildStaticMesh(const StrataMesh& mesh, const float* uvs = nullptr, int colorComponents = 3);
 
 }  // namespace strata::render
