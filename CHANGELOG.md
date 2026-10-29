@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.7.0
+
+The web kit: the shell around a Strata scene embedded in a web page, shipped
+in the release's `strata-0.7.0-wasm32-emscripten.tar.gz` as `kit/`, so hosts
+stop copying it from one another. The engine and its C ABI are unchanged:
+`STRATA_ABI_VERSION` stays 1 and `STRATA_ABI_MINOR` stays 12, and the
+libraries draw what 0.6.0 drew. The kit carries its own version (1.1). The
+Python binding knows the v0.6.0 libraries' SHA-256s and, for the first time,
+this release's own (`strata.load_release("0.7.0")` needs no hash).
+
 - A release's Python binding can `load_release` its own version with no
   hash. Until now `KNOWN_RELEASES` gained a version's SHA-256s only after
   that release was published, so the binding at tag v0.6.0 stopped at 0.5.0.
@@ -53,16 +63,6 @@
   `build-kit.sh` now passes that list with `wasmBinary` added (the example's
   `.wasm` is unchanged; its `.js` reads `Module.wasmBinary`), and
   `testing/smoke.cjs` fails when any `.wasm` is requested more than once.
-
-## 0.7.0
-
-The web kit: the shell around a Strata scene embedded in a web page, shipped
-in the release's `strata-0.7.0-wasm32-emscripten.tar.gz` as `kit/`, so hosts
-stop copying it from one another. The engine and its C ABI are unchanged:
-`STRATA_ABI_VERSION` stays 1 and `STRATA_ABI_MINOR` stays 12, and the
-libraries draw what 0.6.0 drew. The kit carries its own version (1.0). The
-Python binding also knows the v0.6.0 libraries' SHA-256s.
-
 - The web kit (`web/kit/`, shipped in the wasm32-emscripten tarball as
   `kit/`; docs/WEB.md, "The web kit"): the shell around a Strata scene
   embedded in a page's own WebGL 2 context, so hosts stop copying it. No ABI
