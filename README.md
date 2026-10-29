@@ -66,6 +66,11 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 
 ## Made with Strata
 
+<a href="docs/SHOWCASE.md"><img src="docs/media/showcase/family.jpg" width="480" alt="Strata as a glowing core with eighteen projects on three rings around it: renders and previews inside, simulations and views in the middle, games outside"></a>
+
+<sub>The family, drawn by Strata itself (`tools/make_family_media.py`): one
+ring per kind of project, each sphere sized by its repository.</sub>
+
 <table>
   <tr>
     <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/beyond-nations.jpg" width="200" alt="Beyond Nations"></a><br>Beyond Nations</td>
