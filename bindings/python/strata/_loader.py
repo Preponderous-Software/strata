@@ -40,6 +40,8 @@ KNOWN_RELEASES = {
     ("0.5.0", "win-x64"): "8a0ae3dedfb13cc5a0a66a4301cba6a625137d7f86e44b13bb8dbd587dfb0bcd",
     ("0.6.0", "linux-x64"): "3815068f90afa67b42177359a7ea918a5de321d7f7bad8706fa5275c4906af2a",
     ("0.6.0", "win-x64"): "93236e25bb38f422d2033d9d19ab9d181515078e0d6b63addbb1ec2a9d095c13",
+    ("0.7.0", "linux-x64"): "d4ccb236baff278f51a3c649929bab58a503651beb5e341caabc000906919a98",
+    ("0.7.0", "win-x64"): "df5399331f99ddc9bf99477e2c1cdea8522597ef261c3933d7df5e4d37f3580e",
 }
 
 
