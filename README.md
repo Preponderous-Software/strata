@@ -69,15 +69,15 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 <table>
   <tr>
     <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/beyond-nations.jpg" width="200" alt="Beyond Nations"></a><br>Beyond Nations</td>
-    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/steading.gif" width="200" alt="steading"></a><br>steading</td>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/steading.jpg" width="200" alt="steading"></a><br>steading</td>
     <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/kindling.jpg" width="200" alt="Kindling"></a><br>Kindling</td>
-    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/orrery.gif" width="200" alt="orrery"></a><br>orrery</td>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/orrery.jpg" width="200" alt="orrery"></a><br>orrery</td>
   </tr>
   <tr>
     <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/atman.jpg" width="200" alt="Atman"></a><br>Atman</td>
     <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/sisyphus.jpg" width="200" alt="Sisyphus"></a><br>Sisyphus</td>
     <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/familiar.jpg" width="200" alt="Familiar"></a><br>Familiar</td>
-    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/microbiome.gif" width="200" alt="Microbiome"></a><br>Microbiome</td>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/microbiome.jpg" width="200" alt="Microbiome"></a><br>Microbiome</td>
   </tr>
   <tr>
     <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/asn1-viz.jpg" width="200" alt="asn1-viz"></a><br>asn1-viz</td>
