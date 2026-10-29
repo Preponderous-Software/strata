@@ -24,6 +24,7 @@ static_assert(sizeof(GlyphInstance) == 32, "GlyphInstance is the text pipeline's
 // Each throws strata::Error(STRATA_ERROR_INVALID_ARGUMENT) naming the element
 // and the bad field, before anything is added.
 void validateLineVertices(const StrataLineVertex* vertices, size_t count);
+void validateWideLineVertices(const StrataWideLineVertex* vertices, size_t count);  // ABI 1.13
 void validatePoints(const StrataPoint* points, size_t count);
 void validateTexts(const StrataText* texts, size_t count);
 void validateRects(const StrataRect* rects, size_t count);  // ABI 1.11
@@ -56,6 +57,8 @@ public:
     void addPoints(const StrataPoint* points, size_t count);
     void addText(const StrataText* texts, size_t count);
     void addRects(const StrataRect* rects, size_t count);  // ABI 1.11
+    // ABI 1.13. flags: STRATA_LINES_ON_TOP, STRATA_LINES_ROUND_CAPS.
+    void addWideLines(const StrataWideLineVertex* vertices, size_t count, uint32_t flags);
 
     // Lines and points against the scene's depth, then (ABI 1.11) the ones
     // drawn on top of it, with the renderer's Frame uniform block (camera
@@ -67,6 +70,9 @@ public:
     int drawText(rhi::TargetHandle target, int width, int height);
 
     size_t lineVertexCount() const { return lines_.size() + linesOnTop_.size(); }
+    size_t wideLineVertexCount() const {
+        return wideLines_.size() + roundLines_.size() + wideLinesOnTop_.size() + roundLinesOnTop_.size();
+    }
     size_t pointCount() const {
         return solidPoints_.size() + softPoints_.size() + solidPointsOnTop_.size() + softPointsOnTop_.size();
     }
@@ -82,6 +88,10 @@ private:
     rhi::PipelineHandle linePipeline_, solidPointPipeline_, softPointPipeline_, textPipeline_;
     // ABI 1.11: the same pipelines with no depth test, and filled rectangles.
     rhi::PipelineHandle lineOnTopPipeline_, solidPointOnTopPipeline_, softPointOnTopPipeline_, rectPipeline_;
+    // ABI 1.13: wide lines with square or round ends, depth-tested or on top.
+    rhi::PipelineHandle widePipeline_, roundPipeline_, wideOnTopPipeline_, roundOnTopPipeline_;
+    rhi::BufferHandle wideBuffer_;
+    std::vector<StrataWideLineVertex> wideLines_, roundLines_, wideLinesOnTop_, roundLinesOnTop_;
     rhi::BufferHandle lineBuffer_, pointBuffer_, glyphBuffer_, rectBuffer_, viewportUniforms_;
     rhi::TextureHandle font_;
 

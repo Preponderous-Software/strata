@@ -93,6 +93,13 @@ static_assert(offsetof(StrataRayHit, distance) == 8, "");
 static_assert(offsetof(StrataRayHit, point) == 12, "");
 static_assert(offsetof(StrataRayHit, normal) == 24, "");
 static_assert(STRATA_STRUCT_RAY_HIT == 15, "");
+// ABI 1.13
+static_assert(sizeof(StrataWideLineVertex) == 36, "");
+static_assert(offsetof(StrataWideLineVertex, color) == 12, "");
+static_assert(offsetof(StrataWideLineVertex, width_pixels) == 28, "");
+static_assert(offsetof(StrataWideLineVertex, world_width) == 32, "");
+static_assert(STRATA_STRUCT_WIDE_LINE_VERTEX == 17, "");
+static_assert(STRATA_LINES_ROUND_CAPS == 0x2u, "");
 static_assert(STRATA_ABI_VERSION == 1u, "ABI 1 callers must keep working: additions bump STRATA_ABI_MINOR");
 #if UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu
 static_assert(sizeof(StrataEngineDesc) == 48, "64-bit targets");
@@ -102,7 +109,7 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 12u);
+    CHECK(strata_abi_minor() >= 13u);
 }
 
 TEST(point_light_layout_is_queryable) {
@@ -191,7 +198,7 @@ TEST(abi_1_8_calls_reject_bad_arguments_without_a_context) {
     CHECK(strata_struct_field_offset(STRATA_STRUCT_RAY_HIT, 3) == 12);
     CHECK(strata_struct_field_offset(STRATA_STRUCT_RAY_HIT, 4) == 24);
     CHECK(strata_struct_field_offset(STRATA_STRUCT_RAY_HIT, 5) == -1);
-    CHECK(strata_struct_size(17) == -1);
+    CHECK(strata_struct_size(18) == -1);  // one past the last struct id (ABI 1.13)
     const uint8_t texel[4] = {255, 255, 255, 255};
     StrataEngine* engine = reinterpret_cast<StrataEngine*>(0x1);  // never dereferenced: pointers are checked first
     CHECK(strata_update_texture_rgba8(nullptr, 1, 0, 0, 1, 1, texel) == STRATA_ERROR_INVALID_ARGUMENT);
@@ -388,4 +395,18 @@ TEST(abi_1_11_overlay_calls_reject_bad_arguments_without_a_context) {
     CHECK(strata_submit_rects(engine, &rect, -1) == STRATA_ERROR_INVALID_ARGUMENT);
     CHECK(strata_submit_lines_ex(nullptr, v, 2, STRATA_LINES_ON_TOP) == STRATA_ERROR_INVALID_ARGUMENT);
     CHECK(strata_submit_lines_ex(engine, nullptr, 2, 0) == STRATA_ERROR_INVALID_ARGUMENT);
+}
+
+TEST(abi_1_13_wide_lines_reject_bad_arguments_without_a_context) {
+    CHECK(strata_struct_size(STRATA_STRUCT_WIDE_LINE_VERTEX) == 36);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_WIDE_LINE_VERTEX, 0) == 0);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_WIDE_LINE_VERTEX, 1) == 12);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_WIDE_LINE_VERTEX, 2) == 28);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_WIDE_LINE_VERTEX, 3) == 32);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_WIDE_LINE_VERTEX, 4) == -1);
+    const StrataWideLineVertex v[2] = {};
+    StrataEngine* engine = reinterpret_cast<StrataEngine*>(0x1);  // never dereferenced: pointers are checked first
+    CHECK(strata_submit_wide_lines(nullptr, v, 2, 0) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_submit_wide_lines(engine, nullptr, 2, STRATA_LINES_ROUND_CAPS) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_submit_wide_lines(engine, v, -2, 0) == STRATA_ERROR_INVALID_ARGUMENT);
 }

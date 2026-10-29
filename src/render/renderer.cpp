@@ -805,6 +805,11 @@ void Renderer::submitRects(const StrataRect* rects, size_t count) {
     overlay_->addRects(rects, count);
 }
 
+void Renderer::submitWideLines(const StrataWideLineVertex* vertices, size_t count, uint32_t flags) {
+    if (!frameOpen_) fail(STRATA_ERROR_INVALID_STATE, "submit_wide_lines called outside begin_frame/end_frame");
+    overlay_->addWideLines(vertices, count, flags);
+}
+
 void Renderer::ensureOffscreenTarget(int width, int height) {
     if (offscreenTarget_ && width == offscreenWidth_ && height == offscreenHeight_) return;
     device_.destroy(offscreenTarget_);

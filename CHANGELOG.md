@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- Wide lines (ABI 1.13, #46). `strata_submit_lines` draws `GL_LINES`, which
+  are one pixel wide, and WebGL 2 draws no wider, so at DPR 2 or 3 a road,
+  river or route nearly vanished. `strata_submit_wide_lines(engine,
+  vertices, count, flags)` takes pairs of the new `StrataWideLineVertex` (36
+  bytes: position, colour, `width_pixels`, `world_width`;
+  `STRATA_STRUCT_WIDE_LINE_VERTEX` = 17) and draws each segment as a
+  camera-facing quad with a one-pixel antialiased edge, in the browser as on
+  the desktop. The width at each end is the larger of `width_pixels` and
+  `world_width` as projected there, and varies along the segment, so a
+  ribbon can taper; the colour varies too. Flags: `STRATA_LINES_ON_TOP` (as
+  for `strata_submit_lines_ex`) and the new `STRATA_LINES_ROUND_CAPS`, round
+  ends so a polyline's segments join without notches
+  (`strata_submit_lines_ex` still rejects it). A segment that crosses behind
+  the eye is cut there. `StrataLineVertex`, `strata_submit_lines` and
+  `strata_submit_lines_ex` are unchanged and draw exactly what they drew:
+  every existing golden passes as it was. `STRATA_ABI_MINOR` is 13. The C#
+  (`StrataWideLineVertex`, `strata_submit_wide_lines`, `LinesRoundCaps`)
+  and Python (`WideLineVertex`, `Engine.submit_wide_lines`,
+  `LINES_ROUND_CAPS`) bindings have it, and the web kit's host has
+  `Host::wideLine(...)` (round caps by default), submitted with the frame
+  and counted in `sk_stats` line segments; the kit's version stays 1.1, as
+  its page/wasm contract did not change. The scene format has `wide_line`;
+  new golden `w1_wide_lines`, unit tests for validation and the layout,
+  layout tests in C# and Python, and a Python test that a 10-pixel line
+  covers 10 pixels.
+
 - Web kit: the slow bar (`StrataLoader.slow()`) wraps its buttons under its
   text when the row is too narrow, and its width is no longer capped at half
   the viewport (an auto width beside `left:50%`). On a 390 px phone it used

@@ -133,6 +133,10 @@ const int32_t kRectFields[] = {STRATA_OFFSET(StrataRect, x),     STRATA_OFFSET(S
                                STRATA_OFFSET(StrataRect, width), STRATA_OFFSET(StrataRect, height),
                                STRATA_OFFSET(StrataRect, color)};
 
+const int32_t kWideLineVertexFields[] = {
+    STRATA_OFFSET(StrataWideLineVertex, position), STRATA_OFFSET(StrataWideLineVertex, color),
+    STRATA_OFFSET(StrataWideLineVertex, width_pixels), STRATA_OFFSET(StrataWideLineVertex, world_width)};
+
 #define STRATA_TABLE(type, fields) \
     FieldTable { static_cast<int32_t>(sizeof(type)), fields, static_cast<int32_t>(sizeof(fields) / sizeof(fields[0])) }
 
@@ -146,7 +150,7 @@ const FieldTable* fieldTable(int32_t structId) {
         STRATA_TABLE(StrataLineVertex, kLineVertexFields), STRATA_TABLE(StrataPoint, kPointFields),
         STRATA_TABLE(StrataText, kTextFields),             STRATA_TABLE(StrataSolarPosition, kSolarPositionFields),
         STRATA_TABLE(StrataTexturedMesh, kTexturedMeshFields), STRATA_TABLE(StrataRayHit, kRayHitFields),
-        STRATA_TABLE(StrataRect, kRectFields)};
+        STRATA_TABLE(StrataRect, kRectFields),             STRATA_TABLE(StrataWideLineVertex, kWideLineVertexFields)};
     if (structId < 0 || structId >= static_cast<int32_t>(sizeof tables / sizeof tables[0])) return nullptr;
     return &tables[structId];
 }
@@ -419,6 +423,14 @@ StrataStatus strata_submit_rects(StrataEngine* engine, const StrataRect* rects, 
     if (count < 0) return invalid("count is negative");
     if (count > 0 && !rects) return invalid("rects is NULL with a non-zero count");
     return guard([&] { engine->engine->submitRects(rects, static_cast<size_t>(count)); });
+}
+
+StrataStatus strata_submit_wide_lines(StrataEngine* engine, const StrataWideLineVertex* vertices, int32_t count,
+                                      uint32_t flags) {
+    if (!engine) return invalid("engine is NULL");
+    if (count < 0) return invalid("count is negative");
+    if (count > 0 && !vertices) return invalid("vertices is NULL with a non-zero count");
+    return guard([&] { engine->engine->submitWideLines(vertices, static_cast<size_t>(count), flags); });
 }
 
 StrataStatus strata_end_frame(StrataEngine* engine) {

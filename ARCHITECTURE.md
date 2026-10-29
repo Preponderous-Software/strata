@@ -327,6 +327,22 @@ drawing. They are frame inputs like primitives (submitted between
   `STRATA_LINES_ON_TOP`, and points with `STRATA_POINT_ON_TOP`, go into
   separate lists drawn after the depth-tested ones in the same pass, with the
   depth test off, so an arc behind a hill still shows.
+- **Wide lines (ABI 1.13).** `strata_submit_wide_lines` takes
+  `StrataWideLineVertex` pairs (a line vertex with `width_pixels` and
+  `world_width`). `GL_LINES` stays one pixel wide, and WebGL 2 caps
+  `lineWidth` at 1, so each segment is an instanced, camera-facing quad built
+  in the vertex shader from `gl_VertexID`, two vertex records per instance.
+  An end behind the eye (clip `w` below 10⁻³) is first moved along the
+  segment to just in front of it. The width at each end is
+  `max(width_pixels, world_width · P₁₁ · height / 2w)`, as for a point, and
+  is interpolated along the segment. The quad is one pixel wider all round
+  (and half its width longer for a round cap); the fragment shader measures
+  `gl_FragCoord` against the two window-space ends, passed `flat`, so the
+  edge is antialiased over one pixel, `STRATA_LINES_ROUND_CAPS` gives a
+  capsule, and the colour is mixed by the same parameter. They go into four
+  lists (square or round, depth-tested or on top), drawn after the one-pixel
+  lines of the same kind. One-pixel lines are untouched: the same pipeline,
+  the same draw.
 - **Rectangles (ABI 1.11).** `strata_submit_rects` adds filled, alpha-blended
   screen rectangles, drawn in the text pass as one instanced draw before the
   glyphs, so a panel backs the text drawn over it.

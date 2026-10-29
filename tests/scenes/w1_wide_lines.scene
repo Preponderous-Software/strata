@@ -1,0 +1,52 @@
+# ABI 1.13: wide lines (strata_submit_wide_lines) under the sun with its sky.
+# - a winding road, 7 pixels wide with round caps, drawn as 16 segments that
+#   share their ends, so the joints have no notches;
+# - a river 1.5 world units wide that runs from the far hills, under the
+#   camera and out behind it: it narrows with distance, and its segment that
+#   crosses behind the eye is cut there, not dropped or turned inside out;
+# - a ribbon that tapers from 18 to 2 pixels and fades from orange to yellow,
+#   with square ends;
+# - for comparison, a one-pixel line (strata_submit_lines) beside 2, 4 and 8
+#   pixel wide lines;
+# - a brown block hides the middle of a depth-tested wide line, while an
+#   on_top wide line in magenta shows through it.
+size 320 180
+camera 0 5 12  0 0.5 -2  60 0.1 100
+lighting sun 0.42 35  2 1024 40 0.6 0
+clear 0 0 0 1 sky
+mesh 0.30 0.50 0.25
+vertices -40 0 40  40 0 40  40 0 -40  -40 0 -40
+triangles 0 1 2  0 2 3
+item cube 3.5 1 -1  1.6 2 1.6  0.45 0.30 0.18
+wide_line -9.000 0.050 -8.000  -8.250 0.050 -6.839  0.85 0.85 0.80 1  7 0 round
+wide_line -8.250 0.050 -6.839  -7.500 0.050 -5.778  0.85 0.85 0.80 1  7 0 round
+wide_line -7.500 0.050 -5.778  -6.750 0.050 -4.908  0.85 0.85 0.80 1  7 0 round
+wide_line -6.750 0.050 -4.908  -6.000 0.050 -4.304  0.85 0.85 0.80 1  7 0 round
+wide_line -6.000 0.050 -4.304  -5.250 0.050 -4.019  0.85 0.85 0.80 1  7 0 round
+wide_line -5.250 0.050 -4.019  -4.500 0.050 -4.077  0.85 0.85 0.80 1  7 0 round
+wide_line -4.500 0.050 -4.077  -3.750 0.050 -4.472  0.85 0.85 0.80 1  7 0 round
+wide_line -3.750 0.050 -4.472  -3.000 0.050 -5.172  0.85 0.85 0.80 1  7 0 round
+wide_line -3.000 0.050 -5.172  -2.250 0.050 -6.114  0.85 0.85 0.80 1  7 0 round
+wide_line -2.250 0.050 -6.114  -1.500 0.050 -7.220  0.85 0.85 0.80 1  7 0 round
+wide_line -1.500 0.050 -7.220  -0.750 0.050 -8.392  0.85 0.85 0.80 1  7 0 round
+wide_line -0.750 0.050 -8.392  0.000 0.050 -9.531  0.85 0.85 0.80 1  7 0 round
+wide_line 0.000 0.050 -9.531  0.750 0.050 -10.538  0.85 0.85 0.80 1  7 0 round
+wide_line 0.750 0.050 -10.538  1.500 0.050 -11.326  0.85 0.85 0.80 1  7 0 round
+wide_line 1.500 0.050 -11.326  2.250 0.050 -11.828  0.85 0.85 0.80 1  7 0 round
+wide_line 2.250 0.050 -11.828  3.000 0.050 -12.000  0.85 0.85 0.80 1  7 0 round
+wide_line 7.000 0.040 -40.000  8.567 0.040 -30.000  0.15 0.35 0.85 1  0 1.5 round
+wide_line 8.567 0.040 -30.000  8.948 0.040 -20.000  0.15 0.35 0.85 1  0 1.5 round
+wide_line 8.948 0.040 -20.000  7.855 0.040 -10.000  0.15 0.35 0.85 1  0 1.5 round
+wide_line 7.855 0.040 -10.000  6.115 0.040 0.000  0.15 0.35 0.85 1  0 1.5 round
+wide_line 6.115 0.040 0.000  5.045 0.040 10.000  0.15 0.35 0.85 1  0 1.5 round
+wide_line 5.045 0.040 10.000  5.454 0.040 20.000  0.15 0.35 0.85 1  0 1.5 round
+wide_line 5.454 0.040 20.000  7.034 0.040 30.000  0.15 0.35 0.85 1  0 1.5 round
+wide_line -6 3.4 -6  2 2.2 -6  1 0.45 0.1 1 18 0 to 1 0.95 0.2 0.4 2 0
+line -9 4.60 0  -4 4.60 0  1 1 1 1
+wide_line -9 4.15 0  -4 4.15 0  1 1 1 1  2 0
+wide_line -9 3.70 0  -4 3.70 0  1 1 1 1  4 0
+wide_line -9 3.25 0  -4 3.25 0  1 1 1 1  8 0
+wide_line 1 1.4 -1  6 1.4 -1  1 1 1 1  6 0
+wide_line 1 0.6 -1  6 0.6 -1  1 0.2 0.9 1  6 0 round on_top
+rect 8 154 304 20  0 0 0 0.6
+text 16 156 16  1 1 1 1 : WIDE LINES

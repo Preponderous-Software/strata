@@ -30,7 +30,7 @@ from ctypes import (
 #: The major version this binding was written against (STRATA_ABI_VERSION).
 ABI_VERSION = 1
 #: The newest minor whose additions this binding declares (STRATA_ABI_MINOR).
-ABI_MINOR = 12
+ABI_MINOR = 13
 
 # ---------------------------------------------------------------- status
 
@@ -84,6 +84,7 @@ MESH_TRANSLUCENT = 0x2  # ABI 1.11
 POINT_SOFT = 0x1  # ABI 1.5
 POINT_ON_TOP = 0x2  # ABI 1.11
 LINES_ON_TOP = 0x1  # ABI 1.11, strata_submit_lines_ex
+LINES_ROUND_CAPS = 0x2  # ABI 1.13, strata_submit_wide_lines only
 TEXT_SHADOW = 0x1  # ABI 1.5
 
 CLEAR_COLOR = 1 << 0
@@ -345,6 +346,19 @@ class Rect(Structure):
     ]
 
 
+class WideLineVertex(Structure):
+    """ABI 1.13. 36 bytes: one end of a wide line segment."""
+
+    STRUCT_ID = 17
+    ABI_MINOR = 13
+    _fields_ = [
+        ("position", float3),
+        ("color", float4),
+        ("width_pixels", c_float),
+        ("world_width", c_float),
+    ]
+
+
 #: Every boundary struct, in STRATA_STRUCT_* id order.
 STRUCTS = (
     RenderItem,
@@ -364,6 +378,7 @@ STRUCTS = (
     TexturedMesh,
     RayHit,
     Rect,
+    WideLineVertex,
 )
 
 # ---------------------------------------------------------------- functions
@@ -430,6 +445,7 @@ FUNCTIONS = {
     "strata_submit_text": (5, _status, [_engine, _p(Text), c_int32]),
     "strata_submit_lines_ex": (11, _status, [_engine, _p(LineVertex), c_int32, c_uint32]),
     "strata_submit_rects": (11, _status, [_engine, _p(Rect), c_int32]),
+    "strata_submit_wide_lines": (13, _status, [_engine, _p(WideLineVertex), c_int32, c_uint32]),
     "strata_end_frame": (0, _status, [_engine]),
     "strata_present": (0, _status, [_engine]),
     "strata_get_frame_stats": (0, _status, [_engine, _p(FrameStats)]),

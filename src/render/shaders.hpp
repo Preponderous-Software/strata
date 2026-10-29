@@ -425,6 +425,109 @@ inline const char* kSoftPointFragment =
     "    fragColor = vec4(vColor.rgb, vColor.a * a);\n"
     "}\n";
 
+// Wide lines (ABI 1.13): one camera-facing quad per segment, six vertices
+// from gl_VertexID, each instance two StrataWideLineVertex ends. An end behind
+// the eye is first moved along the segment to just in front of it. The quad
+// is the segment's width plus one pixel all round and, for a round cap, half
+// the width longer at each end; the fragment shader works out coverage from
+// the window-space ends, so the edge is antialiased like a point's.
+inline const char* kWideLineVertex =
+    "#version 450 core\n"
+    "layout(location = 0) in vec3 iP0;\n"
+    "layout(location = 1) in vec4 iC0;\n"
+    "layout(location = 2) in vec2 iW0;  // width_pixels, world_width\n"
+    "layout(location = 3) in vec3 iP1;\n"
+    "layout(location = 4) in vec4 iC1;\n"
+    "layout(location = 5) in vec2 iW1;\n" STRATA_FRAME_BLOCK STRATA_OVERLAY_BLOCK
+    "flat out vec4 vEnds;  // window-space ends, pixels\n"
+    "flat out vec2 vHalf;  // half width at each end, pixels\n"
+    "flat out vec4 vC0;\n"
+    "flat out vec4 vC1;\n"
+    "const vec2 kCorners[6] = vec2[](vec2(0, -1), vec2(1, -1), vec2(1, 1), vec2(0, -1), vec2(1, 1), vec2(0, 1));\n"
+    "const float kMinW = 1e-3;\n"
+    "float halfWidth(vec2 w, float clipW) {\n"
+    "    float projected = w.y * uProjection[1][1] * 0.5 * uViewport.y / clipW;\n"
+    "    return 0.5 * min(max(w.x, projected), 4.0 * max(uViewport.x, uViewport.y));\n"
+    "}\n"
+    "void main() {\n"
+    "    mat4 viewProjection = uProjection * uView;\n"
+    "    vec4 a = viewProjection * vec4(iP0, 1.0);\n"
+    "    vec4 b = viewProjection * vec4(iP1, 1.0);\n"
+    "    vec4 ca = iC0, cb = iC1;\n"
+    "    vec2 wa = iW0, wb = iW1;\n"
+    "    vEnds = vec4(0.0);\n"
+    "    vHalf = vec2(0.0);\n"
+    "    vC0 = ca;\n"
+    "    vC1 = cb;\n"
+    "    if (a.w < kMinW && b.w < kMinW) {  // wholly behind the eye\n"
+    "        gl_Position = vec4(2.0, 2.0, 0.0, 1.0);\n"
+    "        return;\n"
+    "    }\n"
+    "    if (a.w < kMinW) {\n"
+    "        float t = (kMinW - a.w) / (b.w - a.w);\n"
+    "        a = mix(a, b, t); ca = mix(ca, cb, t); wa = mix(wa, wb, t);\n"
+    "    } else if (b.w < kMinW) {\n"
+    "        float t = (kMinW - b.w) / (a.w - b.w);\n"
+    "        b = mix(b, a, t); cb = mix(cb, ca, t); wb = mix(wb, wa, t);\n"
+    "    }\n"
+    "    vec2 sa = (a.xy / a.w * 0.5 + 0.5) * uViewport.xy;\n"
+    "    vec2 sb = (b.xy / b.w * 0.5 + 0.5) * uViewport.xy;\n"
+    "    float ha = halfWidth(wa, a.w), hb = halfWidth(wb, b.w);\n"
+    "    vec2 d = sb - sa;\n"
+    "    float len = length(d);\n"
+    "    vec2 dir = len > 1e-4 ? d / len : vec2(1.0, 0.0);\n"
+    "    vec2 normal = vec2(-dir.y, dir.x);\n"
+    "    vec2 corner = kCorners[gl_VertexID];\n"
+    "    bool atB = corner.x > 0.5;\n"
+    "    vec4 clip = atB ? b : a;\n"
+    "    float h = atB ? hb : ha;\n"
+    "    vec2 offset = normal * corner.y * (h + 1.0) + dir * (atB ? 1.0 : -1.0) * (h + 1.0);\n"
+    "    vEnds = vec4(sa, sb);\n"
+    "    vHalf = vec2(ha, hb);\n"
+    "    vC0 = ca;\n"
+    "    vC1 = cb;\n"
+    "    gl_Position = clip + vec4(offset * 2.0 * uViewport.zw * clip.w, 0.0, 0.0);\n"
+    "}\n";
+
+#define STRATA_WIDE_LINE_FRAGMENT_HEAD                                                      \
+    "#version 450 core\n"                                                                   \
+    "flat in vec4 vEnds;\n"                                                                 \
+    "flat in vec2 vHalf;\n"                                                                 \
+    "flat in vec4 vC0;\n"                                                                   \
+    "flat in vec4 vC1;\n"                                                                   \
+    "out vec4 fragColor;\n"                                                                 \
+    "void main() {\n"                                                                       \
+    "    vec2 rel = gl_FragCoord.xy - vEnds.xy;\n"                                          \
+    "    vec2 d = vEnds.zw - vEnds.xy;\n"                                                   \
+    "    float len2 = dot(d, d);\n"                                                         \
+    "    float t = len2 > 1e-8 ? clamp(dot(rel, d) / len2, 0.0, 1.0) : 0.0;\n"              \
+    "    float h = mix(vHalf.x, vHalf.y, t);\n"
+
+#define STRATA_WIDE_LINE_FRAGMENT_TAIL                                                      \
+    "    if (a <= 0.0) discard;\n"                                                          \
+    "    vec4 c = mix(vC0, vC1, t);\n"                                                      \
+    "    fragColor = vec4(c.rgb, c.a * a);\n"                                               \
+    "}\n"
+
+// Square ends: coverage across the segment times coverage along it.
+inline const char* kWideLineFragment =
+    STRATA_WIDE_LINE_FRAGMENT_HEAD
+    "    float len = sqrt(len2);\n"
+    "    vec2 dir = len > 1e-4 ? d / len : vec2(1.0, 0.0);\n"
+    "    float across = abs(rel.x * dir.y - rel.y * dir.x);\n"
+    "    float along = dot(rel, dir);\n"
+    "    float a = clamp(h + 0.5 - across, 0.0, 1.0) * clamp(0.5 + min(along, len - along), 0.0, 1.0);\n"
+    STRATA_WIDE_LINE_FRAGMENT_TAIL;
+
+// Round caps: distance to the nearest point of the segment.
+inline const char* kWideLineRoundFragment =
+    STRATA_WIDE_LINE_FRAGMENT_HEAD
+    "    float a = clamp(h + 0.5 - length(rel - d * t), 0.0, 1.0);\n"
+    STRATA_WIDE_LINE_FRAGMENT_TAIL;
+
+#undef STRATA_WIDE_LINE_FRAGMENT_HEAD
+#undef STRATA_WIDE_LINE_FRAGMENT_TAIL
+
 // Text: one quad per glyph, in pixels with the origin at the top left. The
 // font atlas is read texel by texel, so whole-number scales stay sharp.
 inline const char* kTextVertex =

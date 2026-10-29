@@ -410,6 +410,33 @@ void parse(const std::string& path, Scene& scene, int depth) {
             auto& lines = onTop ? scene.linesOnTop : scene.lines;
             lines.push_back(a);
             lines.push_back(b);
+        } else if (word == "wide_line") {
+            StrataWideLineVertex a{}, b{};
+            for (float& v : a.position) read(in, v, where, "start");
+            for (float& v : b.position) read(in, v, where, "end");
+            for (float& v : a.color) read(in, v, where, "colour");
+            read(in, a.width_pixels, where, "width_pixels");
+            read(in, a.world_width, where, "world_width");
+            std::memcpy(b.color, a.color, sizeof b.color);
+            b.width_pixels = a.width_pixels;
+            b.world_width = a.world_width;
+            uint32_t flags = 0;
+            std::string option;
+            while (in >> option) {
+                if (option == "to") {
+                    for (float& v : b.color) read(in, v, where, "end colour");
+                    read(in, b.width_pixels, where, "end width_pixels");
+                    read(in, b.world_width, where, "end world_width");
+                } else if (option == "round") {
+                    flags |= STRATA_LINES_ROUND_CAPS;
+                } else if (option == "on_top") {
+                    flags |= STRATA_LINES_ON_TOP;
+                } else {
+                    bad(where, "expected 'to', 'round' or 'on_top' after the widths");
+                }
+            }
+            scene.wideLines[flags].push_back(a);
+            scene.wideLines[flags].push_back(b);
         } else if (word == "circle") {
             float centre[3], radius = 0.0f, color[4];
             int segments = 0;
