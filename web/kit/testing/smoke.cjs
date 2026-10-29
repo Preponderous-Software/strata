@@ -22,7 +22,8 @@
 //     count): the loader's own fetch is handed to the glue, not repeated.
 // Before the scene, the loading shell (../strata-loader.js, when it is beside
 // this file) is checked on a blank page: progress() clamps to 0..1, never
-// moves the bar back and shows its label; slow() called twice shows one bar.
+// moves the bar back and shows its label; slow() called twice shows one bar,
+// and at 390 px the slow bar's text and buttons keep one line each.
 // --live keeps the page's own frame loop (no ?drive=1); captures are then of
 // whatever frame is on screen. Exits 1 on any failure.
 'use strict';
@@ -185,6 +186,26 @@ async function loaderChecks(browser) {
     check(r.afterDone === 'done', `loader: progress() after done() leaves the shell done (${r.afterDone})`);
     check(r.slowBars === 1, `loader: slow() twice shows ${r.slowBars} bar(s) (want 1)`);
     check(r.slowAgain === 1, `loader: slow() after the bar is dismissed shows it again (${r.slowAgain})`);
+    // On a 390 px phone, with the default (longest) button text, the bar's
+    // text and each button keep one line: the buttons wrap under the text.
+    const narrow = await context.newPage();
+    narrow.on('pageerror', (e) => errors.push(String(e)));
+    await narrow.setViewportSize({ width: 390, height: 844 });
+    await narrow.setContent('<!doctype html><html><head></head><body></body></html>');
+    await narrow.addScriptTag({ content: fs.readFileSync(src, 'utf8') });
+    const lines = await narrow.evaluate(() => {
+      const L = window.StrataLoader;
+      L.show({ title: 'the test', fallback: { href: '#simpler' } });
+      L.done(); L.slow();
+      const count = (n) => {
+        const range = document.createRange();
+        range.selectNodeContents(n);
+        return new Set([...range.getClientRects()].map((q) => Math.round(q.top))).size;
+      };
+      return [...document.querySelectorAll('.sk-slow span, .sk-slow button')].map((n) => `${n.textContent}: ${count(n)}`);
+    });
+    check(lines.length === 3 && lines.every((l) => l.endsWith(': 1')),
+      `loader: at 390 px the slow bar's text and buttons keep one line each (${lines.join('; ')})`);
     check(errors.length === 0, `loader: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
   } catch (e) {
     check(false, `loader: ${String(e).split('\n')[0]}`);
