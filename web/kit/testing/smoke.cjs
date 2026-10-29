@@ -6,7 +6,9 @@
 //
 // For each device pixel ratio (default 1, 2 and 3: a desktop with a mouse, a
 // tablet and a phone with touch), it loads the page with ?drive=1 (the frame
-// loop off; frames are drawn with __strataKit.drive(t)), and checks:
+// loop off; frames are drawn with __strataKit.drive(t)), scrolls the canvas
+// into view if it is not wholly on screen (a scene in one section of a longer
+// page, below the fold), and checks:
 //   - the page comes up with no errors and its drawing buffer is the canvas's
 //     CSS size times the (capped) device pixel ratio;
 //   - the frame is not one flat colour (a CDP capture, OUT_DIR/dpr<N>.png);
@@ -23,7 +25,9 @@
 // Before the scene, the loading shell (../strata-loader.js, when it is beside
 // this file) is checked on a blank page: progress() clamps to 0..1, never
 // moves the bar back and shows its label; slow() called twice shows one bar,
-// and at 390 px the slow bar's text and buttons keep one line each.
+// and at 390 px the slow bar's text and buttons keep one line each; with
+// contain: true the shell covers its mount (a section below the fold), not
+// the viewport, and without it, the viewport as before.
 // --live keeps the page's own frame loop (no ?drive=1); captures are then of
 // whatever frame is on screen. Exits 1 on any failure.
 'use strict';
@@ -90,6 +94,7 @@ async function runDpr(browser, o, dpr) {
   try {
     await page.goto(kit.withQuery(o.url, { drive: o.live ? null : 1, quality: o.quality }), { waitUntil: 'commit' });
     await kit.waitReady(page);
+    await canvasIntoView(page);
     // Two frames: the first pays for shader compiles, the second is the one checked.
     await drawFrames(page, o, 0);
     await drawFrames(page, o, 0.5);
@@ -138,6 +143,19 @@ async function runDpr(browser, o, dpr) {
   } finally {
     await context.close();
   }
+}
+
+// Scrolls the kit's canvas to the middle of the viewport, unless it is wholly
+// on screen already (a full-screen canvas never moves), so that the capture
+// and the tap targets are of the scene and not of the page above it.
+async function canvasIntoView(page) {
+  const moved = await page.evaluate(() => {
+    const c = window.__strataKit.kit.canvas, r = c.getBoundingClientRect();
+    if (r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth) return false;
+    c.scrollIntoView({ block: 'center', inline: 'center' });
+    return true;
+  });
+  if (moved) await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r())));
 }
 
 // The loading shell on its own, on a blank page: no scene, so it is quick.
@@ -206,6 +224,41 @@ async function loaderChecks(browser) {
     });
     check(lines.length === 3 && lines.every((l) => l.endsWith(': 1')),
       `loader: at 390 px the slow bar's text and buttons keep one line each (${lines.join('; ')})`);
+    // contain: true scopes the shell to its mount, a section below the fold of
+    // a long page; without contain the same mount still gets a viewport overlay.
+    const embed = await context.newPage();
+    embed.on('pageerror', (e) => errors.push(String(e)));
+    await embed.setViewportSize({ width: 390, height: 844 });
+    const embedPage = '<!doctype html><html><head></head><body style="margin:0">' +
+      '<div style="height:1200px"></div><section id="s" style="height:300px;margin:0 20px"></section>' +
+      '<div style="height:1200px"></div></body></html>';
+    for (const contain of [true, false]) {
+      await embed.setContent(embedPage);
+      await embed.addScriptTag({ content: fs.readFileSync(src, 'utf8') });
+      const g = await embed.evaluate((c) => {
+        const s = document.getElementById('s');
+        window.StrataLoader.show({ title: 'the test', mount: s, contain: c, fallback: { href: '#simpler' } });
+        window.scrollTo(0, 1000);
+        const rect = (n) => { const q = n.getBoundingClientRect(); return [q.left, q.top, q.width, q.height].map(Math.round).join(','); };
+        const shell = document.querySelector('.sk-loader');
+        const out = { pos: getComputedStyle(shell).position, shell: rect(shell), section: rect(s),
+          viewport: `0,0,${innerWidth},${innerHeight}`, sectionPos: getComputedStyle(s).position };
+        window.StrataLoader.done(); window.StrataLoader.slow();
+        const bar = document.querySelector('.sk-slow');
+        out.barInside = s.contains(bar);
+        out.barPos = getComputedStyle(bar).position;
+        return out;
+      }, contain);
+      if (contain) {
+        check(g.pos === 'absolute' && g.shell === g.section && g.sectionPos === 'relative',
+          `loader: contain covers its mount, scrolled (${g.pos} ${g.shell}, section ${g.section})`);
+        check(g.barInside && g.barPos === 'absolute', `loader: contain puts the slow bar in its mount (${g.barPos})`);
+      } else {
+        check(g.pos === 'fixed' && g.shell === g.viewport && g.sectionPos === 'static',
+          `loader: without contain the shell covers the viewport (${g.pos} ${g.shell})`);
+        check(!g.barInside && g.barPos === 'fixed', `loader: without contain the slow bar is on the viewport (${g.barPos})`);
+      }
+    }
     check(errors.length === 0, `loader: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
   } catch (e) {
     check(false, `loader: ${String(e).split('\n')[0]}`);
@@ -215,6 +268,7 @@ async function loaderChecks(browser) {
 }
 
 async function tapEqualsPick(page, o, label, touch) {
+  await canvasIntoView(page);
   // Only targets the canvas itself is under: a point covered by the page's
   // own HTML (a panel, a card) is not the canvas's to answer.
   const targets = (await page.evaluate(() => {

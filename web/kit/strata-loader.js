@@ -13,6 +13,7 @@
        trailer: {webm: "...", mp4: "..."},  // optional: played when the page can't run live
        fallback: {href: "/", text: "Open the 2D dashboard"},  // optional link on every fallback
        gate: false,                     // true: wait for a tap when the device asks for less
+       mount: el, contain: true,        // optional: cover only `el` (a page section), not the viewport
      });
      // ... create the scene with StrataKit.create({module: mod, ...}), then:
      StrataLoader.done();
@@ -28,7 +29,7 @@
      }
 
    show() takes load()'s display options (title, poster, trailer, fallback,
-   mount) and returns false, with the fallback showing, when WebGL 2 is
+   mount, contain) and returns false, with the fallback showing, when WebGL 2 is
    missing. progress(fraction, label) clamps the fraction to 0..1 and never
    moves the bar back; the label (or the percentage) replaces the size line.
 
@@ -50,6 +51,14 @@
    Save-Data, or under 4 GB of device memory where the browser says) gets the
    poster and a "Start" button instead of an automatic download.
 
+   By default the overlay covers the viewport (position:fixed), whatever
+   `mount` is. With contain: true it covers only `mount` instead
+   (position:absolute inside it, scrolling with it): for a scene in one
+   section of a longer page, such as a hero render or a card. A `mount` whose
+   position is static is made position:relative so the overlay has something
+   to be absolute to. The slow bar (slow()) then sits at the bottom of `mount`
+   too. Without `mount`, contain does nothing.
+
    load() resolves with the module, or rejects with an Error whose `code` is
    "no-webgl2", "network" or "engine" after the fallback is already showing.
 
@@ -65,6 +74,7 @@
 .sk-loader{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:16px;
   background:var(--sk-loader-bg,#101712);color:var(--sk-loader-fg,#e3ece4);
   font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;transition:opacity .3s}
+.sk-loader.sk-contained{position:absolute}
 .sk-loader[hidden]{display:none}
 .sk-loader.sk-done{opacity:0;pointer-events:none}
 .sk-loader .sk-backdrop{position:absolute;inset:0;background-size:cover;background-position:center;
@@ -90,6 +100,11 @@
 
   let root = null, opts = {}, state = "idle", shown = 0;
 
+  // The element the overlay covers when contain is set, else null (the viewport).
+  function container() {
+    return opts.contain && opts.mount ? opts.mount : null;
+  }
+
   function el(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -110,6 +125,11 @@
     document.head.appendChild(style);
     root = el("div", "sk-loader");
     root.setAttribute("role", "status");
+    const scope = container();
+    if (scope) {
+      root.classList.add("sk-contained");
+      if (getComputedStyle(scope).position === "static") scope.style.position = "relative";
+    }
     if (opts.poster) {
       const b = el("div", "sk-backdrop");
       b.style.backgroundImage = `url("${String(opts.poster).replace(/"/g, "%22")}")`;
@@ -372,9 +392,11 @@
     if (document.querySelector(".sk-slow")) return;
     const bar = el("div", "sk-slow");
     bar.setAttribute("role", "status");
-    bar.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom));" +
+    const inside = container();
+    bar.style.cssText = (inside ? "position:absolute;" : "position:fixed;") + "left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom));" +
       "z-index:21;background:rgba(0,0,0,.7);color:#fff;padding:8px 12px;border-radius:8px;" +
-      "font:13px system-ui,sans-serif;display:flex;flex-wrap:wrap;gap:10px;align-items:center;width:max-content;max-width:calc(100vw - 32px)";
+      "font:13px system-ui,sans-serif;display:flex;flex-wrap:wrap;gap:10px;align-items:center;width:max-content;" +
+      (inside ? "max-width:calc(100% - 32px)" : "max-width:calc(100vw - 32px)");
     bar.appendChild(el("span", "", "This device is drawing slowly."));
     // The buttons wrap under the text together when the row is too narrow
     // (a 390 px phone), rather than squeezing it onto several lines. The
@@ -397,7 +419,7 @@
     buttons.appendChild(b);
     buttons.appendChild(x);
     bar.appendChild(buttons);
-    document.body.appendChild(bar);
+    (inside || document.body).appendChild(bar);
   }
 
   window.StrataLoader = {load, show, progress, done, fallback, slow, hasWebGL2, get state() { return state; }};

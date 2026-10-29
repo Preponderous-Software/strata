@@ -255,6 +255,9 @@ jobs:
         run: |
           python3 -m http.server 8765 --bind 127.0.0.1 --directory build-web/kit-example &
           node web/kit/testing/smoke.cjs http://127.0.0.1:8765/index.html golden-out/kit-smoke --context-loss
+          # The same scene in one section of a longer page, below the fold,
+          # with the loader contained to that section.
+          node web/kit/testing/smoke.cjs "http://127.0.0.1:8765/index.html?embed=1" golden-out/kit-smoke-embed --dpr 1,3
 
       - name: Stage web build
         if: always()

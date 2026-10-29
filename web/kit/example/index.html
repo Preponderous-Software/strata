@@ -15,12 +15,22 @@
     padding: 2px 8px; border-radius: 999px; background: var(--panel); }
   #picked { position: fixed; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top));
     background: var(--panel); padding: 6px 10px; border-radius: 8px; }
+  /* ?embed=1: the scene in one section of a longer page, below the fold, with
+     the loader contained to that section (StrataLoader's contain option). */
+  body.embed { height: auto; overflow: auto; }
+  body.embed #intro { min-height: 120vh; padding: 16px; box-sizing: border-box; }
+  body.embed #stage { position: relative; height: 70vh; margin: 0 16px 40vh; }
+  body.embed #view, body.embed #labels { position: absolute; }
+  body.embed #picked { position: absolute; left: 12px; top: 12px; }
 </style>
 </head>
 <body>
+<header id="intro" hidden><h1>Strata web kit example</h1><p>The scene is further down this page.</p></header>
+<section id="stage">
 <canvas id="view" tabindex="0" role="img" aria-label="Six pillars round a lamp, drawn by Strata"></canvas>
 <div id="labels" aria-hidden="true"></div>
 <div id="picked" aria-live="polite">Tap a pillar.</div>
+</section>
 <script src="strata-loader.js"></script>
 <script src="strata-kit.js"></script>
 <script>
@@ -51,9 +61,14 @@ function pick(x, y, radius) {
 
 (async () => {
   let mod;
+  const embed = new URLSearchParams(location.search).has("embed");
+  if (embed) {
+    document.body.classList.add("embed");
+    document.getElementById("intro").hidden = false;
+  }
   try {
     mod = await StrataLoader.load({script: "example.js", factory: "createKitExample", wasm: "example.wasm",
-      title: "the kit example"});
+      title: "the kit example", mount: embed ? document.getElementById("stage") : undefined, contain: embed});
   } catch (e) { return; }  // the loader is already showing why
   const canvas = document.getElementById("view");
   try {
