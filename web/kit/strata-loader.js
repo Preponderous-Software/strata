@@ -374,10 +374,12 @@
     bar.setAttribute("role", "status");
     bar.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom));" +
       "z-index:21;background:rgba(0,0,0,.7);color:#fff;padding:8px 12px;border-radius:8px;" +
-      "font:13px system-ui,sans-serif;display:flex;flex-wrap:wrap;gap:10px;align-items:center;max-width:calc(100vw - 32px)";
+      "font:13px system-ui,sans-serif;display:flex;flex-wrap:wrap;gap:10px;align-items:center;width:max-content;max-width:calc(100vw - 32px)";
     bar.appendChild(el("span", "", "This device is drawing slowly."));
     // The buttons wrap under the text together when the row is too narrow
-    // (a 390 px phone), rather than squeezing it onto several lines.
+    // (a 390 px phone), rather than squeezing it onto several lines. The
+    // width is max-content because left:50% alone would cap an auto width at
+    // half the viewport.
     const buttons = el("div", "");
     buttons.style.cssText = "display:flex;gap:10px;margin-left:auto";
     const b = el("button", "", opts.trailer ? "Show the clip" : (opts.fallback.text || "Open the simpler view"));
