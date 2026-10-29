@@ -170,6 +170,15 @@ renderer. The C# harness reproduces the C++ golden with zero differing pixels.
     (`sampler2DArrayShadow`).
   - Each cascade blends into the next across its last 10%. The last cascade
     fades out to unshadowed.
+  - The bias is in shadow texels, so it grows with the cascade. A texel is
+    `2 × radius / shadow_map_size`, and a cascade's radius follows
+    `shadow_distance` (capped at the far plane), not the scene. With one
+    1024² cascade out to the default 150, a texel is about a third of a unit
+    and the 1.5-texel normal offset is about half a unit: objects smaller
+    than that cast no visible shadow. A scene a few units across should set
+    `shadow_distance` to a few times its size (the web kit's
+    `shadowDistanceMin`, default 40, is the floor it applies), which brings
+    the texel down to a centimetre or so. There is no separate bias control.
 - **Ambient and sky.** Hemisphere ambient (sky colour above, ground colour
   below), distance fog to the horizon colour, and an analytic sky gradient with
   a sun disc and glow (`STRATA_CLEAR_SKY`). Sky, ambient, fog and light colour

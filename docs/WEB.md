@@ -56,7 +56,11 @@ Limits that matter in a browser:
   the scratch unit is not fixed at 15.
 - Shadow maps are as on the desktop (cascades default to 2048², cube faces
   512²). On a weak GPU, lower `StrataLighting.shadow_map_size` and
-  `cascade_count`.
+  `cascade_count`. With fewer, smaller maps, keep `shadow_distance` close to
+  the scene's size: a scene a few units across under the kit's default
+  `shadowDistanceMin` of 40 (or the engine's 150) loses its small objects'
+  shadows at tier 1 (one 1024² cascade). Lower `shadowDistanceMin` for such
+  a scene; see ARCHITECTURE.md, "Cascaded shadow maps".
 - Strata is single-threaded and needs no `SharedArrayBuffer`, so pages need no
   COOP/COEP headers on its account.
 

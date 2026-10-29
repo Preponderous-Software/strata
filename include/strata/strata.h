@@ -198,7 +198,10 @@ typedef struct StrataLighting {
     float latitude_degrees;     /* SUN: tilts the sun's path; 0 = equator */
     int32_t cascade_count;      /* SUN: 0 disables shadows, 1..4 cascades */
     int32_t shadow_map_size;    /* SUN: texels per cascade side, 256..4096 */
-    float shadow_distance;      /* SUN: furthest distance from the eye that receives shadows */
+    float shadow_distance;      /* SUN: furthest distance from the eye that receives shadows (capped at the
+                                   camera's far plane). Scale it to the scene: the default 150 suits a
+                                   village; for a scene a few units across use a few times its size,
+                                   or small objects lose their shadows (see ARCHITECTURE.md) */
     float split_lambda;         /* SUN: 0 uniform .. 1 logarithmic cascade splits */
     int32_t fog;                /* SUN: non-zero enables distance fog */
 } StrataLighting;
