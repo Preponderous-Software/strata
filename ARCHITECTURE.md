@@ -50,7 +50,8 @@ Emscripten builds always use GLES 3.0.
   relative mouse mode; 1.9: depth readback; 1.10: nearest-texel texture
   filtering; 1.11: translucent meshes, overlays on top of the scene and
   filled screen rectangles; 1.12: injected events, a shared frame clock and
-  the drive channel, see [docs/DRIVE.md](docs/DRIVE.md)).
+  the drive channel, see [docs/DRIVE.md](docs/DRIVE.md); 1.13: wide lines;
+  1.14: world-to-screen projection and world-anchored text).
 - **Layouts are checkable.** `strata_struct_size(id)` and
   `strata_struct_field_offset(id, field)` report every boundary struct. The C++
   unit tests `static_assert` the layouts. The C# tests
@@ -355,6 +356,13 @@ drawing. They are frame inputs like primitives (submitted between
 - **Rectangles (ABI 1.11).** `strata_submit_rects` adds filled, alpha-blended
   screen rectangles, drawn in the text pass as one instanced draw before the
   glyphs, so a panel backs the text drawn over it.
+- **World labels (ABI 1.14).** `strata_submit_world_text` keeps a copy of
+  each text and its world anchor. In the text pass, after the rectangles,
+  each anchor is projected with the frame's camera and drawable size
+  (`projectPoint`, the same function behind `strata_project_point`); a label
+  whose anchor is behind the camera is dropped, and the rest are laid out at
+  the anchor's pixel plus the text's offset and drawn before the frame's
+  screen text, so a HUD stays on top. No depth test, as for screen text.
 - **text** draws every glyph as an instanced quad with no depth test. The font
   is font8x8 (public domain, `third_party/font8x8`): printable ASCII in an
   8-pixel cell, uploaded once as a 760 × 8 `R8` texture and read with

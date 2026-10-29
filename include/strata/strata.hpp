@@ -122,6 +122,12 @@ public:
     void submitRects(const StrataRect* rects, size_t count);
     // ABI 1.13: wide lines with STRATA_LINES_ON_TOP / STRATA_LINES_ROUND_CAPS.
     void submitWideLines(const StrataWideLineVertex* vertices, size_t count, uint32_t flags);
+    // ABI 1.14: text anchored at world positions (count x 3 floats), projected
+    // at endFrame; see strata_submit_world_text.
+    void submitWorldText(const StrataText* texts, const float* anchors, size_t count);
+    // ABI 1.14: a world point with the current camera onto the drawable as it
+    // is now. Returns whether it is in front; see strata_project_point.
+    bool projectPoint(const float world[3], float outPixels[2], float* outDepth) const;
     void endFrame();
     void present();
 

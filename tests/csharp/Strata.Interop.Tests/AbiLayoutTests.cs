@@ -142,6 +142,15 @@ namespace Strata.Interop.Tests {
         }
 
         [Fact]
+        public unsafe void Abi114CallsRejectANullEngine() {
+            float* world = stackalloc float[3];
+            float* pixels = stackalloc float[2];
+            var text = new StrataText { pixel_size = 8 };
+            Assert.Equal(1, StrataNative.strata_project_point(IntPtr.Zero, world, pixels, null, null));  // STRATA_ERROR_INVALID_ARGUMENT
+            Assert.Equal(1, StrataNative.strata_submit_world_text(IntPtr.Zero, &text, world, 1));
+        }
+
+        [Fact]
         public unsafe void OverlaySubmitsRejectANullEngine() {
             var point = new StrataPoint { size_pixels = 2 };
             Assert.Equal(1, StrataNative.strata_submit_points(IntPtr.Zero, &point, 1));  // STRATA_ERROR_INVALID_ARGUMENT

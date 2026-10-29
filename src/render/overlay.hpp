@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "rhi/gpu_device.hpp"
@@ -39,6 +40,18 @@ int glyphIndex(unsigned char c);
 // pixel (pixel_size / 8) right and down.
 void layoutText(const StrataText& text, std::vector<GlyphInstance>& out);
 
+// ABI 1.14. Projects a world point with `camera` onto a width x height
+// drawable: pixels from its top-left (set to 0, 0 when not in front) and the
+// distance along the view axis (the camera looks down -Z in view space).
+// Returns whether the point is in front of the camera: that distance and its
+// clip w are both > 0.
+bool projectPoint(const StrataCamera& camera, int width, int height, const float world[3], float outPixels[2],
+                  float* outDepth);
+
+// ABI 1.14. Checks world-text anchors (count x 3 floats, all finite); throws
+// like the validators above.
+void validateAnchors(const float* anchors, size_t count);
+
 // The font atlas: kFontGlyphCount glyphs of 8 x 8 side by side, one byte per
 // texel (255 set, 0 clear), top row first.
 std::vector<uint8_t> buildFontAtlas();
@@ -59,15 +72,18 @@ public:
     void addRects(const StrataRect* rects, size_t count);  // ABI 1.11
     // ABI 1.13. flags: STRATA_LINES_ON_TOP, STRATA_LINES_ROUND_CAPS.
     void addWideLines(const StrataWideLineVertex* vertices, size_t count, uint32_t flags);
+    // ABI 1.14: text anchored at world positions, projected when drawn.
+    void addWorldText(const StrataText* texts, const float* anchors, size_t count);
 
     // Lines and points against the scene's depth, then (ABI 1.11) the ones
     // drawn on top of it, with the renderer's Frame uniform block (camera
     // matrices). Returns the number of draw calls.
     int drawWorld(rhi::TargetHandle target, int width, int height, rhi::BufferHandle frameUniforms,
                   size_t frameBytes);
-    // Filled rectangles (ABI 1.11), then text, on top of everything. Returns
-    // the number of draw calls.
-    int drawText(rhi::TargetHandle target, int width, int height);
+    // Filled rectangles (ABI 1.11), then world-anchored text (ABI 1.14,
+    // projected with `camera`), then screen text, on top of everything.
+    // Returns the number of draw calls.
+    int drawText(rhi::TargetHandle target, int width, int height, const StrataCamera& camera);
 
     size_t lineVertexCount() const { return lines_.size() + linesOnTop_.size(); }
     size_t wideLineVertexCount() const {
@@ -78,6 +94,7 @@ public:
     }
     size_t glyphCount() const { return glyphs_.size(); }
     size_t rectCount() const { return rects_.size(); }
+    size_t worldTextCount() const { return worldTexts_.size(); }
 
 private:
     void writeViewport(int width, int height);
@@ -99,6 +116,15 @@ private:
     std::vector<StrataPoint> solidPoints_, softPoints_, solidPointsOnTop_, softPointsOnTop_;
     std::vector<GlyphInstance> glyphs_;
     std::vector<StrataRect> rects_;
+    // ABI 1.14. A copy of each world label (its utf8 points into `value` when
+    // laid out) and its anchor; laid out at draw time into drawGlyphs_.
+    struct WorldText {
+        StrataText text{};
+        std::string value;
+        float anchor[3] = {0, 0, 0};
+    };
+    std::vector<WorldText> worldTexts_;
+    std::vector<GlyphInstance> drawGlyphs_;
 };
 
 }  // namespace strata::render

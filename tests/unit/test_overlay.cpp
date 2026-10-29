@@ -191,3 +191,55 @@ TEST(wide_line_vertices_come_in_pairs_with_non_negative_widths) {  // ABI 1.13
     v[1].color[0] = -0.1f;
     CHECK(rejectsWith([&] { validateWideLineVertices(v, 2); }, "wide line vertex 1: colour"));
 }
+
+// ABI 1.14: world -> pixels with the engine's own look-at camera.
+namespace {
+StrataCamera lookDownMinusZ() {
+    const float eye[3] = {0, 0, 10}, target[3] = {0, 0, 0}, up[3] = {0, 1, 0};
+    StrataCamera c{};
+    strata_camera_look_at(eye, target, up, 90.0f, 2.0f, 1.0f, 100.0f, &c);
+    return c;
+}
+}  // namespace
+
+TEST(project_point_maps_the_view_axis_to_the_drawable_centre) {
+    const StrataCamera c = lookDownMinusZ();
+    const float target[3] = {0, 0, 0};
+    float px[2] = {-1, -1}, depth = 0;
+    CHECK(projectPoint(c, 200, 100, target, px, &depth));
+    CHECK_NEAR(px[0], 100.0, 1e-3);
+    CHECK_NEAR(px[1], 50.0, 1e-3);
+    CHECK_NEAR(depth, 10.0, 1e-4);
+}
+
+TEST(project_point_puts_up_and_right_at_the_top_right) {
+    const StrataCamera c = lookDownMinusZ();
+    // fov 90 at distance 10 spans y -10..10; aspect 2 spans x -20..20.
+    const float topRight[3] = {20, 10, 0};
+    float px[2] = {0, 0};
+    CHECK(projectPoint(c, 200, 100, topRight, px, nullptr));
+    CHECK_NEAR(px[0], 200.0, 1e-3);
+    CHECK_NEAR(px[1], 0.0, 1e-3);
+    const float offScreen[3] = {-40, 0, 0};  // still in front, left of the drawable
+    CHECK(projectPoint(c, 200, 100, offScreen, px, nullptr));
+    CHECK_NEAR(px[0], -100.0, 1e-3);
+}
+
+TEST(project_point_reports_points_behind_the_camera) {
+    const StrataCamera c = lookDownMinusZ();
+    const float behind[3] = {0, 0, 12};
+    float px[2] = {7, 7}, depth = 0;
+    CHECK(!projectPoint(c, 200, 100, behind, px, &depth));
+    CHECK_NEAR(depth, -2.0, 1e-4);
+    CHECK(px[0] == 0.0f && px[1] == 0.0f);
+    const float atEye[3] = {0, 0, 10};
+    CHECK(!projectPoint(c, 200, 100, atEye, px, &depth));
+}
+
+TEST(world_text_anchors_must_be_finite) {
+    const float good[6] = {0, 1, 2, 3, 4, 5};
+    validateAnchors(good, 2);
+    const float bad[6] = {0, 1, 2, 3, std::numeric_limits<float>::quiet_NaN(), 5};
+    CHECK(rejectsWith([&] { validateAnchors(bad, 2); }, "anchor 1"));
+    CHECK(rejectsWith([&] { validateAnchors(nullptr, 1); }, "NULL"));
+}

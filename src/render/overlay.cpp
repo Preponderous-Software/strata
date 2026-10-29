@@ -136,6 +136,39 @@ void validateRects(const StrataRect* rects, size_t count) {
     }
 }
 
+void validateAnchors(const float* anchors, size_t count) {
+    if (count > 0 && !anchors) fail(STRATA_ERROR_INVALID_ARGUMENT, "anchors are NULL with a non-zero count");
+    for (size_t i = 0; i < count; ++i) {
+        if (!finite(anchors + 3 * i, 3)) fail(STRATA_ERROR_INVALID_ARGUMENT, "anchor %zu: position must be finite", i);
+    }
+}
+
+bool projectPoint(const StrataCamera& camera, int width, int height, const float world[3], float outPixels[2],
+                  float* outDepth) {
+    // Column-major: element (row r, column c) is m[c * 4 + r].
+    const float* v = camera.view;
+    const float* p = camera.projection;
+    float view[4];
+    for (int r = 0; r < 4; ++r) view[r] = v[r] * world[0] + v[4 + r] * world[1] + v[8 + r] * world[2] + v[12 + r];
+    float clip[4];
+    for (int r = 0; r < 4; ++r) {
+        clip[r] = p[r] * view[0] + p[4 + r] * view[1] + p[8 + r] * view[2] + p[12 + r] * view[3];
+    }
+    const float depth = -view[2];  // the camera looks down -Z in view space
+    if (outDepth) *outDepth = depth;
+    const bool inFront = depth > 0.0f && clip[3] > 0.0f && std::isfinite(clip[0] / clip[3]) &&
+                         std::isfinite(clip[1] / clip[3]);
+    if (outPixels) {
+        outPixels[0] = 0.0f;
+        outPixels[1] = 0.0f;
+        if (inFront) {
+            outPixels[0] = (clip[0] / clip[3] * 0.5f + 0.5f) * static_cast<float>(width);
+            outPixels[1] = (0.5f - clip[1] / clip[3] * 0.5f) * static_cast<float>(height);
+        }
+    }
+    return inFront;
+}
+
 int glyphIndex(unsigned char c) {
     if (c < kFontFirstGlyph || c >= kFontFirstGlyph + kFontGlyphCount) c = '?';
     return c - kFontFirstGlyph;
@@ -339,6 +372,7 @@ void Overlay::clear() {
     softPointsOnTop_.clear();
     glyphs_.clear();
     rects_.clear();
+    worldTexts_.clear();
 }
 
 void Overlay::addLines(const StrataLineVertex* vertices, size_t count, uint32_t flags) {
@@ -381,6 +415,19 @@ void Overlay::addRects(const StrataRect* rects, size_t count) {
 void Overlay::addText(const StrataText* texts, size_t count) {
     validateTexts(texts, count);
     for (size_t i = 0; i < count; ++i) layoutText(texts[i], glyphs_);
+}
+
+void Overlay::addWorldText(const StrataText* texts, const float* anchors, size_t count) {
+    validateTexts(texts, count);
+    validateAnchors(anchors, count);
+    for (size_t i = 0; i < count; ++i) {
+        WorldText w;
+        w.text = texts[i];
+        w.text.utf8 = nullptr;  // the caller's string is not kept; `value` is
+        w.value = texts[i].utf8;
+        std::memcpy(w.anchor, anchors + 3 * i, sizeof w.anchor);
+        worldTexts_.push_back(std::move(w));
+    }
 }
 
 template <typename T>
@@ -494,8 +541,20 @@ int Overlay::drawWorld(rhi::TargetHandle target, int width, int height, rhi::Buf
     return draws;
 }
 
-int Overlay::drawText(rhi::TargetHandle target, int width, int height) {
-    if (glyphs_.empty() && rects_.empty()) return 0;
+int Overlay::drawText(rhi::TargetHandle target, int width, int height, const StrataCamera& camera) {
+    // World labels first, so this frame's screen text (a HUD) sits on them.
+    drawGlyphs_.clear();
+    for (const WorldText& w : worldTexts_) {
+        float at[2];
+        if (!projectPoint(camera, width, height, w.anchor, at, nullptr)) continue;
+        StrataText t = w.text;
+        t.x += at[0];
+        t.y += at[1];
+        t.utf8 = w.value.c_str();
+        layoutText(t, drawGlyphs_);
+    }
+    drawGlyphs_.insert(drawGlyphs_.end(), glyphs_.begin(), glyphs_.end());
+    if (drawGlyphs_.empty() && rects_.empty()) return 0;
     writeViewport(width, height);
     rhi::PassDesc pass;
     pass.name = "text";
@@ -516,15 +575,15 @@ int Overlay::drawText(rhi::TargetHandle target, int width, int height) {
         device_.drawArrays(draw);
         ++draws;
     }
-    if (!glyphs_.empty()) {
-        upload(glyphBuffer_, glyphs_);
+    if (!drawGlyphs_.empty()) {
+        upload(glyphBuffer_, drawGlyphs_);
         device_.bindPipeline(textPipeline_);
         device_.bindUniformBuffer(3, viewportUniforms_, 0, 16);
         device_.bindTexture(3, font_);
         device_.bindVertexBuffer(0, glyphBuffer_, 0);
         rhi::DrawArrays draw;
         draw.vertexCount = 6;
-        draw.instanceCount = static_cast<uint32_t>(glyphs_.size());
+        draw.instanceCount = static_cast<uint32_t>(drawGlyphs_.size());
         device_.drawArrays(draw);
         ++draws;
     }

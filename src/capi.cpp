@@ -410,6 +410,23 @@ StrataStatus strata_submit_text(StrataEngine* engine, const StrataText* texts, i
     return guard([&] { engine->engine->submitText(texts, static_cast<size_t>(count)); });
 }
 
+StrataStatus strata_submit_world_text(StrataEngine* engine, const StrataText* texts, const float* anchors,
+                                      int32_t count) {
+    if (!engine) return invalid("engine is NULL");
+    if (count < 0) return invalid("count is negative");
+    if (count > 0 && (!texts || !anchors)) return invalid("texts or anchors is NULL with a non-zero count");
+    return guard([&] { engine->engine->submitWorldText(texts, anchors, static_cast<size_t>(count)); });
+}
+
+StrataStatus strata_project_point(const StrataEngine* engine, const float world[3], float out_pixels[2],
+                                  float* out_depth, int32_t* out_in_front) {
+    if (!engine || !world) return invalid("engine and world must not be NULL");
+    return guard([&] {
+        const bool inFront = engine->engine->projectPoint(world, out_pixels, out_depth);
+        if (out_in_front) *out_in_front = inFront ? 1 : 0;
+    });
+}
+
 StrataStatus strata_submit_lines_ex(StrataEngine* engine, const StrataLineVertex* vertices, int32_t count,
                                     uint32_t flags) {
     if (!engine) return invalid("engine is NULL");

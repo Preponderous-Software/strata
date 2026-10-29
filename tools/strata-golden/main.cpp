@@ -175,6 +175,18 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
                                                   static_cast<int32_t>(scene.points.size())),
                              "strata_submit_points");
         }
+        if (!scene.labels.empty()) {
+            std::vector<StrataText> texts;
+            std::vector<float> anchors;
+            for (const auto& l : scene.labels) {
+                texts.push_back(l.text.text);
+                texts.back().utf8 = l.text.value.c_str();
+                anchors.insert(anchors.end(), l.anchor, l.anchor + 3);
+            }
+            ok = ok && check(strata_submit_world_text(engine, texts.data(), anchors.data(),
+                                                      static_cast<int32_t>(texts.size())),
+                             "strata_submit_world_text");
+        }
         if (!scene.texts.empty()) {
             std::vector<StrataText> texts;
             for (const auto& t : scene.texts) {

@@ -297,6 +297,16 @@ class Engine:
     def set_camera(self, camera: Camera) -> None:
         self._call("strata_set_camera", ctypes.byref(camera))
 
+    def project_point(self, world: Sequence[float]) -> Optional[Tuple[float, float, float]]:
+        """ABI 1.14. Where a world point lands with the camera last set: (x, y, depth),
+        in pixels from the drawable's top-left and world units along the view axis,
+        or None when the point is behind the camera."""
+        pixels = (ctypes.c_float * 2)()
+        depth = ctypes.c_float()
+        in_front = ctypes.c_int32()
+        self._call("strata_project_point", _floats(world, 3), pixels, ctypes.byref(depth), ctypes.byref(in_front))
+        return (pixels[0], pixels[1], depth.value) if in_front.value else None
+
     def set_lighting(self, lighting: Lighting) -> None:
         self._call("strata_set_lighting", ctypes.byref(lighting))
 
@@ -442,6 +452,16 @@ class Engine:
         """ABI 1.5. Text.utf8 must be bytes (NUL-terminated by ctypes)."""
         arr, count = _array(Text, texts)
         self._call("strata_submit_text", arr, count)
+
+    def submit_world_text(self, texts, anchors) -> None:
+        """ABI 1.14. Labels at world points: anchors holds one (x, y, z) per text, and
+        each Text's x and y are a pixel offset from where its anchor lands on screen.
+        Labels whose anchor is behind the camera are skipped."""
+        arr, count = _array(Text, texts)
+        flat = [float(v) for anchor in anchors for v in _floats(anchor, 3)]
+        if len(flat) != 3 * count:
+            raise ValueError("expected %d anchors, got %d" % (count, len(flat) // 3))
+        self._call("strata_submit_world_text", arr, (ctypes.c_float * len(flat))(*flat), count)
 
     def end_frame(self) -> None:
         self._call("strata_end_frame")

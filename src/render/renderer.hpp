@@ -55,6 +55,9 @@ public:
     void submitLines(const StrataLineVertex* vertices, size_t count);
     void submitPoints(const StrataPoint* points, size_t count);
     void submitText(const StrataText* texts, size_t count);
+    void submitWorldText(const StrataText* texts, const float* anchors, size_t count);  // ABI 1.14
+    // ABI 1.14: with the current camera onto a width x height drawable.
+    bool projectPoint(const float world[3], int width, int height, float outPixels[2], float* outDepth) const;
     void submitLines(const StrataLineVertex* vertices, size_t count, uint32_t flags);  // ABI 1.11
     void submitRects(const StrataRect* rects, size_t count);                          // ABI 1.11
     void submitWideLines(const StrataWideLineVertex* vertices, size_t count, uint32_t flags);  // ABI 1.13

@@ -795,6 +795,18 @@ void Renderer::submitText(const StrataText* texts, size_t count) {
     overlay_->addText(texts, count);
 }
 
+void Renderer::submitWorldText(const StrataText* texts, const float* anchors, size_t count) {
+    if (!frameOpen_) fail(STRATA_ERROR_INVALID_STATE, "submit_world_text called outside begin_frame/end_frame");
+    overlay_->addWorldText(texts, anchors, count);
+}
+
+bool Renderer::projectPoint(const float world[3], int width, int height, float outPixels[2], float* outDepth) const {
+    if (!std::isfinite(world[0]) || !std::isfinite(world[1]) || !std::isfinite(world[2])) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "world point must be finite");
+    }
+    return render::projectPoint(camera_, width, height, world, outPixels, outDepth);
+}
+
 void Renderer::submitLines(const StrataLineVertex* vertices, size_t count, uint32_t flags) {
     if (!frameOpen_) fail(STRATA_ERROR_INVALID_STATE, "submit_lines_ex called outside begin_frame/end_frame");
     overlay_->addLines(vertices, count, flags);
@@ -1190,7 +1202,7 @@ void Renderer::endFrame() {
     translucentPass(width, height);
 
     stats_.draw_calls += overlay_->drawWorld(offscreenTarget_, width, height, frameUniforms_, sizeof(FrameUniforms));
-    stats_.draw_calls += overlay_->drawText(offscreenTarget_, width, height);
+    stats_.draw_calls += overlay_->drawText(offscreenTarget_, width, height, camera_);
 
     if (host) device_.restoreHostState();
     stats_.cpu_ms_frame = msSince(frameStart);
