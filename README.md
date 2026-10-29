@@ -34,7 +34,8 @@ renders on llvmpipe and compares on each pull request. The animation is the L2
 village drawn at 39 times of day by `tools/make_readme_media.py`.
 
 Strata is a small C++17 engine for simulation projects. It was built for two
-games and is now used by five projects:
+games. Among the projects that use it (all of them are in
+[Made with Strata](#made-with-strata)):
 
 - [**Beyond Nations**](https://github.com/Preponderous-Software/beyond-nations),
   whose simulation is C#, reaches Strata through the C ABI.
@@ -62,6 +63,34 @@ The design is Preponderous Software's RFC 0020, *Shared C++ 3D Engine*.
 - **Two front doors:** a C++ API (`include/strata/strata.hpp`) for C++ games,
   and a versioned C ABI (`include/strata/strata.h`) that C# reaches through
   P/Invoke.
+
+## Made with Strata
+
+<table>
+  <tr>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/beyond-nations.jpg" width="200" alt="Beyond Nations"></a><br>Beyond Nations</td>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/steading.gif" width="200" alt="steading"></a><br>steading</td>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/kindling.jpg" width="200" alt="Kindling"></a><br>Kindling</td>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/orrery.gif" width="200" alt="orrery"></a><br>orrery</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/atman.jpg" width="200" alt="Atman"></a><br>Atman</td>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/sisyphus.jpg" width="200" alt="Sisyphus"></a><br>Sisyphus</td>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/familiar.jpg" width="200" alt="Familiar"></a><br>Familiar</td>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/microbiome.gif" width="200" alt="Microbiome"></a><br>Microbiome</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/asn1-viz.jpg" width="200" alt="asn1-viz"></a><br>asn1-viz</td>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/gardener.jpg" width="200" alt="gardener"></a><br>gardener</td>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/dansplugins-dot-com.jpg" width="200" alt="dansplugins.com"></a><br>dansplugins.com</td>
+    <td align="center"><a href="docs/SHOWCASE.md"><img src="docs/media/showcase/fishe.jpg" width="200" alt="FishE"></a><br>FishE</td>
+  </tr>
+</table>
+
+Eighteen public projects draw with Strata: games, simulation views, a replay
+player, a playtesting toolkit and headless renders for plugin pages.
+[docs/SHOWCASE.md](docs/SHOWCASE.md) lists each one with a link and a picture
+taken from the project itself.
 
 ## Status
 
@@ -265,6 +294,7 @@ archive for C and C++ hosts.
   linking `libstrata.a`, and what differs from the desktop.
 - [docs/DRIVE.md](docs/DRIVE.md): injected input, the frame clock and the
   drive channel (ABI 1.12), for tests, replays and playtesting harnesses.
+- [docs/SHOWCASE.md](docs/SHOWCASE.md): the public projects made with Strata.
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): dependency licences.
 
 ## Licence
