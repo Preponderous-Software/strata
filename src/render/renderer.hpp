@@ -36,6 +36,11 @@ public:
     // ABI 1.6. Unit vector towards the sun for STRATA_LIGHTING_SUN, used
     // instead of time_of_day and latitude; nullptr goes back to them.
     void setSunDirection(const float* toSun);
+    // ABI 1.16. Ambient tint and lift (SUN and SPACE) and the key light's
+    // intensity and tint (SUN); nullptr means the default (1s, or 0s for the
+    // lift). They stay across setLighting.
+    void setAmbient(const float* tint, const float* lift);
+    void setSunIntensity(float intensity, const float* tint);
     void setPointLights(const StrataPointLight* lights, size_t count);
     void setTerrain(const StrataTerrainTile* tile);
     uint32_t addMesh(const StrataMesh& mesh);
@@ -196,6 +201,7 @@ private:
     StrataLighting lighting_{};
     bool hasSunDirection_ = false;
     glm::vec3 sunDirection_{0, 1, 0};
+    LightLevels levels_{};
     SkyState currentSky() const;
     std::vector<StrataPointLight> pointLights_;
     StrataFrameDesc frame_{};

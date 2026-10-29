@@ -235,6 +235,47 @@ class Render(unittest.TestCase):
             with self.assertRaises(ValueError):
                 engine.add_mesh(colors=rgb[:-3], **quad)  # one vertex short
 
+    def test_ambient_and_sun_levels(self):
+        """ABI 1.16: the defaults draw the same bytes; a lift and a dim sun change them."""
+        ground = strata.RenderItem(strata.PRIMITIVE_CUBE, (0, -0.5, 0), (20, 1, 20), (0.6, 0.6, 0.6, 1))
+        block = strata.RenderItem(strata.PRIMITIVE_CUBE, (0, 1, 0), (2, 2, 2), (0.8, 0.5, 0.3, 1))
+        items = (strata.RenderItem * 2)(ground, block)
+
+        def draw(engine, levels=None):
+            if levels:
+                levels(engine)
+            for _ in range(2):
+                engine.begin_frame(clear_color=(0, 0, 0, 1))
+                engine.submit_primitives(items)
+                engine.end_frame()
+            return engine.read_pixels()[0]
+
+        def mean(rgba):
+            return sum(rgba[i] + rgba[i + 1] + rgba[i + 2] for i in range(0, len(rgba), 4)) / len(rgba)
+
+        with strata.Engine(self.lib, 96, 64) as engine:
+            engine.set_camera(self.lib.look_at((6, 5, 8), (0, 0.5, 0), fov_y_degrees=50, aspect=96 / 64))
+            lighting = self.lib.lighting_defaults(strata.LIGHTING_SUN)
+            lighting.time_of_day = 0.35
+            lighting.cascade_count = 0
+            engine.set_lighting(lighting)
+            before = draw(engine)
+            same = draw(engine, lambda e: (e.set_ambient((1, 1, 1), (0, 0, 0)), e.set_sun_intensity(1, (1, 1, 1))))
+            self.assertEqual(bytes(before), bytes(same))
+            lifted = draw(engine, lambda e: e.set_ambient(lift=(0.3, 0.3, 0.3)))
+            self.assertGreater(mean(lifted), mean(before) + 5)
+            dimmed = draw(engine, lambda e: (e.set_ambient(), e.set_sun_intensity(0.2)))
+            self.assertLess(mean(dimmed), mean(before) - 5)
+            engine.set_lighting(lighting)  # the levels stay across set_lighting
+            self.assertEqual(bytes(draw(engine)), bytes(dimmed))
+            with self.assertRaises(strata.StrataError) as caught:
+                engine.set_ambient(tint=(1, 1, -1))
+            self.assertEqual(caught.exception.status, strata.ERROR_INVALID_ARGUMENT)
+            with self.assertRaises(strata.StrataError):
+                engine.set_sun_intensity(float("nan"))
+            engine.set_sun_intensity()
+            self.assertEqual(bytes(draw(engine)), bytes(before))  # nothing else had changed
+
     def test_errors_carry_status_and_text(self):
         with strata.Engine(self.lib, 32, 32) as engine:
             with self.assertRaises(strata.StrataError) as caught:

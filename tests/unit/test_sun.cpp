@@ -112,3 +112,38 @@ TEST(sky_for_a_placed_sun_matches_the_time_of_day_sky) {
     CHECK_NEAR(a.shadowStrength, b.shadowStrength, 1e-6);
     CHECK(evaluateSkyForSun(solarPosition(kDecemberSolstice2026Noon, 40.0, 0.0).toSun).shadowStrength > 0.9f);
 }
+
+TEST(default_light_levels_change_no_bit_of_the_sky) {
+    // ABI 1.16: a host that never calls strata_set_ambient or
+    // strata_set_sun_intensity must draw exactly what 1.15 drew.
+    for (int i = 0; i < 200; ++i) {
+        const SkyState original = evaluateSky(static_cast<float>(i) / 200.0f, 35.0f);
+        SkyState adjusted = original;
+        applyLightLevels(adjusted, LightLevels{});
+        for (int c = 0; c < 3; ++c) {
+            CHECK(adjusted.skyAmbient[c] == original.skyAmbient[c]);
+            CHECK(adjusted.groundAmbient[c] == original.groundAmbient[c]);
+            CHECK(adjusted.lightColor[c] == original.lightColor[c]);
+        }
+        CHECK(adjusted.shadowStrength == original.shadowStrength);
+        CHECK(adjusted.zenith == original.zenith && adjusted.fogColor == original.fogColor);
+    }
+}
+
+TEST(light_levels_tint_lift_and_scale) {
+    const SkyState noon = evaluateSky(0.5f, 35.0f);
+    LightLevels levels;
+    levels.ambientTint = glm::vec3(2.0f, 1.0f, 0.5f);
+    levels.ambientLift = glm::vec3(0.1f, 0.2f, 0.3f);
+    levels.keyTint = glm::vec3(1.0f, 0.5f, 0.25f);
+    levels.keyIntensity = 0.5f;
+    SkyState s = noon;
+    applyLightLevels(s, levels);
+    for (int c = 0; c < 3; ++c) {
+        CHECK_NEAR(s.skyAmbient[c], noon.skyAmbient[c] * levels.ambientTint[c] + levels.ambientLift[c], 1e-6);
+        CHECK_NEAR(s.groundAmbient[c], noon.groundAmbient[c] * levels.ambientTint[c] + levels.ambientLift[c], 1e-6);
+        CHECK_NEAR(s.lightColor[c], noon.lightColor[c] * levels.keyTint[c] * 0.5f, 1e-6);
+    }
+    // The sun keeps its direction, shadows and sky.
+    CHECK(s.toLight == noon.toLight && s.shadowStrength == noon.shadowStrength && s.zenith == noon.zenith);
+}

@@ -110,7 +110,14 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 15u);
+    CHECK(strata_abi_minor() >= 16u);
+}
+
+TEST(light_levels_reject_a_null_engine) {
+    // ABI 1.16.
+    const float tint[3] = {1.0f, 1.0f, 1.0f};
+    CHECK(strata_set_ambient(nullptr, tint, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_set_sun_intensity(nullptr, 1.0f, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
 }
 
 TEST(point_light_layout_is_queryable) {

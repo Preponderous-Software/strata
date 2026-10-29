@@ -167,6 +167,14 @@ void parse(const std::string& path, Scene& scene, int depth) {
             const long long days = daysFromCivil(y, static_cast<unsigned>(mo), static_cast<unsigned>(d));
             scene.sunUnixSeconds = static_cast<double>(days) * 86400.0 + h * 3600.0 + mi * 60.0 - utcOffset * 3600.0;
             scene.hasSunDate = true;
+        } else if (word == "ambient") {
+            for (float& v : scene.ambientTint) read(in, v, where, "ambient tint");
+            for (float& v : scene.ambientLift) read(in, v, where, "ambient lift");
+            scene.hasAmbient = true;
+        } else if (word == "sun_intensity") {
+            read(in, scene.sunIntensity, where, "sun intensity");
+            for (float& v : scene.sunTint) read(in, v, where, "sun tint");
+            scene.hasSunIntensity = true;
         } else if (word == "clear") {
             for (float& v : scene.frame.clear_color) read(in, v, where, "clear colour");
             scene.frame.clear_flags = STRATA_CLEAR_COLOR | STRATA_CLEAR_DEPTH;

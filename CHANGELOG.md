@@ -55,6 +55,33 @@
     character (an accented place name) shows as one `?`. A wider glyph set
     is left for a separate change.
 
+
+- ABI 1.16: ambient and sun levels (#49). In `STRATA_LIGHTING_SUN` the ambient
+  and the sun's strength were fixed functions of time of day, so a host could
+  not lift a scene's shadow side or dim the sun for weather without moving
+  it. `strata_set_ambient(engine, tint, lift)` makes the hemisphere ambient
+  (and SPACE's flat `legacy_ambient`) `ambient * tint + lift`;
+  `strata_set_sun_intensity(engine, intensity, tint)` scales the key light
+  (the sun, or the moon at night) and keeps its direction, shadows and the
+  sky. Both stay across `strata_set_lighting`, are ignored by LEGACY, and
+  are validated (tint and intensity 0..16, lift 0..1; NULL is the default).
+  New functions only: `StrataLighting` is unchanged, `STRATA_ABI_VERSION`
+  stays 1 and `STRATA_ABI_MINOR` is 16. The defaults draw exactly what 1.15
+  drew (`x * 1 + 0` is `x`): every existing golden passes unchanged, a unit
+  test checks the sky bit for bit over a whole day, and the Python test
+  draws the same bytes with and without explicit default calls. In the C#
+  and Python bindings (`set_ambient`, `set_sun_intensity`). Scene files gain
+  `ambient` and `sun_intensity`; new golden `sun_levels_overcast`
+  (before and after: `docs/media/light-levels.png`).
+- Web kit 1.2 (the same unreleased kit minor as `Host::label`, #47):
+  `Host::ambientTint`, `ambientLift`, `sunIntensity` and
+  `sunTint` (applied every frame; the defaults draw what 1.1 drew), and
+  `Host::fill(light, lift, priority)`: a fill light whose `lift` is added to
+  the ambient when the tier's light budget drops it, so a scene that stands
+  in fill lights for ambient no longer goes dark at tier 0 (4 lights). The
+  tiers' budgets are unchanged, and a light added with `light()` adds
+  nothing when dropped, so no tier changes for an existing host. Unit tests
+  in `test_kit_lights.cpp`.
 - Web kit: the slow bar (`StrataLoader.slow()`) wraps its buttons under its
   text when the row is too narrow, and its width is no longer capped at half
   the viewport (an auto width beside `left:50%`). On a 390 px phone it used

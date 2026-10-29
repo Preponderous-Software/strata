@@ -17,7 +17,10 @@ add_executable(strata-unit-tests
     test_image_compare.cpp
     test_image_png.cpp
     test_glsl_es.cpp
-    test_headless_driver.cpp)
+    test_headless_driver.cpp
+    test_kit_lights.cpp)
 target_link_libraries(strata-unit-tests PRIVATE strata_static)
+# test_kit_lights.cpp includes the web kit's header (without STRATA_KIT_MAIN).
+target_include_directories(strata-unit-tests PRIVATE ${PROJECT_SOURCE_DIR}/web/kit)
 strata_set_warnings(strata-unit-tests)
 add_test(NAME strata-unit-tests COMMAND strata-unit-tests)

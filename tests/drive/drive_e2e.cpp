@@ -146,7 +146,8 @@ std::vector<uint8_t> steppedRun(const std::string& dir, int run, bool& skipped) 
     for (int i = 0; i < 30; ++i) total += frame(*engine, held, x);
     const std::string hello = readLine(harness);
     EXPECT(hello.find("\"surface\":\"headless\"") != std::string::npos);
-    const std::string abi = "\"abi\":\"" + std::to_string(STRATA_ABI_VERSION) + "." + std::to_string(STRATA_ABI_MINOR) + "\"";
+    const std::string abi =
+        "\"abi\":\"" + std::to_string(STRATA_ABI_VERSION) + "." + std::to_string(STRATA_ABI_MINOR) + "\"";
     EXPECT(hello.find(abi) != std::string::npos);
     EXPECT(hello.find("\"clock\":\"stepped\"") != std::string::npos);
     EXPECT(readLine(harness).find("\"op\":\"event\"") != std::string::npos);

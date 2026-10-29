@@ -84,6 +84,13 @@ namespace Strata.Interop.Tests {
         }
 
         [Fact]
+        public unsafe void LightLevelsAreExported() {
+            // ABI 1.16: both resolve, and a null engine is STRATA_ERROR_INVALID_ARGUMENT.
+            Assert.Equal(1, StrataNative.strata_set_ambient(IntPtr.Zero, null, null));
+            Assert.Equal(1, StrataNative.strata_set_sun_intensity(IntPtr.Zero, 1.0f, null));
+        }
+
+        [Fact]
         public unsafe void TexturedMeshMatchesNative() {
             if (IntPtr.Size == 8) Assert.Equal(72, Unsafe.SizeOf<StrataTexturedMesh>());
             AssertLayout<StrataTexturedMesh>(StrataAbi.StructTexturedMesh, "mesh", "uvs", "texture", "flags");

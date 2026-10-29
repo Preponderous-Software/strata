@@ -444,8 +444,44 @@ void Renderer::setCamera(const StrataCamera& camera) {
 }
 
 SkyState Renderer::currentSky() const {
-    return hasSunDirection_ ? evaluateSkyForSun(sunDirection_)
-                            : evaluateSky(lighting_.time_of_day, lighting_.latitude_degrees);
+    SkyState sky = hasSunDirection_ ? evaluateSkyForSun(sunDirection_)
+                                    : evaluateSky(lighting_.time_of_day, lighting_.latitude_degrees);
+    applyLightLevels(sky, levels_);
+    return sky;
+}
+
+namespace {
+
+// Three components, each in [0, max]; nullptr is fallback in all three.
+glm::vec3 levelTriple(const float* v, float fallback, float max, const char* what) {
+    if (v == nullptr) return glm::vec3(fallback);
+    for (int i = 0; i < 3; ++i) {
+        if (!(v[i] >= 0.0f && v[i] <= max)) {
+            fail(STRATA_ERROR_INVALID_ARGUMENT, "%s must be in [0, %g] (got %g, %g, %g)", what,
+                 static_cast<double>(max), static_cast<double>(v[0]), static_cast<double>(v[1]),
+                 static_cast<double>(v[2]));
+        }
+    }
+    return glm::vec3(v[0], v[1], v[2]);
+}
+
+}  // namespace
+
+void Renderer::setAmbient(const float* tint, const float* lift) {
+    const glm::vec3 t = levelTriple(tint, 1.0f, 16.0f, "ambient tint");
+    const glm::vec3 l = levelTriple(lift, 0.0f, 1.0f, "ambient lift");
+    levels_.ambientTint = t;
+    levels_.ambientLift = l;
+}
+
+void Renderer::setSunIntensity(float intensity, const float* tint) {
+    if (!(intensity >= 0.0f && intensity <= 16.0f)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "sun intensity must be in [0, 16] (got %g)",
+             static_cast<double>(intensity));
+    }
+    const glm::vec3 t = levelTriple(tint, 1.0f, 16.0f, "sun tint");
+    levels_.keyIntensity = intensity;
+    levels_.keyTint = t;
 }
 
 void Renderer::setSunDirection(const float* toSun) {
@@ -907,7 +943,7 @@ void Renderer::writeFrameUniforms(int width, int height, const Cascades* cascade
     } else if (lighting_.mode == STRATA_LIGHTING_SPACE) {
         // The sun shader with no key light (zero colour, zero direction), a
         // flat ambient from both hemispheres and fog off: point lights only.
-        const glm::vec3 ambient(lighting_.legacy_ambient);
+        const glm::vec3 ambient = glm::vec3(lighting_.legacy_ambient) * levels_.ambientTint + levels_.ambientLift;
         u.skyAmbient = glm::vec4(ambient, 0.0f);
         u.groundAmbient = glm::vec4(ambient, 0.0f);
         u.zenith = glm::vec4(0.0f, 0.0f, 0.0f, camera_.far_plane);

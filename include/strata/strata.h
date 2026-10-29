@@ -72,9 +72,11 @@
  *        STRATA_LINES_ROUND_CAPS)
  *   1.14 world-to-screen projection and world-anchored text
  *        (strata_project_point, strata_submit_world_text)
- *   1.15 per-vertex RGBA mesh colours (STRATA_MESH_COLORS_RGBA) */
+ *   1.15 per-vertex RGBA mesh colours (STRATA_MESH_COLORS_RGBA)
+ *   1.16 ambient and sun levels (strata_set_ambient,
+ *        strata_set_sun_intensity) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 15u
+#define STRATA_ABI_MINOR 16u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -648,6 +650,27 @@ STRATA_API StrataStatus strata_solar_position(double unix_seconds_utc, double la
  * shadows. It stays until the next call, across strata_set_lighting calls.
  * NULL goes back to time_of_day and latitude_degrees. */
 STRATA_API StrataStatus strata_set_sun_direction(StrataEngine* engine, const float to_sun[3]);
+
+/* ABI 1.16. Adjusts the ambient term without moving the sun. In
+ * STRATA_LIGHTING_SUN the hemisphere ambient (sky and ground) becomes
+ * ambient * tint + lift; in STRATA_LIGHTING_SPACE the flat legacy_ambient does
+ * the same. LEGACY ignores both. tint is linear RGB, each component 0..16
+ * (NULL: 1, 1, 1); lift is linear RGB, each 0..1 (NULL: 0, 0, 0). A tint of
+ * equal components scales the ambient; a lift raises the shadow side (an
+ * interior, a deep valley, or fill lights a tier has dropped). The sky, fog
+ * and point lights are unchanged. Both stay until the next call, across
+ * strata_set_lighting calls; strata_set_ambient(engine, NULL, NULL) goes back
+ * to the defaults, which draw exactly what a 1.12 library draws. On an
+ * invalid value nothing changes. */
+STRATA_API StrataStatus strata_set_ambient(StrataEngine* engine, const float tint[3], const float lift[3]);
+/* ABI 1.16. Scales the STRATA_LIGHTING_SUN key light (the sun by day, the
+ * moon at night) by intensity (0..16) and tint (linear RGB, each 0..16; NULL:
+ * 1, 1, 1), keeping its direction, shadows and the sky: dim or warm the sun
+ * for weather or mood. Ignored by LEGACY and SPACE. It stays until the next
+ * call, across strata_set_lighting calls; strata_set_sun_intensity(engine, 1,
+ * NULL) goes back to the default, which draws exactly what a 1.12 library
+ * draws. On an invalid value nothing changes. */
+STRATA_API StrataStatus strata_set_sun_intensity(StrataEngine* engine, float intensity, const float tint[3]);
 
 /* ABI 1.1. Replaces the scene's point lights with a copy of `lights`; they
  * stay until the next call. count 0 (lights may then be NULL) removes them

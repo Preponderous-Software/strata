@@ -90,6 +90,7 @@ struct Options {
 struct Light {
     StrataPointLight light;
     int priority;  // higher is kept first when there are more than the tier allows
+    Rgb dropLift{0.0f, 0.0f, 0.0f};  // kit 1.2: ambient added when the tier drops this light (Host::fill)
 };
 
 struct Host {
@@ -107,6 +108,13 @@ struct Host {
     float toSun[3] = {0.3f, 0.8f, 0.4f};
     float night = 0.0f;
     float sunElevation = 45.0f;
+    // Kit 1.2 (ABI 1.16): ambient and sun levels, applied every frame through
+    // strata_set_ambient and strata_set_sun_intensity. The host may change
+    // them at any time; these defaults draw exactly what kit 1.1 drew.
+    Rgb ambientTint{1.0f, 1.0f, 1.0f};
+    Rgb ambientLift{0.0f, 0.0f, 0.0f};
+    float sunIntensity = 1.0f;
+    Rgb sunTint{1.0f, 1.0f, 1.0f};
     // This frame's batches. The kit clears them before strata_kit_build.
     std::vector<StrataRenderItem> items;
     std::vector<StrataPoint> points;
@@ -126,6 +134,7 @@ struct Host {
     int32_t frames = 0;
     int32_t pointsRejected = 0;
     int32_t labelsRejected = 0;  // kit 1.2: calls to strata_submit_world_text that failed
+    int32_t levelsRejected = 0;  // kit 1.2: bad ambient or sun levels, reported once
 #ifdef __EMSCRIPTEN__
     EMSCRIPTEN_WEBGL_CONTEXT_HANDLE context = 0;
 #endif
@@ -238,6 +247,11 @@ struct Host {
         l.intensity = intensity;
         light(l, priority);
     }
+    // Kit 1.2. A fill light: a point light standing in for ambient. When the
+    // tier's budget drops it (tier 0 keeps 4), `lift` is added to this frame's
+    // ambient lift instead, so the scene does not go dark on the devices that
+    // run at the lowest tier. A light the tier keeps adds nothing.
+    void fill(const StrataPointLight& l, Rgb lift, int priority = 0) { lights.push_back({l, priority, lift}); }
 };
 
 // The one host of this module.
@@ -256,6 +270,27 @@ inline void mul4(const float* a, const float* b, float* out) {  // column-major 
 }
 
 inline void* noProcAddress(const char*, void*) { return nullptr; }
+
+// Kit 1.2. Sorts a frame's lights by priority (stably, so equal priorities
+// keep their order), copies the first maxLights into kept (room for
+// STRATA_MAX_POINT_LIGHTS) and adds each dropped light's dropLift to lift.
+// Returns the number kept.
+inline int32_t cutLights(std::vector<Light>& lights, int maxLights, StrataPointLight* kept, float lift[3]) {
+    std::stable_sort(lights.begin(), lights.end(),
+                     [](const Light& a, const Light& b) { return a.priority > b.priority; });
+    const int budget = std::clamp(maxLights, 0, static_cast<int>(STRATA_MAX_POINT_LIGHTS));
+    int32_t n = 0;
+    for (const Light& l : lights) {
+        if (n < budget) {
+            kept[n++] = l.light;
+        } else {
+            lift[0] += l.dropLift.r;
+            lift[1] += l.dropLift.g;
+            lift[2] += l.dropLift.b;
+        }
+    }
+    return n;
+}
 
 }  // namespace strata_kit
 
@@ -502,16 +537,20 @@ STRATA_KIT_EXPORT int sk_frame(double seconds) {
     h.pointSeq = 0;
     strata_kit_build(h, seconds);
 
-    std::stable_sort(h.lights.begin(), h.lights.end(),
-                     [](const Light& a, const Light& b) { return a.priority > b.priority; });
     StrataPointLight kept[STRATA_MAX_POINT_LIGHTS];
-    int32_t n = 0;
-    for (const Light& l : h.lights) {
-        if (n >= tier.maxLights) break;
-        kept[n++] = l.light;
-    }
+    float lift[3] = {h.ambientLift.r, h.ambientLift.g, h.ambientLift.b};
+    const int32_t n = cutLights(h.lights, tier.maxLights, kept, lift);
     h.lightsDrawn = n;
     strata_set_point_lights(h.engine, kept, n);
+    for (float& v : lift) v = std::clamp(v, 0.0f, 1.0f);
+    const float ambientTint[3] = {h.ambientTint.r, h.ambientTint.g, h.ambientTint.b};
+    if (strata_set_ambient(h.engine, ambientTint, lift) != STRATA_OK && h.levelsRejected++ == 0) {
+        std::fprintf(stderr, "%s: strata_set_ambient: %s\n", o.name, strata_last_error());
+    }
+    const float sunTint[3] = {h.sunTint.r, h.sunTint.g, h.sunTint.b};
+    if (strata_set_sun_intensity(h.engine, h.sunIntensity, sunTint) != STRATA_OK && h.levelsRejected++ == 0) {
+        std::fprintf(stderr, "%s: strata_set_sun_intensity: %s\n", o.name, strata_last_error());
+    }
 
     StrataFrameDesc desc{};
     desc.clear_flags = STRATA_CLEAR_COLOR | STRATA_CLEAR_DEPTH | STRATA_CLEAR_SKY;

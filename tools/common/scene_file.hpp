@@ -45,6 +45,10 @@
 //                                 (model = translate * rotate(tilt axis) * rotate(+Y, spin) * scale)
 //   sun date <YYYY-MM-DD> <HH:MM> <utc_offset_hours> <latitude> <longitude>
 //                                 (ABI 1.6: places the sun with strata_solar_position)
+//   ambient <tint r g b> <lift r g b>
+//                                 (ABI 1.16: strata_set_ambient; ambient becomes ambient * tint + lift)
+//   sun_intensity <intensity> <tint r g b>
+//                                 (ABI 1.16: strata_set_sun_intensity; scales the sun or moon)
 //   texture_update <name> <x> <y> <w> <h> <r g b>
 //                                 (ABI 1.8: fills that rectangle of a texture with one colour through
 //                                  strata_update_texture_rgba8, after the first frame and before the
@@ -95,6 +99,12 @@ struct Scene {
     double sunUnixSeconds = 0.0;
     double sunLatitude = 0.0;
     double sunLongitude = 0.0;
+    bool hasAmbient = false;  // ABI 1.16
+    float ambientTint[3] = {1, 1, 1};
+    float ambientLift[3] = {0, 0, 0};
+    bool hasSunIntensity = false;  // ABI 1.16
+    float sunIntensity = 1.0f;
+    float sunTint[3] = {1, 1, 1};
     StrataFrameDesc frame{};
     std::vector<StrataRenderItem> items;
     std::vector<StrataLineVertex> lines;
