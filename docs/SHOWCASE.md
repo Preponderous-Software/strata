@@ -1,5 +1,15 @@
 # Made with Strata
 
+<img src="media/family-orbit.gif" width="720" alt="Strata as a glowing core with a light in it, and the eighteen projects below as spheres on three rings around it, joined to the core by thin lines; the camera goes once round">
+
+<sub>The family, drawn by Strata v0.7.0 itself through the Python binding
+(`tools/make_family_media.py`). Inner ring, violet: renders and previews.
+Middle ring, teal: simulations and views. Outer ring, orange: games. Each
+sphere's size is its GitHub repository size on a log scale (read on
+2026-10-29), from Familiar at 125 KB to Beyond Nations at about 74 MB. The core's
+point light gives each one its lit side. A still is in
+[`media/showcase/family.jpg`](media/showcase/family.jpg).</sub>
+
 Every public project that draws with Strata, with a picture from the project
 itself. Each image is copied from that project's own README or docs at the
 commit named under it and downscaled to fit here (a still frame where the
@@ -223,5 +233,8 @@ Add an entry when a public project draws with Strata:
    stays under 2 MB.
 3. Add the entry here with the source path and commit, and, if it fits, a
    thumbnail in the README's "Made with Strata" grid.
+4. Add the repository to `PROJECTS` in `tools/make_family_media.py` (its size
+   from `tools/make_family_media.py --refresh`) and run it to redraw the family
+   picture above.
 
 Private projects are not listed.
