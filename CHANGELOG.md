@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Web kit: the slow bar (`StrataLoader.slow()`) wraps its buttons under its
+  text when the row is too narrow, and its width is no longer capped at half
+  the viewport (an auto width beside `left:50%`). On a 390 px phone it used
+  to squeeze the text and the button onto several lines each, side by side.
+  The smoke test's loader checks now include the bar at 390 px. The kit
+  version stays 1.1.
+
 ## 0.7.0
 
 The web kit: the shell around a Strata scene embedded in a web page, shipped
