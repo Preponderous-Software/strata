@@ -55,7 +55,9 @@ Useful switches:
   function, struct or enum value is not a break: bump `STRATA_ABI_MINOR`
   instead, add the minor to the version list at the top of `strata.h`, mark
   each addition with it, and update the same places for any new struct. New functions go
-  into the C# and Python bindings too, with the minor they arrived in.
+  into the C# and Python bindings too, with the minor they arrived in. A new
+  name goes into the poison list in `tests/unit/kit_abi_floor.h` as well, and
+  the web kit uses it only inside an `#if STRATA_ABI_MINOR >= n` guard.
 - **Golden images.** A golden changes only in a PR that explains why and shows
   the before and after images. See
   [docs/GOLDEN_IMAGES.md](docs/GOLDEN_IMAGES.md).

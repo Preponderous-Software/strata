@@ -82,6 +82,15 @@
   tiers' budgets are unchanged, and a light added with `light()` adds
   nothing when dropped, so no tier changes for an existing host. Unit tests
   in `test_kit_lights.cpp`.
+- Web kit: a vendored kit builds against the 0.7.0 library again (#68).
+  `Host::wideLine` (ABI 1.13) and the light levels (ABI 1.16) called the
+  newer functions with no `STRATA_ABI_MINOR` guard, so docs/WEB.md's
+  promise that the newer parts compile out held only for `Host::label`.
+  They are now guarded like it; against an older `strata.h` they are absent
+  and a dropped `fill` light adds no ambient. A new compile-only target,
+  `strata-kit-abi-floor`, builds the kit's example scene with
+  `STRATA_ABI_MINOR` lowered to 12 and every newer name poisoned (GCC and
+  Clang), so an unguarded call fails the build. No ABI or pixel change.
 - Web kit: the slow bar (`StrataLoader.slow()`) wraps its buttons under its
   text when the row is too narrow, and its width is no longer capped at half
   the viewport (an auto width beside `left:50%`). On a 390 px phone it used

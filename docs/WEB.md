@@ -276,8 +276,12 @@ versions differ. A host that pins a release takes the kit from that release's ta
 same release) and needs no vendored copy. A host that needs a kit fix before
 the next Strata release can vendor `web/kit/` at a pinned commit and link the
 last release's `libstrata.a`: the kit uses only the C ABI, and its parts
-that need a newer ABI than that release's `strata.h` (`Host::label`, ABI
-1.14) compile out.
+that need a newer ABI than that release's `strata.h` compile out:
+`Host::wideLine` (ABI 1.13), `Host::label` (ABI 1.14) and the light levels
+`Host::ambientTint`, `ambientLift`, `sunIntensity` and `sunTint` (ABI 1.16;
+without them a dropped `fill` light adds no ambient). A compile-only target in
+`tests/unit` (`strata-kit-abi-floor`) builds the example scene as against the
+0.7.0 `strata.h` (ABI 1.12), so an unguarded newer call fails the build.
 
 ## Beyond Nations (.NET `browser-wasm`)
 

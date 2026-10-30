@@ -108,18 +108,23 @@ struct Host {
     float toSun[3] = {0.3f, 0.8f, 0.4f};
     float night = 0.0f;
     float sunElevation = 45.0f;
+#if STRATA_ABI_MINOR >= 16
     // Kit 1.2 (ABI 1.16): ambient and sun levels, applied every frame through
     // strata_set_ambient and strata_set_sun_intensity. The host may change
-    // them at any time; these defaults draw exactly what kit 1.1 drew.
+    // them at any time; these defaults draw exactly what kit 1.1 drew. Built
+    // against an older strata.h they are absent.
     Rgb ambientTint{1.0f, 1.0f, 1.0f};
     Rgb ambientLift{0.0f, 0.0f, 0.0f};
     float sunIntensity = 1.0f;
     Rgb sunTint{1.0f, 1.0f, 1.0f};
+#endif
     // This frame's batches. The kit clears them before strata_kit_build.
     std::vector<StrataRenderItem> items;
     std::vector<StrataPoint> points;
     std::vector<StrataLineVertex> lines;
+#if STRATA_ABI_MINOR >= 13
     std::vector<StrataWideLineVertex> wideLines[4];  // ABI 1.13, by their STRATA_LINES_* flags
+#endif
     std::vector<Light> lights;
     // Kit 1.2: labels (see label()); their strings are copied, so the host's
     // can go away as soon as label() returns.
@@ -185,9 +190,11 @@ struct Host {
         lines.push_back(v1);
     }
 
+#if STRATA_ABI_MINOR >= 13
     // ABI 1.13. A line segment widthPixels wide on screen, or worldWidth wide
     // in the world where that projects wider: a road, a river, a trail. Round
-    // caps by default, so segments that share an end join cleanly.
+    // caps by default, so segments that share an end join cleanly. Built
+    // against an older strata.h it is absent.
     void wideLine(float x0, float y0, float z0, float x1, float y1, float z1, Rgb c, float widthPixels,
                   float worldWidth = 0.0f, float a = 1.0f, uint32_t flags = STRATA_LINES_ROUND_CAPS) {
         const float alpha = std::clamp(a, 0.0f, 1.0f);
@@ -198,6 +205,7 @@ struct Host {
         to.push_back(v0);
         to.push_back(v1);
     }
+#endif
 #if STRATA_ABI_MINOR >= 14
     // Kit 1.2 (Strata ABI 1.14). Text drawn by the engine at a world point,
     // centred just above it and hidden while the point is behind the camera
@@ -250,7 +258,8 @@ struct Host {
     // Kit 1.2. A fill light: a point light standing in for ambient. When the
     // tier's budget drops it (tier 0 keeps 4), `lift` is added to this frame's
     // ambient lift instead, so the scene does not go dark on the devices that
-    // run at the lowest tier. A light the tier keeps adds nothing.
+    // run at the lowest tier. A light the tier keeps adds nothing. Built
+    // against a strata.h older than ABI 1.16 a dropped fill adds nothing either.
     void fill(const StrataPointLight& l, Rgb lift, int priority = 0) { lights.push_back({l, priority, lift}); }
 };
 
@@ -485,7 +494,9 @@ STRATA_KIT_EXPORT const int32_t* sk_stats() {
     s[0] = static_cast<int32_t>(h.items.size());
     s[1] = static_cast<int32_t>(h.points.size());
     size_t segments = h.lines.size();
+#if STRATA_ABI_MINOR >= 13
     for (const auto& wide : h.wideLines) segments += wide.size();
+#endif
     s[2] = static_cast<int32_t>(segments / 2);
     s[3] = h.lightsDrawn;
     s[4] = h.terrainSamples;
@@ -529,7 +540,9 @@ STRATA_KIT_EXPORT int sk_frame(double seconds) {
     h.items.clear();
     h.points.clear();
     h.lines.clear();
+#if STRATA_ABI_MINOR >= 13
     for (auto& wide : h.wideLines) wide.clear();
+#endif
     h.lights.clear();
     h.labels.clear();
     h.labelAnchors.clear();
@@ -538,10 +551,15 @@ STRATA_KIT_EXPORT int sk_frame(double seconds) {
     strata_kit_build(h, seconds);
 
     StrataPointLight kept[STRATA_MAX_POINT_LIGHTS];
+#if STRATA_ABI_MINOR >= 16
     float lift[3] = {h.ambientLift.r, h.ambientLift.g, h.ambientLift.b};
+#else
+    float lift[3] = {0.0f, 0.0f, 0.0f};  // no strata_set_ambient before ABI 1.16
+#endif
     const int32_t n = cutLights(h.lights, tier.maxLights, kept, lift);
     h.lightsDrawn = n;
     strata_set_point_lights(h.engine, kept, n);
+#if STRATA_ABI_MINOR >= 16
     for (float& v : lift) v = std::clamp(v, 0.0f, 1.0f);
     const float ambientTint[3] = {h.ambientTint.r, h.ambientTint.g, h.ambientTint.b};
     if (strata_set_ambient(h.engine, ambientTint, lift) != STRATA_OK && h.levelsRejected++ == 0) {
@@ -551,6 +569,7 @@ STRATA_KIT_EXPORT int sk_frame(double seconds) {
     if (strata_set_sun_intensity(h.engine, h.sunIntensity, sunTint) != STRATA_OK && h.levelsRejected++ == 0) {
         std::fprintf(stderr, "%s: strata_set_sun_intensity: %s\n", o.name, strata_last_error());
     }
+#endif
 
     StrataFrameDesc desc{};
     desc.clear_flags = STRATA_CLEAR_COLOR | STRATA_CLEAR_DEPTH | STRATA_CLEAR_SKY;
@@ -561,10 +580,12 @@ STRATA_KIT_EXPORT int sk_frame(double seconds) {
     }
     if (!h.items.empty()) strata_submit_primitives(h.engine, h.items.data(), static_cast<int32_t>(h.items.size()));
     if (!h.lines.empty()) strata_submit_lines(h.engine, h.lines.data(), static_cast<int32_t>(h.lines.size()));
+#if STRATA_ABI_MINOR >= 13
     for (uint32_t flags = 0; flags < 4; ++flags) {
         const auto& wide = h.wideLines[flags];
         if (!wide.empty()) strata_submit_wide_lines(h.engine, wide.data(), static_cast<int32_t>(wide.size()), flags);
     }
+#endif
     if (!h.points.empty() &&
         strata_submit_points(h.engine, h.points.data(), static_cast<int32_t>(h.points.size())) != STRATA_OK) {
         // One bad point drops the whole call; say so once, not every frame.
