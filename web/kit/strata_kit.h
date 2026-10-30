@@ -109,6 +109,7 @@ struct Host {
     std::vector<StrataRenderItem> items;
     std::vector<StrataPoint> points;
     std::vector<StrataLineVertex> lines;
+    std::vector<StrataWideLineVertex> wideLines[4];  // ABI 1.13, by their STRATA_LINES_* flags
     std::vector<Light> lights;
     // Stats of the last frame (sk_stats).
     uint32_t pointSeq = 0;
@@ -165,6 +166,20 @@ struct Host {
         StrataLineVertex v1{{x1, y1, z1}, {c.r, c.g, c.b, alpha}};
         lines.push_back(v0);
         lines.push_back(v1);
+    }
+
+    // ABI 1.13. A line segment widthPixels wide on screen, or worldWidth wide
+    // in the world where that projects wider: a road, a river, a trail. Round
+    // caps by default, so segments that share an end join cleanly.
+    void wideLine(float x0, float y0, float z0, float x1, float y1, float z1, Rgb c, float widthPixels,
+                  float worldWidth = 0.0f, float a = 1.0f, uint32_t flags = STRATA_LINES_ROUND_CAPS) {
+        const float alpha = std::clamp(a, 0.0f, 1.0f);
+        const float px = std::max(widthPixels, 0.0f), world = std::max(worldWidth, 0.0f);
+        StrataWideLineVertex v0{{x0, y0, z0}, {c.r, c.g, c.b, alpha}, px, world};
+        StrataWideLineVertex v1{{x1, y1, z1}, {c.r, c.g, c.b, alpha}, px, world};
+        auto& to = wideLines[flags & (STRATA_LINES_ON_TOP | STRATA_LINES_ROUND_CAPS)];
+        to.push_back(v0);
+        to.push_back(v1);
     }
 
     // A point light. All of a frame's lights are sorted by priority (stably,
@@ -385,7 +400,7 @@ STRATA_KIT_EXPORT float sk_set_sun(double unixSeconds, double lat, double lon) {
 // The view-projection matrix of the last frame (column-major, 16 floats).
 STRATA_KIT_EXPORT const float* sk_view_proj() { return strata_kit::host().viewProj; }
 
-// What the last frame drew: primitives, points, line segments, point lights,
+// What the last frame drew: primitives, points, line segments (wide ones too), point lights,
 // terrain samples, quality, width, height, frames drawn, points rejected,
 // meshes (kit 1.1; as the host set Host::meshes).
 STRATA_KIT_EXPORT const int32_t* sk_stats() {
@@ -393,7 +408,9 @@ STRATA_KIT_EXPORT const int32_t* sk_stats() {
     static int32_t s[11];
     s[0] = static_cast<int32_t>(h.items.size());
     s[1] = static_cast<int32_t>(h.points.size());
-    s[2] = static_cast<int32_t>(h.lines.size() / 2);
+    size_t segments = h.lines.size();
+    for (const auto& wide : h.wideLines) segments += wide.size();
+    s[2] = static_cast<int32_t>(segments / 2);
     s[3] = h.lightsDrawn;
     s[4] = h.terrainSamples;
     s[5] = h.quality;
@@ -436,6 +453,7 @@ STRATA_KIT_EXPORT int sk_frame(double seconds) {
     h.items.clear();
     h.points.clear();
     h.lines.clear();
+    for (auto& wide : h.wideLines) wide.clear();
     h.lights.clear();
     h.pointSeq = 0;
     strata_kit_build(h, seconds);
@@ -460,6 +478,10 @@ STRATA_KIT_EXPORT int sk_frame(double seconds) {
     }
     if (!h.items.empty()) strata_submit_primitives(h.engine, h.items.data(), static_cast<int32_t>(h.items.size()));
     if (!h.lines.empty()) strata_submit_lines(h.engine, h.lines.data(), static_cast<int32_t>(h.lines.size()));
+    for (uint32_t flags = 0; flags < 4; ++flags) {
+        const auto& wide = h.wideLines[flags];
+        if (!wide.empty()) strata_submit_wide_lines(h.engine, wide.data(), static_cast<int32_t>(wide.size()), flags);
+    }
     if (!h.points.empty() &&
         strata_submit_points(h.engine, h.points.data(), static_cast<int32_t>(h.points.size())) != STRATA_OK) {
         // One bad point drops the whole call; say so once, not every frame.

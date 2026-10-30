@@ -67,9 +67,11 @@
  *        strata_submit_rects)
  *   1.12 injected input, a shared frame clock and the drive channel
  *        (strata_push_event, strata_frame_seconds, strata_is_driven,
- *        STRATA_DRIVE; see docs/DRIVE.md) */
+ *        STRATA_DRIVE; see docs/DRIVE.md)
+ *   1.13 wide lines (StrataWideLineVertex, strata_submit_wide_lines,
+ *        STRATA_LINES_ROUND_CAPS) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 12u
+#define STRATA_ABI_MINOR 13u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -393,6 +395,24 @@ typedef struct StrataPoint {
 
 /* strata_submit_lines_ex flags (ABI 1.11). */
 #define STRATA_LINES_ON_TOP 0x1u /* not depth-tested: the lines show through the scene (an arc behind a hill) */
+/* ABI 1.13, strata_submit_wide_lines only (strata_submit_lines_ex rejects it):
+ * each segment ends in a half disc instead of a square end, so segments that
+ * share an end join without a notch, at any angle. */
+#define STRATA_LINES_ROUND_CAPS 0x2u
+
+/* ABI 1.13. One end of a wide line segment: a StrataLineVertex with a width.
+ * The segment is drawn as a camera-facing quad (two triangles), so its width
+ * holds in a browser too, where WebGL draws GL lines one pixel wide. Its
+ * width on screen at each end is the larger of width_pixels and world_width
+ * as projected at that end's distance, and it varies linearly along the
+ * segment, so a ribbon can taper. The colour varies the same way. Edges are
+ * antialiased over about one pixel. 36 bytes. */
+typedef struct StrataWideLineVertex {
+    float position[3];  /* world space */
+    float color[4];     /* linear RGBA; alpha blends */
+    float width_pixels; /* >= 0: smallest width on screen, in pixels */
+    float world_width;  /* >= 0: width in world units; 0 for a pure screen-width line */
+} StrataWideLineVertex;
 
 /* ABI 1.11. A filled rectangle on screen, in pixels from the top-left of the
  * drawable, alpha blended: a backing panel for text, a bar, a HUD block. A
@@ -490,7 +510,8 @@ enum {
     STRATA_STRUCT_SOLAR_POSITION = 13, /* ABI 1.6 */
     STRATA_STRUCT_TEXTURED_MESH = 14,  /* ABI 1.7 */
     STRATA_STRUCT_RAY_HIT = 15,        /* ABI 1.8 */
-    STRATA_STRUCT_RECT = 16            /* ABI 1.11 */
+    STRATA_STRUCT_RECT = 16,           /* ABI 1.11 */
+    STRATA_STRUCT_WIDE_LINE_VERTEX = 17 /* ABI 1.13 */
 };
 
 /* Field ids for strata_struct_field_offset(STRATA_STRUCT_RENDER_ITEM, ...). */
@@ -708,6 +729,14 @@ STRATA_API StrataStatus strata_submit_lines_ex(StrataEngine* engine, const Strat
  * rectangle is checked first; on an invalid one nothing from the call is
  * added. */
 STRATA_API StrataStatus strata_submit_rects(StrataEngine* engine, const StrataRect* rects, int32_t count);
+/* ABI 1.13. Wide lines (see StrataWideLineVertex): count is a number of
+ * vertices, even, and each pair is one segment, as for strata_submit_lines.
+ * flags are STRATA_LINES_ON_TOP and STRATA_LINES_ROUND_CAPS; an unknown bit
+ * is STRATA_ERROR_INVALID_ARGUMENT. They are drawn with this frame's lines of
+ * the same kind (depth-tested or on top), after the one-pixel ones. Overlapping
+ * translucent segments (a round-capped joint) blend twice where they overlap. */
+STRATA_API StrataStatus strata_submit_wide_lines(StrataEngine* engine, const StrataWideLineVertex* vertices,
+                                                 int32_t count, uint32_t flags);
 STRATA_API StrataStatus strata_end_frame(StrataEngine* engine);
 /* Window: swaps buffers. Headless and host context: no-op. */
 STRATA_API StrataStatus strata_present(StrataEngine* engine);

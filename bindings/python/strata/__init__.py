@@ -54,6 +54,7 @@ from ._abi import (
     TerrainTile,
     Text,
     TexturedMesh,
+    WideLineVertex,
     bind,
     check_layouts,
     STRUCTS,
@@ -419,6 +420,13 @@ class Engine:
             self._call("strata_submit_lines_ex", arr, count, flags)
         else:
             self._call("strata_submit_lines", arr, count)
+
+    def submit_wide_lines(self, vertices, flags: int = 0) -> None:
+        """ABI 1.13. An even number of WideLineVertex; each pair is one segment,
+        drawn as a quad of width_pixels or world_width, whichever is wider on
+        screen. flags: LINES_ON_TOP, LINES_ROUND_CAPS."""
+        arr, count = _array(WideLineVertex, vertices)
+        self._call("strata_submit_wide_lines", arr, count, flags)
 
     def submit_rects(self, rects) -> None:
         """ABI 1.11. Filled screen rectangles, drawn before this frame's text."""

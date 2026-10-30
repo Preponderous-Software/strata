@@ -26,6 +26,7 @@
   <tr>
     <td align="center"><img src="tests/golden/tex_globe_sun/linux-llvmpipe.png" width="200" alt="A textured test globe with a tilted axis over a mipmapped checker ground"><br>textures (ABI 1.7)</td>
     <td align="center"><img src="tests/golden/tex_space_planets/linux-llvmpipe.png" width="200" alt="An unlit textured star lighting three textured globes with different axial tilts"><br>tilted, textured planets</td>
+    <td align="center"><img src="tests/golden/w1_wide_lines/linux-llvmpipe.png" width="200" alt="A winding road, a river that narrows with distance and a tapering ribbon drawn as wide lines"><br>wide lines (ABI 1.13)</td>
   </tr>
 </table>
 

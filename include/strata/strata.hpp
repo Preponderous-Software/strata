@@ -120,6 +120,8 @@ public:
     // ABI 1.11: lines with STRATA_LINES_* flags, and filled screen rectangles.
     void submitLines(const StrataLineVertex* vertices, size_t count, uint32_t flags);
     void submitRects(const StrataRect* rects, size_t count);
+    // ABI 1.13: wide lines with STRATA_LINES_ON_TOP / STRATA_LINES_ROUND_CAPS.
+    void submitWideLines(const StrataWideLineVertex* vertices, size_t count, uint32_t flags);
     void endFrame();
     void present();
 

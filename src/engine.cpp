@@ -233,6 +233,11 @@ void Engine::submitRects(const StrataRect* rects, size_t count) {
     impl_->renderer->submitRects(rects, count);
 }
 
+void Engine::submitWideLines(const StrataWideLineVertex* vertices, size_t count, uint32_t flags) {
+    if (count > 0 && vertices == nullptr) fail(STRATA_ERROR_INVALID_ARGUMENT, "vertices is NULL with a non-zero count");
+    impl_->renderer->submitWideLines(vertices, count, flags);
+}
+
 void Engine::endFrame() {
     impl_->renderer->endFrame();
     impl_->stats = impl_->renderer->stats();

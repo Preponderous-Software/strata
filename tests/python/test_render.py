@@ -157,6 +157,30 @@ class Render(unittest.TestCase):
             engine.clear_meshes()
             self.assertIsNone(engine.poll_event())
 
+    def test_wide_lines_are_as_wide_as_asked(self):  # ABI 1.13
+        with strata.Engine(self.lib, 160, 90) as engine:
+            engine.set_camera(self.lib.look_at((0, 0, 10), (0, 0, 0), fov_y_degrees=60, aspect=160 / 90, far_plane=50))
+            engine.set_lighting(self.lib.lighting_defaults(strata.LIGHTING_LEGACY))
+            white = (1, 1, 1, 1)
+            engine.begin_frame(clear_color=(0, 0, 0, 1))
+            # A horizontal line 10 pixels wide across the middle of the frame.
+            engine.submit_wide_lines(
+                [strata.WideLineVertex((-20, 0, 0), white, 10.0, 0.0), strata.WideLineVertex((20, 0, 0), white, 10.0, 0.0)],
+                flags=strata.LINES_ROUND_CAPS,
+            )
+            engine.end_frame()
+            rgba, w, h = engine.read_pixels()
+            column = [rgba[(y * w + 80) * 4] for y in range(h)]
+            lit = [y for y, red in enumerate(column) if red > 127]
+            self.assertEqual(len(lit), 10, column)
+            self.assertLessEqual(abs((lit[0] + lit[-1]) / 2 - (h - 1) / 2), 1.0)
+            with self.assertRaises(strata.StrataError) as caught:
+                engine.begin_frame()
+                engine.submit_wide_lines([strata.WideLineVertex((0, 0, 0), white, -1.0, 0.0)] * 2)
+            self.assertEqual(caught.exception.status, strata.ERROR_INVALID_ARGUMENT)
+            self.assertIn("width_pixels", str(caught.exception))
+            engine.end_frame()
+
     def test_errors_carry_status_and_text(self):
         with strata.Engine(self.lib, 32, 32) as engine:
             with self.assertRaises(strata.StrataError) as caught:

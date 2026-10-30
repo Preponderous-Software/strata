@@ -20,6 +20,10 @@
 //   lighting space <ambient>                                         (ABI 1.5)
 //   line <ax ay az> <bx by bz> <r g b a> [on_top]
 //                                 (ABI 1.5; on_top submits it with STRATA_LINES_ON_TOP, ABI 1.11)
+//   wide_line <ax ay az> <bx by bz> <r g b a> <width_pixels> <world_width> [to <r g b a> <width_pixels> <world_width>]
+//             [round] [on_top]
+//                                 (ABI 1.13: strata_submit_wide_lines; 'to' gives the end its own colour and
+//                                  widths, round is STRATA_LINES_ROUND_CAPS, on_top STRATA_LINES_ON_TOP)
 //   rect <x> <y> <w> <h> <r g b a> (ABI 1.11: a filled screen rectangle, pixels from the top left)
 //   circle <cx cy cz> <radius> <segments> <r g b a>  (line loop in the XZ plane)
 //   point <px py pz> <size_pixels> <world_diameter> <r g b a> [soft] [on_top]
@@ -94,6 +98,7 @@ struct Scene {
     std::vector<StrataLineVertex> lines;
     std::vector<StrataLineVertex> linesOnTop;  // ABI 1.11
     std::vector<StrataRect> rects;             // ABI 1.11
+    std::vector<StrataWideLineVertex> wideLines[4];  // ABI 1.13, indexed by their STRATA_LINES_* flags
     std::vector<StrataPoint> points;
     struct Text {
         StrataText text{};  // utf8 is set from `value` when submitted

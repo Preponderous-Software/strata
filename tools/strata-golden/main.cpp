@@ -160,6 +160,12 @@ bool renderScene(const strata::scene::Scene& scene, int32_t surface, strata::ima
                                                     static_cast<int32_t>(scene.linesOnTop.size()), STRATA_LINES_ON_TOP),
                              "strata_submit_lines_ex");
         }
+        for (uint32_t flags = 0; flags < 4; ++flags) {
+            const auto& wide = scene.wideLines[flags];
+            if (wide.empty()) continue;
+            ok = ok && check(strata_submit_wide_lines(engine, wide.data(), static_cast<int32_t>(wide.size()), flags),
+                             "strata_submit_wide_lines");
+        }
         if (!scene.rects.empty()) {
             ok = ok && check(strata_submit_rects(engine, scene.rects.data(), static_cast<int32_t>(scene.rects.size())),
                              "strata_submit_rects");

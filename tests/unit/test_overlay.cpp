@@ -169,3 +169,25 @@ TEST(rects_reject_negative_sizes_bad_colours_and_null) {
     CHECK(rejectsWith([&] { validateRects(&r, 1); }, "rect 0: colour"));
     CHECK(rejectsWith([&] { validateRects(nullptr, 1); }, "NULL"));
 }
+
+TEST(wide_line_vertices_come_in_pairs_with_non_negative_widths) {  // ABI 1.13
+    StrataWideLineVertex v[2]{};
+    v[0].color[3] = v[1].color[3] = 1.0f;
+    v[0].width_pixels = 6.0f;
+    v[1].world_width = 0.5f;
+    validateWideLineVertices(v, 2);
+    validateWideLineVertices(nullptr, 0);
+    CHECK(rejectsWith([&] { validateWideLineVertices(v, 1); }, "even"));
+    CHECK(rejectsWith([&] { validateWideLineVertices(nullptr, 2); }, "NULL"));
+    v[1].width_pixels = -1.0f;
+    CHECK(rejectsWith([&] { validateWideLineVertices(v, 2); }, "wide line vertex 1: width_pixels"));
+    v[1].width_pixels = 0.0f;
+    v[0].world_width = std::numeric_limits<float>::quiet_NaN();
+    CHECK(rejectsWith([&] { validateWideLineVertices(v, 2); }, "wide line vertex 0: world_width"));
+    v[0].world_width = 0.0f;
+    v[0].position[1] = std::numeric_limits<float>::infinity();
+    CHECK(rejectsWith([&] { validateWideLineVertices(v, 2); }, "wide line vertex 0: position"));
+    v[0].position[1] = 0.0f;
+    v[1].color[0] = -0.1f;
+    CHECK(rejectsWith([&] { validateWideLineVertices(v, 2); }, "wide line vertex 1: colour"));
+}

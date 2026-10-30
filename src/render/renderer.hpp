@@ -57,6 +57,7 @@ public:
     void submitText(const StrataText* texts, size_t count);
     void submitLines(const StrataLineVertex* vertices, size_t count, uint32_t flags);  // ABI 1.11
     void submitRects(const StrataRect* rects, size_t count);                          // ABI 1.11
+    void submitWideLines(const StrataWideLineVertex* vertices, size_t count, uint32_t flags);  // ABI 1.13
     void endFrame();
 
     const StrataFrameStats& stats() const { return stats_; }

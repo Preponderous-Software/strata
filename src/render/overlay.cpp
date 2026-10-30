@@ -14,6 +14,7 @@ namespace {
 
 constexpr uint32_t kKnownPointFlags = STRATA_POINT_SOFT | STRATA_POINT_ON_TOP;
 constexpr uint32_t kKnownLineFlags = STRATA_LINES_ON_TOP;
+constexpr uint32_t kKnownWideLineFlags = STRATA_LINES_ON_TOP | STRATA_LINES_ROUND_CAPS;
 constexpr uint32_t kKnownTextFlags = STRATA_TEXT_SHADOW;
 constexpr float kMaxTextPixelSize = 512.0f;
 constexpr size_t kMaxTextBytes = 65536;
@@ -46,6 +47,31 @@ void validateLineVertices(const StrataLineVertex* vertices, size_t count) {
         }
         if (!unitColor(vertices[i].color)) {
             fail(STRATA_ERROR_INVALID_ARGUMENT, "line vertex %zu: colour must be finite and non-negative, alpha <= 1", i);
+        }
+    }
+}
+
+void validateWideLineVertices(const StrataWideLineVertex* vertices, size_t count) {
+    if (count % 2 != 0) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "wide line vertex count must be even (pairs make segments), got %zu", count);
+    }
+    if (count > 0 && !vertices) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "wide line vertices are NULL with a non-zero count");
+    }
+    for (size_t i = 0; i < count; ++i) {
+        const StrataWideLineVertex& v = vertices[i];
+        if (!finite(v.position, 3)) fail(STRATA_ERROR_INVALID_ARGUMENT, "wide line vertex %zu: position must be finite", i);
+        if (!unitColor(v.color)) {
+            fail(STRATA_ERROR_INVALID_ARGUMENT,
+                 "wide line vertex %zu: colour must be finite and non-negative, alpha <= 1", i);
+        }
+        if (!std::isfinite(v.width_pixels) || v.width_pixels < 0.0f) {
+            fail(STRATA_ERROR_INVALID_ARGUMENT, "wide line vertex %zu: width_pixels must be finite and >= 0, got %g", i,
+                 static_cast<double>(v.width_pixels));
+        }
+        if (!std::isfinite(v.world_width) || v.world_width < 0.0f) {
+            fail(STRATA_ERROR_INVALID_ARGUMENT, "wide line vertex %zu: world_width must be finite and >= 0, got %g", i,
+                 static_cast<double>(v.world_width));
         }
     }
 }
@@ -184,6 +210,34 @@ Overlay::Overlay(rhi::GpuDevice& device) : device_(device) {
     line.depthTest = DepthTest::Off;
     lineOnTopPipeline_ = device_.createPipeline(line);
 
+    PipelineDesc wide;
+    wide.name = "overlay.wide_lines";
+    wide.vertexSource = shaders::kWideLineVertex;
+    wide.fragmentSource = shaders::kWideLineFragment;
+    constexpr uint32_t kEnd = sizeof(StrataWideLineVertex);
+    wide.buffers = {{0, 2 * kEnd, true}};
+    wide.attributes = {{0, 0, 3, AttribType::Float, offsetof(StrataWideLineVertex, position)},
+                       {1, 0, 4, AttribType::Float, offsetof(StrataWideLineVertex, color)},
+                       {2, 0, 2, AttribType::Float, offsetof(StrataWideLineVertex, width_pixels)},
+                       {3, 0, 3, AttribType::Float, kEnd + offsetof(StrataWideLineVertex, position)},
+                       {4, 0, 4, AttribType::Float, kEnd + offsetof(StrataWideLineVertex, color)},
+                       {5, 0, 2, AttribType::Float, kEnd + offsetof(StrataWideLineVertex, width_pixels)}};
+    wide.depthTest = DepthTest::LessEqual;
+    wide.depthWrite = false;
+    wide.depthClamp = true;
+    wide.cull = CullMode::None;
+    wide.blend = BlendMode::Alpha;
+    widePipeline_ = device_.createPipeline(wide);
+    wide.name = "overlay.wide_lines.round";
+    wide.fragmentSource = shaders::kWideLineRoundFragment;
+    roundPipeline_ = device_.createPipeline(wide);
+    wide.depthTest = DepthTest::Off;
+    wide.name = "overlay.wide_lines.round.on_top";
+    roundOnTopPipeline_ = device_.createPipeline(wide);
+    wide.name = "overlay.wide_lines.on_top";
+    wide.fragmentSource = shaders::kWideLineFragment;
+    wideOnTopPipeline_ = device_.createPipeline(wide);
+
     PipelineDesc point;
     point.name = "overlay.points";
     point.vertexSource = shaders::kPointVertex;
@@ -242,6 +296,7 @@ Overlay::Overlay(rhi::GpuDevice& device) : device_(device) {
     font.debugName = "strata.overlay-font";
     font_ = device_.createTexture(font);
 
+    wideBuffer_ = device_.createBuffer(64 * 2 * sizeof(StrataWideLineVertex), nullptr, true, "strata.overlay-wide-lines");
     lineBuffer_ = device_.createBuffer(256 * sizeof(StrataLineVertex), nullptr, true, "strata.overlay-lines");
     pointBuffer_ = device_.createBuffer(256 * sizeof(StrataPoint), nullptr, true, "strata.overlay-points");
     glyphBuffer_ = device_.createBuffer(256 * sizeof(GlyphInstance), nullptr, true, "strata.overlay-glyphs");
@@ -259,6 +314,11 @@ Overlay::~Overlay() {
     device_.destroy(softPointOnTopPipeline_);
     device_.destroy(rectPipeline_);
     device_.destroy(rectBuffer_);
+    device_.destroy(widePipeline_);
+    device_.destroy(roundPipeline_);
+    device_.destroy(wideOnTopPipeline_);
+    device_.destroy(roundOnTopPipeline_);
+    device_.destroy(wideBuffer_);
     device_.destroy(lineBuffer_);
     device_.destroy(pointBuffer_);
     device_.destroy(glyphBuffer_);
@@ -269,6 +329,10 @@ Overlay::~Overlay() {
 void Overlay::clear() {
     lines_.clear();
     linesOnTop_.clear();
+    wideLines_.clear();
+    roundLines_.clear();
+    wideLinesOnTop_.clear();
+    roundLinesOnTop_.clear();
     solidPoints_.clear();
     softPoints_.clear();
     solidPointsOnTop_.clear();
@@ -283,6 +347,17 @@ void Overlay::addLines(const StrataLineVertex* vertices, size_t count, uint32_t 
     }
     validateLineVertices(vertices, count);
     auto& to = (flags & STRATA_LINES_ON_TOP) ? linesOnTop_ : lines_;
+    to.insert(to.end(), vertices, vertices + count);
+}
+
+void Overlay::addWideLines(const StrataWideLineVertex* vertices, size_t count, uint32_t flags) {
+    if (flags & ~kKnownWideLineFlags) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "wide lines: unknown flag bits 0x%x", flags & ~kKnownWideLineFlags);
+    }
+    validateWideLineVertices(vertices, count);
+    const bool round = (flags & STRATA_LINES_ROUND_CAPS) != 0;
+    auto& to = (flags & STRATA_LINES_ON_TOP) ? (round ? roundLinesOnTop_ : wideLinesOnTop_)
+                                             : (round ? roundLines_ : wideLines_);
     to.insert(to.end(), vertices, vertices + count);
 }
 
@@ -323,7 +398,7 @@ void Overlay::writeViewport(int width, int height) {
 
 int Overlay::drawWorld(rhi::TargetHandle target, int width, int height, rhi::BufferHandle frameUniforms,
                        size_t frameBytes) {
-    if (lineVertexCount() == 0 && pointCount() == 0) return 0;
+    if (lineVertexCount() == 0 && wideLineVertexCount() == 0 && pointCount() == 0) return 0;
     writeViewport(width, height);
     int draws = 0;
     rhi::PassDesc pass;
@@ -344,6 +419,18 @@ int Overlay::drawWorld(rhi::TargetHandle target, int width, int height, rhi::Buf
         device_.updateBuffer(lineBuffer_, 0, lines_.size() * sizeof(StrataLineVertex), lines_.data());
         device_.updateBuffer(lineBuffer_, lines_.size() * sizeof(StrataLineVertex),
                              linesOnTop_.size() * sizeof(StrataLineVertex), linesOnTop_.data());
+    }
+    if (wideLineVertexCount() > 0) {
+        const size_t bytes = wideLineVertexCount() * sizeof(StrataWideLineVertex);
+        if (bytes > device_.bufferSize(wideBuffer_)) {
+            device_.resizeBuffer(wideBuffer_, std::max(bytes, device_.bufferSize(wideBuffer_) * 2));
+        }
+        size_t at = 0;
+        for (const auto* list : {&wideLines_, &roundLines_, &wideLinesOnTop_, &roundLinesOnTop_}) {
+            device_.updateBuffer(wideBuffer_, at * sizeof(StrataWideLineVertex),
+                                 list->size() * sizeof(StrataWideLineVertex), list->data());
+            at += list->size();
+        }
     }
     if (pointCount() > 0) {
         const size_t bytes = pointCount() * sizeof(StrataPoint);
@@ -367,6 +454,18 @@ int Overlay::drawWorld(rhi::TargetHandle target, int width, int height, rhi::Buf
         device_.drawArrays(draw);
         ++draws;
     };
+    // A wide segment is an instance of two ends; base and count are vertices.
+    auto drawWide = [&](rhi::PipelineHandle pipeline, size_t base, size_t count) {
+        if (count == 0) return;
+        device_.bindPipeline(pipeline);
+        device_.bindVertexBuffer(0, wideBuffer_, 0);
+        rhi::DrawArrays draw;
+        draw.vertexCount = 6;
+        draw.instanceCount = static_cast<uint32_t>(count / 2);
+        draw.baseInstance = static_cast<uint32_t>(base / 2);
+        device_.drawArrays(draw);
+        ++draws;
+    };
     auto drawPoints = [&](rhi::PipelineHandle pipeline, size_t base, size_t count) {
         if (count == 0) return;
         // Solid points first, soft (additive) glows over them.
@@ -380,9 +479,14 @@ int Overlay::drawWorld(rhi::TargetHandle target, int width, int height, rhi::Buf
         ++draws;
     };
     drawLines(linePipeline_, 0, lines_.size());
+    drawWide(widePipeline_, 0, wideLines_.size());
+    drawWide(roundPipeline_, wideLines_.size(), roundLines_.size());
     drawPoints(solidPointPipeline_, 0, solidPoints_.size());
     drawPoints(softPointPipeline_, solidPoints_.size(), softPoints_.size());
     drawLines(lineOnTopPipeline_, lines_.size(), linesOnTop_.size());
+    const size_t wideOnTop = wideLines_.size() + roundLines_.size();
+    drawWide(wideOnTopPipeline_, wideOnTop, wideLinesOnTop_.size());
+    drawWide(roundOnTopPipeline_, wideOnTop + wideLinesOnTop_.size(), roundLinesOnTop_.size());
     const size_t onTop = solidPoints_.size() + softPoints_.size();
     drawPoints(solidPointOnTopPipeline_, onTop, solidPointsOnTop_.size());
     drawPoints(softPointOnTopPipeline_, onTop + solidPointsOnTop_.size(), softPointsOnTop_.size());

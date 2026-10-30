@@ -125,6 +125,14 @@ namespace Strata.Interop.Tests {
         }
 
         [Fact]
+        public unsafe void WideLineVertexMatchesNativeAndAbi113CallRejectsANullEngine() {
+            Assert.Equal(36, Unsafe.SizeOf<StrataWideLineVertex>());
+            AssertLayout<StrataWideLineVertex>(StrataAbi.StructWideLineVertex, "position", "color", "width_pixels", "world_width");
+            var v = stackalloc StrataWideLineVertex[2];
+            Assert.Equal(1, StrataNative.strata_submit_wide_lines(IntPtr.Zero, v, 2, StrataAbi.LinesRoundCaps));  // STRATA_ERROR_INVALID_ARGUMENT
+        }
+
+        [Fact]
         public unsafe void Abi112CallsRejectANullEngine() {
             var evt = new StrataEvent { type = 2 };
             double seconds = -1;
