@@ -219,6 +219,20 @@ percentage, under the bar; it does nothing once `done()` or a fallback has
 run. `slow()` shows its bar once: a second call while it is up does nothing.
 On a narrow screen (a 390 px phone) the bar's buttons wrap under its text.
 
+The overlay covers the viewport by default. For a scene in one section of a
+longer page (a hero render, a card), pass the section as `mount` and set
+`contain: true`: the overlay is then `position:absolute` inside the section
+and scrolls with it, and so does the slow bar. A section whose position is
+`static` is made `position:relative`. The example page shows this with
+`?embed=1`, and CI runs the smoke test against it too: the smoke test
+scrolls a canvas that is not wholly on screen into view before it captures
+and taps.
+
+```js
+await StrataLoader.load({script: "scene.js", factory: "createScene", wasm: "scene.wasm",
+  title: "the scene", mount: document.getElementById("hero"), contain: true});
+```
+
 ```js
 if (StrataLoader.show({title: "the game", poster: "poster.jpg", fallback: {href: "/", text: "Back"}})) {
   runtime.onProgress = (loaded, total) => StrataLoader.progress(loaded / total, `${loaded} of ${total} files`);

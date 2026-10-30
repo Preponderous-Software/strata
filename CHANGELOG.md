@@ -41,6 +41,17 @@
   `strata.h`, ARCHITECTURE.md and docs/WEB.md now say so, along with the
   web kit's `shadowDistanceMin`. No ABI, code or pixel change. (#53)
 
+- Web kit: the loader can cover one section of a page instead of the
+  viewport. `StrataLoader.load()` and `show()` take `contain: true` with
+  `mount`: the overlay and the slow bar are then `position:absolute` inside
+  `mount` and scroll with it (a `static` mount is made `position:relative`).
+  Without `contain` nothing changes. The smoke test (`testing/smoke.cjs`)
+  scrolls a canvas that is not wholly on screen into view before it captures
+  and taps, so a scene below the fold no longer reports "0 target(s) on
+  screen"; a full-screen canvas is not moved. The example page has an
+  `?embed=1` layout (the scene below the fold, the loader contained), and CI
+  runs the smoke test against it. The kit version stays 1.1. (#53)
+
 ## 0.7.0
 
 The web kit: the shell around a Strata scene embedded in a web page, shipped
