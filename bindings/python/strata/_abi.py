@@ -30,7 +30,7 @@ from ctypes import (
 #: The major version this binding was written against (STRATA_ABI_VERSION).
 ABI_VERSION = 1
 #: The newest minor whose additions this binding declares (STRATA_ABI_MINOR).
-ABI_MINOR = 13
+ABI_MINOR = 14
 
 # ---------------------------------------------------------------- status
 
@@ -446,6 +446,8 @@ FUNCTIONS = {
     "strata_submit_lines_ex": (11, _status, [_engine, _p(LineVertex), c_int32, c_uint32]),
     "strata_submit_rects": (11, _status, [_engine, _p(Rect), c_int32]),
     "strata_submit_wide_lines": (13, _status, [_engine, _p(WideLineVertex), c_int32, c_uint32]),
+    "strata_submit_world_text": (14, _status, [_engine, _p(Text), _p(c_float), c_int32]),
+    "strata_project_point": (14, _status, [_engine, _p(c_float), _p(c_float), _p(c_float), _p(c_int32)]),
     "strata_end_frame": (0, _status, [_engine]),
     "strata_present": (0, _status, [_engine]),
     "strata_get_frame_stats": (0, _status, [_engine, _p(FrameStats)]),

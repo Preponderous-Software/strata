@@ -1,0 +1,22 @@
+# O3 world-anchored labels (ABI 1.14): text placed at the screen position of
+# a world point plus a pixel offset, centred over three buildings with a
+# marker point at each anchor. One label is anchored behind the camera and
+# must not appear. A screen-space HUD line is drawn over the labels.
+size 640 360
+camera 0 9 16  0 1 0  50 0.3 200
+lighting sun 0.42 40  3 2048 60 0.6 1
+clear 0.45 0.65 0.9 1 sky
+item cube 0 -0.5 0  24 1 24  0.5 0.58 0.42
+item cube -6 1.5 -2  3 3 3  0.75 0.5 0.35
+item cylinder 0 2 -5  2 4 2  0.6 0.6 0.65
+item cube 6 1 1  4 2 3  0.55 0.35 0.3
+point -6 3.6 -2  8 0  1 0.85 0.2 1 on_top
+point 0 4.6 -5  8 0  1 0.85 0.2 1 on_top
+point 6 2.6 1  8 0  1 0.85 0.2 1 on_top
+label -6 3.6 -2  -32 -26 16  1 1 1 1 shadow : Mill
+label 0 4.6 -5  -40 -26 16  1 1 1 1 shadow : Tower
+label 6 2.6 1  -32 -26 16  1 1 1 1 shadow : Barn
+label 6 2.6 1  -36 10 8  1 0.9 0.6 1 : pop 12
+label 0 9 30  -48 0 16  1 0 0 1 : BEHIND
+text 8 8 16  1 1 1 1 shadow : World labels
+text 8 340 8  0 0 0 0.8 : anchored at world points; one behind the camera is hidden

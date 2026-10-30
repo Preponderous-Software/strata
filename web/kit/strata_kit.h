@@ -3,7 +3,8 @@
 // Part of the Strata web kit (docs/WEB.md, "The web kit"). It covers the shell
 // around a scene and leaves the scene alone: the WebGL 2 context, the engine
 // in it, resizing, three quality tiers, an orbit camera, the sun, the per-frame
-// batching of primitives, points, lines and point lights, and a stats export.
+// batching of primitives, points, lines, point lights and (kit 1.2) labels,
+// and a stats export.
 // The scene is the host's: it fills the batches in a hook, from whatever data
 // its own exported setters were handed.
 //
@@ -37,6 +38,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 #include "strata/strata.h"
@@ -52,8 +54,8 @@
 // The kit's own version, separate from the engine's: a page and its wasm are
 // built from one kit, and strata-kit.js checks they agree (sk_kit_version).
 #define STRATA_KIT_VERSION_MAJOR 1
-#define STRATA_KIT_VERSION_MINOR 1
-#define STRATA_KIT_VERSION_STRING "1.1"
+#define STRATA_KIT_VERSION_MINOR 2
+#define STRATA_KIT_VERSION_STRING "1.2"
 
 namespace strata_kit {
 
@@ -111,6 +113,11 @@ struct Host {
     std::vector<StrataLineVertex> lines;
     std::vector<StrataWideLineVertex> wideLines[4];  // ABI 1.13, by their STRATA_LINES_* flags
     std::vector<Light> lights;
+    // Kit 1.2: labels (see label()); their strings are copied, so the host's
+    // can go away as soon as label() returns.
+    std::vector<StrataText> labels;
+    std::vector<float> labelAnchors;
+    std::vector<std::string> labelStrings;
     // Stats of the last frame (sk_stats).
     uint32_t pointSeq = 0;
     int32_t lightsDrawn = 0;
@@ -118,6 +125,7 @@ struct Host {
     int32_t meshes = 0;          // the host sets this when it adds or removes meshes
     int32_t frames = 0;
     int32_t pointsRejected = 0;
+    int32_t labelsRejected = 0;  // kit 1.2: calls to strata_submit_world_text that failed
 #ifdef __EMSCRIPTEN__
     EMSCRIPTEN_WEBGL_CONTEXT_HANDLE context = 0;
 #endif
@@ -181,6 +189,39 @@ struct Host {
         to.push_back(v0);
         to.push_back(v1);
     }
+#if STRATA_ABI_MINOR >= 14
+    // Kit 1.2 (Strata ABI 1.14). Text drawn by the engine at a world point,
+    // centred just above it and hidden while the point is behind the camera
+    // (strata_submit_world_text). It is part of the frame, so it shows in
+    // stills from sk_save_png too, which HTML labels placed with
+    // StrataKit.placeLabels do not; it has no collision handling and shows
+    // through the scene. Strata's 8 x 8 font: printable ASCII. Built against
+    // an older strata.h (a vendored kit with an older release) it is absent.
+    void label(float x, float y, float z, const char* utf8, float pixelSize = 16.0f, Rgb c = {1.0f, 1.0f, 1.0f},
+               float a = 1.0f) {
+        if (!utf8) return;
+        int longest = 0, n = 0;  // characters on the longest line
+        for (const char* p = utf8; *p; ++p) {
+            if (*p == '\n') {
+                n = 0;
+            } else if ((static_cast<unsigned char>(*p) & 0xC0) != 0x80) {
+                longest = std::max(longest, ++n);
+            }
+        }
+        StrataText t{};
+        t.x = -0.5f * static_cast<float>(longest) * pixelSize;
+        t.y = -1.25f * pixelSize;
+        t.pixel_size = std::clamp(pixelSize, 1.0f, 512.0f);
+        t.flags = STRATA_TEXT_SHADOW;
+        t.color[0] = c.r;
+        t.color[1] = c.g;
+        t.color[2] = c.b;
+        t.color[3] = std::clamp(a, 0.0f, 1.0f);
+        labels.push_back(t);
+        labelAnchors.insert(labelAnchors.end(), {x, y, z});
+        labelStrings.emplace_back(utf8);
+    }
+#endif
 
     // A point light. All of a frame's lights are sorted by priority (stably,
     // so equal priorities keep their order) and cut to the tier's budget.
@@ -455,6 +496,9 @@ STRATA_KIT_EXPORT int sk_frame(double seconds) {
     h.lines.clear();
     for (auto& wide : h.wideLines) wide.clear();
     h.lights.clear();
+    h.labels.clear();
+    h.labelAnchors.clear();
+    h.labelStrings.clear();
     h.pointSeq = 0;
     strata_kit_build(h, seconds);
 
@@ -487,6 +531,16 @@ STRATA_KIT_EXPORT int sk_frame(double seconds) {
         // One bad point drops the whole call; say so once, not every frame.
         if (h.pointsRejected++ == 0) std::fprintf(stderr, "%s: strata_submit_points: %s\n", o.name, strata_last_error());
     }
+#if STRATA_ABI_MINOR >= 14
+    if (!h.labels.empty()) {
+        for (size_t i = 0; i < h.labels.size(); ++i) h.labels[i].utf8 = h.labelStrings[i].c_str();
+        if (strata_submit_world_text(h.engine, h.labels.data(), h.labelAnchors.data(),
+                                     static_cast<int32_t>(h.labels.size())) != STRATA_OK &&
+            h.labelsRejected++ == 0) {
+            std::fprintf(stderr, "%s: strata_submit_world_text: %s\n", o.name, strata_last_error());
+        }
+    }
+#endif
     if (strata_end_frame(h.engine) != STRATA_OK) {
         std::fprintf(stderr, "%s: strata_end_frame: %s\n", o.name, strata_last_error());
         return 0;

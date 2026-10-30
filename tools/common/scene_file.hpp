@@ -29,6 +29,8 @@
 //   point <px py pz> <size_pixels> <world_diameter> <r g b a> [soft] [on_top]
 //                                 (ABI 1.5; on_top is STRATA_POINT_ON_TOP, ABI 1.11)
 //   text <x> <y> <pixel_size> <r g b a> [shadow] : <text to the end of the line>
+//   label <x y z> <dx> <dy> <pixel_size> <r g b a> [shadow] : <text>
+//                                 (ABI 1.14: text anchored at a world point, offset dx dy pixels)
 //   texture <name> checker <w> <h> <cells_u> <cells_v> <r g b> <r g b> [mipmaps] [clamp_v] [nearest]
 //                                 (ABI 1.7; nearest is STRATA_TEXTURE_NEAREST, ABI 1.10)
 //   texture <name> globe <w> <h> [mipmaps] [clamp_v] [nearest]
@@ -105,6 +107,11 @@ struct Scene {
         std::string value;
     };
     std::vector<Text> texts;
+    struct Label {  // ABI 1.14
+        float anchor[3] = {0, 0, 0};
+        Text text;
+    };
+    std::vector<Label> labels;
     std::vector<StrataPointLight> pointLights;
     bool hasTerrain = false;
     StrataTerrainTile terrain{};  // heights/colors point into the vectors below once loaded

@@ -477,8 +477,12 @@ void parse(const std::string& path, Scene& scene, int depth) {
             read(in, r.height, where, "height");
             for (float& v : r.color) read(in, v, where, "colour");
             scene.rects.push_back(r);
-        } else if (word == "text") {
-            Scene::Text t;
+        } else if (word == "text" || word == "label") {
+            Scene::Label label;
+            if (word == "label") {
+                for (float& v : label.anchor) read(in, v, where, "anchor");
+            }
+            Scene::Text& t = label.text;
             read(in, t.text.x, where, "x");
             read(in, t.text.y, where, "y");
             read(in, t.text.pixel_size, where, "pixel size");
@@ -492,7 +496,11 @@ void parse(const std::string& path, Scene& scene, int depth) {
             if (option != ":") bad(where, "expected ':' before the text");
             std::getline(in, t.value);
             if (!t.value.empty() && t.value[0] == ' ') t.value.erase(0, 1);
-            scene.texts.push_back(std::move(t));
+            if (word == "label") {
+                scene.labels.push_back(std::move(label));
+            } else {
+                scene.texts.push_back(std::move(t));
+            }
         } else {
             bad(where, "unknown directive '" + word + "'");
         }

@@ -1,4 +1,4 @@
-// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.12).
+// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.14).
 // Copyright (c) 2026 Daniel McCoy Stephenson. MIT licence; see LICENSE.
 using System;
 using System.IO;
@@ -9,8 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles, 1.12 injected events, a shared frame clock and the drive channel, 1.13 wide lines.</summary>
-        public const uint Minor = 13;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles, 1.12 injected events, a shared frame clock and the drive channel, 1.13 wide lines, 1.14 world-to-screen projection and world-anchored text.</summary>
+        public const uint Minor = 14;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
@@ -317,6 +317,10 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_submit_rects(IntPtr engine, StrataRect* rects, int count);
         /// <summary>ABI 1.13. Wide lines: count is a number of vertices and must be even; flags LinesOnTop, LinesRoundCaps.</summary>
         [DllImport(Library)] public static extern int strata_submit_wide_lines(IntPtr engine, StrataWideLineVertex* vertices, int count, uint flags);
+        /// <summary>ABI 1.14. Text anchored at world points (3 floats per text); each text's x and y are a pixel offset from where its anchor lands. Labels behind the camera are skipped.</summary>
+        [DllImport(Library)] public static extern int strata_submit_world_text(IntPtr engine, StrataText* texts, float* anchors, int count);
+        /// <summary>ABI 1.14. A world point with the camera last set: pixels from the drawable's top-left, the view-axis distance, and 1 when it is in front of the camera. Each output may be null.</summary>
+        [DllImport(Library)] public static extern int strata_project_point(IntPtr engine, float* world, float* pixels, float* depth, int* inFront);
         [DllImport(Library)] public static extern int strata_end_frame(IntPtr engine);
         [DllImport(Library)] public static extern int strata_present(IntPtr engine);
         [DllImport(Library)] public static extern int strata_get_frame_stats(IntPtr engine, StrataFrameStats* stats);

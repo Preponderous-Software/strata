@@ -69,9 +69,11 @@
  *        (strata_push_event, strata_frame_seconds, strata_is_driven,
  *        STRATA_DRIVE; see docs/DRIVE.md)
  *   1.13 wide lines (StrataWideLineVertex, strata_submit_wide_lines,
- *        STRATA_LINES_ROUND_CAPS) */
+ *        STRATA_LINES_ROUND_CAPS)
+ *   1.14 world-to-screen projection and world-anchored text
+ *        (strata_project_point, strata_submit_world_text) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 13u
+#define STRATA_ABI_MINOR 14u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -428,7 +430,9 @@ typedef struct StrataRect {
 } StrataRect;
 
 /* A run of text on screen in Strata's built-in 8 x 8 bitmap font (printable
- * ASCII; other bytes show as '?'; '\n' starts a new line). Every glyph is a
+ * ASCII; anything else shows as one '?' per UTF-8 character, so an accented
+ * letter becomes '?'; '\n' starts a new line). From ABI 1.14 the same struct
+ * also labels a world position (strata_submit_world_text). Every glyph is a
  * square cell pixel_size wide and tall and the font is monospaced, so a line
  * of n characters is n * pixel_size pixels wide. Multiples of 8 stay crisp.
  * 40 bytes on 64-bit targets. */
@@ -599,6 +603,20 @@ STRATA_API StrataStatus strata_set_camera(StrataEngine* engine, const StrataCame
 STRATA_API StrataStatus strata_camera_look_at(const float eye[3], const float target[3], const float up[3],
                                               float fov_y_degrees, float aspect, float near_plane,
                                               float far_plane, StrataCamera* out);
+/* ABI 1.14. Projects a world-space point with the camera last set
+ * (strata_set_camera) onto the drawable as it is now (strata_get_drawable_size),
+ * the same mapping the scene and strata_submit_world_text use. Writes
+ * *out_in_front = 1 when the point is in front of the camera (its distance
+ * along the view axis is > 0 and its clip w is > 0), else 0. In front,
+ * out_pixels gets its position in pixels from the top-left of the drawable,
+ * the coordinates StrataText and StrataRect use; it may lie off screen.
+ * Behind the camera out_pixels is set to (0, 0). *out_depth gets its distance
+ * along the camera's view axis in world units (negative behind the camera),
+ * the same measure as strata_read_depth_f32. out_pixels, out_depth and
+ * out_in_front may each be NULL when not wanted. world must be finite. Needs
+ * no frame and draws nothing. */
+STRATA_API StrataStatus strata_project_point(const StrataEngine* engine, const float world[3], float out_pixels[2],
+                                             float* out_depth, int32_t* out_in_front);
 
 /* Fills *out with the defaults for a lighting mode. LEGACY defaults are Beyond
  * Nations' PrimitiveRenderer constants. */
@@ -740,6 +758,21 @@ STRATA_API StrataStatus strata_submit_rects(StrataEngine* engine, const StrataRe
  * translucent segments (a round-capped joint) blend twice where they overlap. */
 STRATA_API StrataStatus strata_submit_wide_lines(StrataEngine* engine, const StrataWideLineVertex* vertices,
                                                  int32_t count, uint32_t flags);
+/* ABI 1.14. World-anchored text: labels over a building, a unit or a map pin.
+ * anchors holds count world positions (3 floats each, x y z); text i is drawn
+ * with its top-left at the pixel where anchors[i] lands on screen plus
+ * (texts[i].x, texts[i].y) as a pixel offset, so (-n * pixel_size / 2,
+ * -pixel_size) centres a one-line label of n characters just above its
+ * anchor. Anchors are projected at end_frame with the camera and drawable
+ * size the frame is drawn with, exactly as strata_project_point does; a label
+ * whose anchor is not in front of the camera is skipped (not an error). Like
+ * screen text, labels are not depth-tested: they show through the scene.
+ * They are drawn after this frame's rectangles and before its screen text,
+ * so a HUD drawn with strata_submit_text stays on top. Every text and anchor
+ * is checked first (anchors must be finite); on an invalid one nothing from
+ * the call is added. */
+STRATA_API StrataStatus strata_submit_world_text(StrataEngine* engine, const StrataText* texts, const float* anchors,
+                                                 int32_t count);
 STRATA_API StrataStatus strata_end_frame(StrataEngine* engine);
 /* Window: swaps buffers. Headless and host context: no-op. */
 STRATA_API StrataStatus strata_present(StrataEngine* engine);

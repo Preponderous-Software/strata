@@ -109,7 +109,7 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 13u);
+    CHECK(strata_abi_minor() >= 14u);
 }
 
 TEST(point_light_layout_is_queryable) {
@@ -409,4 +409,17 @@ TEST(abi_1_13_wide_lines_reject_bad_arguments_without_a_context) {
     CHECK(strata_submit_wide_lines(nullptr, v, 2, 0) == STRATA_ERROR_INVALID_ARGUMENT);
     CHECK(strata_submit_wide_lines(engine, nullptr, 2, STRATA_LINES_ROUND_CAPS) == STRATA_ERROR_INVALID_ARGUMENT);
     CHECK(strata_submit_wide_lines(engine, v, -2, 0) == STRATA_ERROR_INVALID_ARGUMENT);
+}
+
+TEST(abi_1_14_projection_and_world_text_reject_bad_arguments_without_a_context) {
+    const float world[3] = {0, 0, 0};
+    float px[2] = {0, 0};
+    StrataText t{};
+    CHECK(strata_project_point(nullptr, world, px, nullptr, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+    StrataEngine* engine = reinterpret_cast<StrataEngine*>(0x1);  // never dereferenced: pointers are checked first
+    CHECK(strata_project_point(engine, nullptr, px, nullptr, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_submit_world_text(nullptr, &t, world, 1) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_submit_world_text(engine, nullptr, world, 1) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_submit_world_text(engine, &t, nullptr, 1) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_submit_world_text(engine, &t, world, -1) == STRATA_ERROR_INVALID_ARGUMENT);
 }

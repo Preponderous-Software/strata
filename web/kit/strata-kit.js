@@ -45,7 +45,7 @@
    MIT licensed, as Strata. */
 (function () {
   "use strict";
-  const KIT_VERSION = "1.1";
+  const KIT_VERSION = "1.2";
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },

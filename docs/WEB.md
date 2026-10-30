@@ -153,7 +153,7 @@ from `v0.7.0` on (older tarballs have no `kit/`):
 
 | File | What it is |
 |---|---|
-| `strata_kit.h` | Header-only C++ host shell. Creates the WebGL 2 context (`preserveDrawingBuffer` on, so frames can be read back) and the engine; resizing; three quality tiers (sun cascades, shadow map size, point-light budget, point thinning); an orbit camera and its view-projection matrix; the sun from latitude, longitude and time; per-frame batches of primitives, points (alpha clamped), lines and prioritised point lights; frame stats (`sk_stats`: primitives, points, lines, lights, terrain samples and, from kit 1.1, the meshes the host counts in `Host::meshes`). Exports `sk_init`, `sk_restore`, `sk_resize`, `sk_set_quality`, `sk_set_camera`, `sk_set_sun`, `sk_view_proj`, `sk_stats`, `sk_frame` and `sk_kit_version`. Natively (no Emscripten) the same file opens a headless engine: `sk_init_headless` and `sk_save_png`, so a scene also renders stills |
+| `strata_kit.h` | Header-only C++ host shell. Creates the WebGL 2 context (`preserveDrawingBuffer` on, so frames can be read back) and the engine; resizing; three quality tiers (sun cascades, shadow map size, point-light budget, point thinning); an orbit camera and its view-projection matrix; the sun from latitude, longitude and time; per-frame batches of primitives, points (alpha clamped), lines, prioritised point lights and, from kit 1.2, engine-drawn world labels (`Host::label`, Strata ABI 1.14); frame stats (`sk_stats`: primitives, points, lines, lights, terrain samples and, from kit 1.1, the meshes the host counts in `Host::meshes`). Exports `sk_init`, `sk_restore`, `sk_resize`, `sk_set_quality`, `sk_set_camera`, `sk_set_sun`, `sk_view_proj`, `sk_stats`, `sk_frame` and `sk_kit_version`. Natively (no Emscripten) the same file opens a headless engine: `sk_init_headless` and `sk_save_png`, so a scene also renders stills |
 | `strata-kit.js` | Dependency-free page shell (`window.StrataKit`): canvas sizing with a capped device pixel ratio; adaptive quality (pixel density first, then the tier, with settle windows, reset when the tab is hidden); orbit, pan, pinch, wheel and keyboard camera; `project()` and `pick()` in CSS pixels; `webglcontextlost`/`webglcontextrestored`; `?quality=`, `?fps=1` and `?drive=1`; label placement with collision and hysteresis (`StrataKit.placeLabels`); `window.__strataKit` for tools |
 | `strata-loader.js` | The loading shell (`window.StrataLoader`): the poster as a blurred backdrop, byte-accurate download progress with the size (or, for a host that boots its own way, `StrataLoader.show()` and `StrataLoader.progress(fraction, label)`: see below), and a fallback to the trailer clip or the poster, with the reason in words, when WebGL 2 is missing, the engine fails, a lost context does not come back, or the device is too slow at the lowest tier |
 | `build-kit.sh` | One parameterised build: emsdk version check, the Strata tarball's SHA-256 (or a source build's `libstrata.a`), fixed flags (`-O2 -fwasm-exceptions`, WebGL 2 only, `MODULARIZE`, and `INCOMING_MODULE_JS_API` with `wasmBinary`, so the glue takes the bytes `strata-loader.js` already fetched instead of downloading the `.wasm` again) and the export list. Copies the page scripts beside the `.wasm`. A host that links its own glue with `strata-loader.js` needs `wasmBinary` in `-sINCOMING_MODULE_JS_API` too: emsdk 6.0.11's default list leaves it out |
@@ -262,12 +262,14 @@ Rules the kit keeps, which a hand-written shell tends to lose:
   a minute, or no restore within 5 s, falls back.
 
 The kit has its own version (`STRATA_KIT_VERSION_STRING`, `StrataKit.version`;
-1.1 now), and `strata-kit.js` warns when the page's and the wasm's major
+1.2 now), and `strata-kit.js` warns when the page's and the wasm's major
 versions differ. A host that pins a release takes the kit from that release's tarball
 (`kit/build-kit.sh`, with `STRATA_VERSION` and `STRATA_SHA256` set to the
 same release) and needs no vendored copy. A host that needs a kit fix before
 the next Strata release can vendor `web/kit/` at a pinned commit and link the
-last release's `libstrata.a`: the kit uses only the C ABI.
+last release's `libstrata.a`: the kit uses only the C ABI, and its parts
+that need a newer ABI than that release's `strata.h` (`Host::label`, ABI
+1.14) compile out.
 
 ## Beyond Nations (.NET `browser-wasm`)
 

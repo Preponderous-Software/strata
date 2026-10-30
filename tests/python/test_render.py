@@ -181,6 +181,36 @@ class Render(unittest.TestCase):
             self.assertIn("width_pixels", str(caught.exception))
             engine.end_frame()
 
+    def test_project_point_and_world_labels(self):
+        """ABI 1.14: the projection matches where a label is drawn, and a label
+        anchored behind the camera draws nothing."""
+        with strata.Engine(self.lib, 160, 90) as engine:
+            engine.set_camera(self.lib.look_at((0, 0, 10), (0, 0, 0), fov_y_degrees=60, aspect=160 / 90))
+            x, y, depth = engine.project_point((0, 0, 0))
+            self.assertAlmostEqual(x, 80.0, places=3)
+            self.assertAlmostEqual(y, 45.0, places=3)
+            self.assertAlmostEqual(depth, 10.0, places=4)
+            up = engine.project_point((0, 1, 0))
+            self.assertLess(up[1], 45.0)  # up in the world is up on screen: a smaller y
+            self.assertIsNone(engine.project_point((0, 0, 20)))  # behind the eye
+
+            def draw(anchor):
+                engine.begin_frame(clear_color=(0, 0, 0, 1))
+                engine.submit_world_text([strata.Text(-8, -8, 16, 0, (1, 1, 1, 1), b"#")], [anchor])
+                engine.end_frame()
+                rgba, w, _h = engine.read_pixels()
+                return [(i // 4 % w, i // 4 // w) for i in range(0, len(rgba), 4) if rgba[i] > 128]
+
+            lit = draw((2, 1, 0))
+            ax, ay, _ = engine.project_point((2, 1, 0))
+            self.assertTrue(lit)
+            # Pixel centres (px + 0.5) of the glyph all fall inside its 16 x 16 cell at the anchor.
+            self.assertTrue(all(ax - 8 <= px + 0.5 <= ax + 8 and ay - 8 <= py + 0.5 <= ay + 8 for px, py in lit))
+            self.assertEqual(draw((0, 0, 20)), [])
+
+            with self.assertRaises(ValueError):
+                engine.submit_world_text([strata.Text(0, 0, 8, 0, (1, 1, 1, 1), b"x")], [])
+
     def test_errors_carry_status_and_text(self):
         with strata.Engine(self.lib, 32, 32) as engine:
             with self.assertRaises(strata.StrataError) as caught:

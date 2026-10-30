@@ -69,6 +69,9 @@ void strata_kit_build(strata_kit::Host& h, double t) {
     const float glow = 0.3f + 0.7f * h.night;
     h.add(STRATA_PRIMITIVE_SPHERE, 0.0f, 2.15f, 0.0f, 0.4f, 0.4f, 0.4f, {0.9f * glow, 0.65f * glow, 0.3f * glow});
     h.point(0.0f, 2.9f, 0.0f, 10.0f, 0.3f, {1.0f, 0.85f, 0.45f}, 1.0f);
+#if STRATA_ABI_MINOR >= 14
+    h.label(0.0f, 3.3f, 0.0f, "lamp", 12.0f, {1.0f, 0.9f, 0.7f});  // kit 1.2: drawn by the engine, in stills too
+#endif
     h.light(0.0f, 2.2f, 0.0f, 9.0f, {1.0f, 0.75f, 0.45f}, 0.6f + 1.4f * h.night, 1);
 }
 

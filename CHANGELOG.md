@@ -28,6 +28,33 @@
   layout tests in C# and Python, and a Python test that a 10-pixel line
   covers 10 pixels.
 
+- ABI 1.14, world-anchored labels (#47). Both additions are compatible;
+  every ABI 1.x host keeps working and no existing image changes.
+  - `strata_project_point` projects a world point with the camera last set
+    onto the drawable as it is now: pixels from the top-left (the
+    coordinates `StrataText` and `StrataRect` use), the distance along the
+    view axis (as `strata_read_depth_f32` measures it) and whether the
+    point is in front of the camera. Hosts in C, C++, C# and Python no
+    longer re-derive the engine's view-projection to place a label.
+  - `strata_submit_world_text` takes `StrataText`s plus one world anchor
+    each; a text's `x` and `y` become a pixel offset from where its anchor
+    lands. Anchors are projected at `end_frame` with the frame's camera and
+    size, labels behind the camera are skipped, and labels are drawn after
+    the frame's rectangles and before its screen text. They are not
+    depth-tested. GL-free `projectPoint` in `src/render/overlay.cpp`, with
+    unit tests; `Engine::projectPoint`, `Engine::submitWorldText`.
+  - Python: `Engine.project_point` (`(x, y, depth)` or `None` behind the
+    camera) and `Engine.submit_world_text`. C#: the two P/Invokes.
+  - Web kit 1.2: `Host::label(x, y, z, text)` centres an engine-drawn label
+    just above a world point, so it shows in stills rendered with
+    `sk_save_png` as well as in the page. It compiles out against an older
+    `strata.h`, so a vendored kit still links with the 0.7.0 library. The
+    example scene labels its lamp.
+  - New golden `o3_world_labels` and a `label` scene directive.
+  - Text is still Strata's 8 x 8 printable-ASCII font: a non-ASCII
+    character (an accented place name) shows as one `?`. A wider glyph set
+    is left for a separate change.
+
 - Web kit: the slow bar (`StrataLoader.slow()`) wraps its buttons under its
   text when the row is too narrow, and its width is no longer capped at half
   the viewport (an auto width beside `left:50%`). On a 390 px phone it used

@@ -238,6 +238,20 @@ void Engine::submitWideLines(const StrataWideLineVertex* vertices, size_t count,
     impl_->renderer->submitWideLines(vertices, count, flags);
 }
 
+void Engine::submitWorldText(const StrataText* texts, const float* anchors, size_t count) {
+    if (count > 0 && (texts == nullptr || anchors == nullptr)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "texts or anchors is NULL with a non-zero count");
+    }
+    impl_->renderer->submitWorldText(texts, anchors, count);
+}
+
+bool Engine::projectPoint(const float world[3], float outPixels[2], float* outDepth) const {
+    if (world == nullptr) fail(STRATA_ERROR_INVALID_ARGUMENT, "world is NULL");
+    int32_t width = 0, height = 0;
+    drawableSize(width, height);
+    return impl_->renderer->projectPoint(world, width, height, outPixels, outDepth);
+}
+
 void Engine::endFrame() {
     impl_->renderer->endFrame();
     impl_->stats = impl_->renderer->stats();
