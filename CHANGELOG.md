@@ -34,6 +34,12 @@
   to squeeze the text and the button onto several lines each, side by side.
   The smoke test's loader checks now include the bar at 390 px. The kit
   version stays 1.1.
+- Docs: `shadow_distance` should be scaled to the scene. The shadow bias is
+  measured in cascade texels, and a cascade's size follows `shadow_distance`
+  (capped at the far plane), so a scene a few units across under the
+  default 150, with one 1024² cascade, loses its small objects' shadows.
+  `strata.h`, ARCHITECTURE.md and docs/WEB.md now say so, along with the
+  web kit's `shadowDistanceMin`. No ABI, code or pixel change. (#53)
 
 ## 0.7.0
 
