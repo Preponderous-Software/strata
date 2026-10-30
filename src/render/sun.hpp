@@ -29,6 +29,17 @@ SkyState evaluateSky(float timeOfDay, float latitudeDegrees);
 // hosts that place the sun themselves (ABI 1.6).
 SkyState evaluateSkyForSun(const glm::vec3& toSun);
 
+// ABI 1.16. The host's adjustments on top of the evaluated sky
+// (strata_set_ambient, strata_set_sun_intensity). The defaults change nothing:
+// x * 1 + 0 is x exactly, so a host that never calls them draws what it drew.
+struct LightLevels {
+    glm::vec3 ambientTint{1.0f};  // multiplies the sky and ground ambient
+    glm::vec3 ambientLift{0.0f};  // then added to both
+    glm::vec3 keyTint{1.0f};      // multiplies the key light (sun, or moon at night)
+    float keyIntensity = 1.0f;    // and so does this
+};
+void applyLightLevels(SkyState& sky, const LightLevels& levels);
+
 // Unit vector towards the sun, before any colour is decided.
 glm::vec3 sunDirection(float timeOfDay, float latitudeDegrees);
 

@@ -167,6 +167,10 @@ void Engine::resize(int32_t width, int32_t height) {
 void Engine::setCamera(const StrataCamera& camera) { impl_->renderer->setCamera(camera); }
 void Engine::setLighting(const StrataLighting& lighting) { impl_->renderer->setLighting(lighting); }
 void Engine::setSunDirection(const float* toSun) { impl_->renderer->setSunDirection(toSun); }
+void Engine::setAmbient(const float* tint, const float* lift) { impl_->renderer->setAmbient(tint, lift); }
+void Engine::setSunIntensity(float intensity, const float* tint) {
+    impl_->renderer->setSunIntensity(intensity, tint);
+}
 
 void Engine::setTerrain(const StrataTerrainTile* tile) { impl_->renderer->setTerrain(tile); }
 

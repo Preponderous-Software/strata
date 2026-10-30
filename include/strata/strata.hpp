@@ -77,6 +77,9 @@ public:
     // ABI 1.6. Places the sun (a vector towards it, world space); nullptr goes
     // back to the lighting's time_of_day and latitude_degrees.
     void setSunDirection(const float* toSun);
+    // ABI 1.16. See strata_set_ambient and strata_set_sun_intensity.
+    void setAmbient(const float* tint, const float* lift);
+    void setSunIntensity(float intensity, const float* tint);
     // Replaces the point lights (copied). count 0 removes them; at most
     // STRATA_MAX_POINT_LIGHTS. Validates every light before changing any.
     void setPointLights(const StrataPointLight* lights, size_t count);

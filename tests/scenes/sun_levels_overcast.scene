@@ -1,0 +1,11 @@
+# ABI 1.16: l2_csm_morning's sun and village under a grey sky. The sun keeps
+# its direction and shadows but is dimmed and cooled (strata_set_sun_intensity),
+# and the ambient is lifted and greyed (strata_set_ambient), so the shadow side
+# opens up without moving the sun. Compare with l2_csm_morning.
+size 640 360
+camera -48 22 46  4 0 -6  60 0.3 400
+lighting sun 0.30 35  4 2048 150 0.6 1
+ambient 0.9 0.9 0.9  0.12 0.12 0.13
+sun_intensity 0.45  0.85 0.92 1.0
+clear 0 0 0 1 sky
+include _village_items.scene

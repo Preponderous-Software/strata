@@ -1,4 +1,4 @@
-// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.15).
+// C# view of Strata's C ABI (include/strata/strata.h, ABI version 1.16).
 // Copyright (c) 2026 Daniel McCoy Stephenson. MIT licence; see LICENSE.
 using System;
 using System.IO;
@@ -9,8 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles, 1.12 injected events, a shared frame clock and the drive channel, 1.13 wide lines, 1.14 world-to-screen projection and world-anchored text, 1.15 per-vertex RGBA mesh colours.</summary>
-        public const uint Minor = 15;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles, 1.12 injected events, a shared frame clock and the drive channel, 1.13 wide lines, 1.14 world-to-screen projection and world-anchored text, 1.15 per-vertex RGBA mesh colours, 1.16 ambient and sun levels.</summary>
+        public const uint Minor = 16;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
@@ -279,6 +279,10 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_solar_position(double unixSecondsUtc, double latitudeDegrees, double longitudeDegrees, StrataSolarPosition* position);
         /// <summary>ABI 1.6. toSun points at three floats; null goes back to the lighting's time of day and latitude.</summary>
         [DllImport(Library)] public static extern int strata_set_sun_direction(IntPtr engine, float* toSun);
+        /// <summary>ABI 1.16. tint and lift point at three floats each; null is 1, 1, 1 and 0, 0, 0.</summary>
+        [DllImport(Library)] public static extern int strata_set_ambient(IntPtr engine, float* tint, float* lift);
+        /// <summary>ABI 1.16. tint points at three floats; null is 1, 1, 1. (1, null) is the default.</summary>
+        [DllImport(Library)] public static extern int strata_set_sun_intensity(IntPtr engine, float intensity, float* tint);
         /// <summary>ABI 1.1.</summary>
         [DllImport(Library)] public static extern int strata_set_point_lights(IntPtr engine, StrataPointLight* lights, int count);
         /// <summary>ABI 1.3. tile null removes the terrain.</summary>

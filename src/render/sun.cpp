@@ -121,4 +121,10 @@ SkyState evaluateSkyForSun(const glm::vec3& toSun) {
     return s;
 }
 
+void applyLightLevels(SkyState& sky, const LightLevels& levels) {
+    sky.skyAmbient = sky.skyAmbient * levels.ambientTint + levels.ambientLift;
+    sky.groundAmbient = sky.groundAmbient * levels.ambientTint + levels.ambientLift;
+    sky.lightColor = sky.lightColor * (levels.keyTint * levels.keyIntensity);
+}
+
 }  // namespace strata::render

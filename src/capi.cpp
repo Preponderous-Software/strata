@@ -310,6 +310,16 @@ StrataStatus strata_set_sun_direction(StrataEngine* engine, const float to_sun[3
     return guard([&] { engine->engine->setSunDirection(to_sun); });
 }
 
+StrataStatus strata_set_ambient(StrataEngine* engine, const float tint[3], const float lift[3]) {
+    if (!engine) return invalid("engine must not be NULL");
+    return guard([&] { engine->engine->setAmbient(tint, lift); });
+}
+
+StrataStatus strata_set_sun_intensity(StrataEngine* engine, float intensity, const float tint[3]) {
+    if (!engine) return invalid("engine must not be NULL");
+    return guard([&] { engine->engine->setSunIntensity(intensity, tint); });
+}
+
 StrataStatus strata_set_point_lights(StrataEngine* engine, const StrataPointLight* lights, int32_t count) {
     if (!engine) return invalid("engine is NULL");
     if (count < 0) return invalid("count is negative");

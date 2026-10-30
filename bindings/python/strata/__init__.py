@@ -315,6 +315,20 @@ class Engine:
         """ABI 1.6. None goes back to the lighting's time of day."""
         self._call("strata_set_sun_direction", _floats(to_sun, 3) if to_sun is not None else None)
 
+    def set_ambient(
+        self, tint: Optional[Sequence[float]] = None, lift: Optional[Sequence[float]] = None
+    ) -> None:
+        """ABI 1.16. Ambient becomes ambient * tint + lift (SUN and SPACE); None is the default."""
+        self._call(
+            "strata_set_ambient",
+            _floats(tint, 3) if tint is not None else None,
+            _floats(lift, 3) if lift is not None else None,
+        )
+
+    def set_sun_intensity(self, intensity: float = 1.0, tint: Optional[Sequence[float]] = None) -> None:
+        """ABI 1.16. Scales the SUN key light (sun or moon) by intensity and tint; (1, None) is the default."""
+        self._call("strata_set_sun_intensity", float(intensity), _floats(tint, 3) if tint is not None else None)
+
     def set_point_lights(self, lights: Iterable[PointLight]) -> None:
         """ABI 1.1."""
         arr, count = _array(PointLight, lights)

@@ -52,7 +52,7 @@ Emscripten builds always use GLES 3.0.
   filled screen rectangles; 1.12: injected events, a shared frame clock and
   the drive channel, see [docs/DRIVE.md](docs/DRIVE.md); 1.13: wide lines;
   1.14: world-to-screen projection and world-anchored text; 1.15: per-vertex
-  RGBA mesh colours).
+  RGBA mesh colours; 1.16: ambient and sun levels).
 - **Layouts are checkable.** `strata_struct_size(id)` and
   `strata_struct_field_offset(id, field)` report every boundary struct. The C++
   unit tests `static_assert` the layouts. The C# tests

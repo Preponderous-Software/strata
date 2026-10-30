@@ -180,6 +180,14 @@ void strata_kit_build(strata_kit::Host& h, double t) {
 STRATA_KIT_EXPORT void my_set_rows(const float* rows, int n) { /* keep them */ }
 ```
 
+Light levels (kit 1.2, ABI 1.16): `Host::ambientTint`, `ambientLift`,
+`sunIntensity` and `sunTint` go to `strata_set_ambient` and
+`strata_set_sun_intensity` every frame; the defaults change nothing. Tier 0
+keeps only 4 point lights, so a fill light that stands in for ambient should
+be added with `h.fill(light, lift, priority)`: when the tier drops it, its
+`lift` (linear RGB) is added to the ambient instead, and the scene keeps its
+level on the devices that run at the lowest tier.
+
 `build-kit.sh` builds it (settings from the environment or a sourced file;
 see the script's header):
 

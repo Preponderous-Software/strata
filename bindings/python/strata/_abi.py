@@ -30,7 +30,7 @@ from ctypes import (
 #: The major version this binding was written against (STRATA_ABI_VERSION).
 ABI_VERSION = 1
 #: The newest minor whose additions this binding declares (STRATA_ABI_MINOR).
-ABI_MINOR = 15
+ABI_MINOR = 16
 
 # ---------------------------------------------------------------- status
 
@@ -419,6 +419,8 @@ FUNCTIONS = {
     "strata_set_lighting": (0, _status, [_engine, _p(Lighting)]),
     "strata_solar_position": (6, _status, [c_double, c_double, c_double, _p(SolarPosition)]),
     "strata_set_sun_direction": (6, _status, [_engine, _p(c_float)]),
+    "strata_set_ambient": (16, _status, [_engine, _p(c_float), _p(c_float)]),
+    "strata_set_sun_intensity": (16, _status, [_engine, c_float, _p(c_float)]),
     "strata_set_point_lights": (1, _status, [_engine, _p(PointLight), c_int32]),
     "strata_set_terrain": (3, _status, [_engine, _p(TerrainTile)]),
     "strata_add_mesh": (4, _status, [_engine, _p(Mesh), _p(c_uint32)]),
