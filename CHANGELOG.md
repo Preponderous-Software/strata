@@ -79,6 +79,19 @@
   `?embed=1` layout (the scene below the fold, the loader contained), and CI
   runs the smoke test against it. The kit version stays 1.1. (#53)
 
+- ABI 1.15: `STRATA_MESH_COLORS_RGBA` (`StrataTexturedMesh.flags`) reads
+  `mesh.colors` as RGBA quadruples per vertex instead of RGB triples; the
+  alpha is validated and ignored (a mesh's alpha is still `color[3]`).
+  `StrataMesh.colors` is RGB while `StrataMesh.color` is RGBA, and a host
+  that passed RGBA per vertex got every vertex after the first coloured
+  wrongly with no error; the header now says so, and such a host can pass
+  the flag through `strata_add_textured_mesh` with texture 0. Older
+  libraries reject the flag as unknown. The Python binding's `add_mesh`
+  raises `ValueError` when `colors` is too short for the vertices (the
+  library would read past it) and warns when it is RGBA without the flag.
+  `STRATA_ABI_VERSION` stays 1; no layout or pixel change. The drive
+  channel's hello reports `"abi":"1.15"`. (#53)
+
 ## 0.7.0
 
 The web kit: the shell around a Strata scene embedded in a web page, shipped

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import warnings
 from array import array
 from typing import Iterable, Optional, Sequence, Tuple
 
@@ -334,11 +335,27 @@ class Engine:
         texture: int = 0,
         flags: int = 0,
     ) -> int:
-        """ABI 1.4 (1.7 with uvs, a texture or flags). Returns the mesh id."""
+        """ABI 1.4 (1.7 with uvs, a texture or flags). Returns the mesh id.
+
+        colors are RGB triples per vertex, or RGBA quadruples with
+        flags=MESH_COLORS_RGBA (ABI 1.15). Too few raises ValueError (the
+        library would read past the end); RGBA without the flag warns, since
+        the library reads it as RGB and every vertex after the first is
+        coloured wrongly."""
         pos = array("f", positions)
         idx = array("I", indices)
         if len(pos) % 3:
             raise ValueError("positions must be xyz triples")
+        if colors is not None:
+            colors = array("f", colors)
+            per = 4 if flags & _abi.MESH_COLORS_RGBA else 3
+            want = per * (len(pos) // 3)
+            if len(colors) < want:
+                raise ValueError("colors has %d floats; %d vertices need %d (%s)"
+                                 % (len(colors), len(pos) // 3, want, "RGBA" if per == 4 else "RGB"))
+            if per == 3 and len(colors) == 4 * (len(pos) // 3):
+                warnings.warn("colors looks like RGBA (4 floats a vertex) but is read as RGB; "
+                              "pass flags=MESH_COLORS_RGBA (ABI 1.15)", RuntimeWarning, stacklevel=2)
         keep = []
 
         def pointer(data, ctype, typecode):

@@ -507,7 +507,7 @@ void Renderer::setTerrain(const StrataTerrainTile* tile) {
 uint32_t Renderer::addMesh(const StrataMesh& m) { return addMeshEntry(m, nullptr, 0, 0); }
 
 uint32_t Renderer::addTexturedMesh(const StrataTexturedMesh& m) {
-    if (m.flags & ~static_cast<uint32_t>(STRATA_MESH_UNLIT | STRATA_MESH_TRANSLUCENT)) {
+    if (m.flags & ~static_cast<uint32_t>(STRATA_MESH_UNLIT | STRATA_MESH_TRANSLUCENT | STRATA_MESH_COLORS_RGBA)) {
         fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: unknown flags 0x%x", m.flags);
     }
     if ((m.flags & STRATA_MESH_TRANSLUCENT) && !(m.mesh.color[3] >= 0.0f && m.mesh.color[3] <= 1.0f)) {
@@ -525,7 +525,8 @@ uint32_t Renderer::addMeshEntry(const StrataMesh& m, const float* uvs, uint32_t 
              STRATA_MAX_MESHES);
     }
     if (nextMeshId_ == 0) fail(STRATA_ERROR_INVALID_STATE, "mesh: ids exhausted");
-    const StaticMesh mesh = buildStaticMesh(m, uvs);  // validates first; throws before anything changes
+    const int colorComponents = (flags & STRATA_MESH_COLORS_RGBA) ? 4 : 3;  // ABI 1.15
+    const StaticMesh mesh = buildStaticMesh(m, uvs, colorComponents);  // validates first; throws before anything changes
     MeshEntry entry;
     entry.pick = buildPickGeometry(m);
     entry.vertices = device_.createBuffer(mesh.vertices.size() * sizeof(float), mesh.vertices.data(), false,

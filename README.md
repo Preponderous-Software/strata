@@ -117,7 +117,7 @@ texture updates and relative mouse mode (ABI 1.8); `v0.3.0` static meshes
 (ABI 1.4), unlit overlays and space lighting (**O1**, ABI 1.5) and
 `modules/sim`; `v0.2.0` point lights (**L3**), point-light shadows (**L4**)
 and a terrain tile (**T1**); and `v0.1.0` the skeleton and lighting
-**L1–L2**. The C ABI is 1.12: each addition is compatible, and every ABI
+**L1–L2**. The C ABI is 1.15: each addition is compatible, and every ABI
 1.0 host still works.
 
 | Milestone | What it is | Golden images |
