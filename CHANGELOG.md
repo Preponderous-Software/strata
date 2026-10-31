@@ -109,10 +109,11 @@
   `strata_read_pixels_rgba8` and the golden PNGs show those bytes as sRGB.
   Hosts have guessed differently at what to pass. `strata.h` and a new
   "Colour space" section in ARCHITECTURE.md now say what reaches the screen.
-  Opaque, untextured unlit draws show a colour exactly as passed (unless a
-  host context enables `GL_FRAMEBUFFER_SRGB` itself), lit surfaces come out
-  darker in the mid-tones, and decoding sRGB to linear first only darkens
-  everything further. An opt-in output encode is still open. No ABI, code
+  Opaque, untextured unlit draws show a colour exactly as passed (soft
+  points are added to what is beneath instead). Lit surfaces come out darker
+  in the mid-tones, and decoding sRGB to linear first only darkens
+  everything further. None of this holds when a host context enables
+  `GL_FRAMEBUFFER_SRGB` itself. An opt-in output encode is still open. No ABI, code
   or pixel change. (#48)
 
 - Web kit: the loader can cover one section of a page instead of the
