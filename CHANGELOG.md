@@ -103,6 +103,16 @@
   default 150, with one 1024² cascade, loses its small objects' shadows.
   `strata.h`, ARCHITECTURE.md and docs/WEB.md now say so, along with the
   web kit's `shadowDistanceMin`. No ABI, code or pixel change. (#53)
+- Docs: what colour space Strata outputs. Colours are documented as linear,
+  but nothing encodes them on the way out: the shaders write the lit value
+  unencoded and Strata does not touch `GL_FRAMEBUFFER_SRGB`, so the screen,
+  `strata_read_pixels_rgba8` and the golden PNGs show those bytes as sRGB.
+  Hosts have guessed differently at what to pass. `strata.h` and a new
+  "Colour space" section in ARCHITECTURE.md now say what reaches the screen.
+  Unlit draws show a colour exactly as passed, lit surfaces come out
+  darker in the mid-tones, and decoding sRGB to linear first only darkens
+  everything further. An opt-in output encode is still open. No ABI, code
+  or pixel change. (#48)
 
 - Web kit: the loader can cover one section of a page instead of the
   viewport. `StrataLoader.load()` and `show()` take `contain: true` with

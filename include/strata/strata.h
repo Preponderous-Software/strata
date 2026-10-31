@@ -19,6 +19,22 @@
  *     the memory layout of a System.Numerics.Matrix4x4 used the way OpenGL
  *     hosts in .NET use it (rows of the .NET matrix become GLSL columns).
  *
+ * Colour. Every colour below is documented as "linear": the lighting maths
+ * treats it as linear, and nothing converts it on the way in (texels are not
+ * sRGB-decoded either). Nothing converts it on the way out: there is no sRGB
+ * output encode, and Strata neither enables nor disables GL_FRAMEBUFFER_SRGB
+ * (on STRATA_SURFACE_HOST_CONTEXT the host's own setting applies). The
+ * shaders write the result into the colour target unencoded, and a display, a
+ * browser canvas or a PNG viewer shows those bytes as sRGB.
+ * strata_read_pixels_rgba8 returns the same bytes.
+ * So a colour that is drawn without lighting (lines, points, text, rects,
+ * STRATA_MESH_UNLIT meshes) reaches the screen exactly as it was passed:
+ * an sRGB colour from a design tool, passed in unchanged, looks as picked
+ * there. Lit surfaces multiply that value by the light. Their mid-tones come
+ * out darker and more saturated than a linear pipeline with an sRGB encode
+ * would show them. Decoding an sRGB colour to linear before passing it in
+ * makes every colour darker still, because nothing encodes it again.
+ *
  * Copyright (c) 2026 Daniel McCoy Stephenson. MIT licence; see LICENSE.
  */
 #ifndef STRATA_H
