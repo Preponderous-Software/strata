@@ -130,6 +130,32 @@ out-of-range kind are skipped and counted in `items_rejected`.
 cylinder 24), its vertex order and winding, and Unity's dimensions (cylinder
 and capsule 2 units tall).
 
+## Colour space
+
+The lighting maths treats every colour a host passes in as linear: render
+items, terrain, meshes, lights, overlays and text. Texels are used as stored,
+with no sRGB decode. No pass encodes its output either. Every fragment shader
+writes its result into the colour target unencoded, and Strata neither
+enables nor disables `GL_FRAMEBUFFER_SRGB` (on a host context the host's own
+setting applies). A display, a browser canvas, `strata_read_pixels_rgba8`
+and a golden PNG all hold those bytes, and they are viewed as sRGB.
+
+What a host sees:
+
+- **Unlit draws** (lines, points, text, rects, `STRATA_MESH_UNLIT` meshes)
+  reach the screen exactly as passed. An sRGB colour from a design tool,
+  passed in unchanged, looks as picked.
+- **Lit surfaces** multiply that value by the light. Their mid-tones come out
+  darker and more saturated than a linear pipeline with an sRGB output encode
+  would show them.
+- **Decoding an sRGB colour to linear** before passing it in makes every colour
+  darker still, because nothing encodes it again.
+
+An output encode would change every golden image, so it cannot be the
+default. **Later:** an opt-in sRGB encode as the last step of each colour
+pass. WebGL 2 has no `FRAMEBUFFER_SRGB` toggle, so the encode would be
+done in the shaders.
+
 ## Lighting
 
 ### `STRATA_LIGHTING_LEGACY`
@@ -277,10 +303,10 @@ work.
   replaced by the vertex colour times the texture (unit 4); untextured meshes
   sample a 1 x 1 white texel, so they draw exactly as in 1.4. Texels are used
   as stored, like every other Strata colour (there is no sRGB decode and no
-  output transform). Every mesh has a model matrix (identity until
-  `strata_set_mesh_transform`), sent with the inverse transpose of its 3 x 3
-  in a per-mesh range of uniform binding 3 and applied in the opaque, cascade
-  and cube-shadow passes. `STRATA_MESH_UNLIT` meshes are drawn last in the
+  output transform; see [Colour space](#colour-space)). Every mesh has a
+  model matrix (identity until `strata_set_mesh_transform`), sent with the
+  inverse transpose of its 3 x 3 in a per-mesh range of uniform binding 3
+  and applied in the opaque, cascade and cube-shadow passes. `STRATA_MESH_UNLIT` meshes are drawn last in the
   opaque pass as colour times texture, with no lights or fog, and are left
   out of every shadow pass, so a star's surface can sit around a point light.
 - **Nearest filtering (ABI 1.10).** `STRATA_TEXTURE_NEAREST` sets
