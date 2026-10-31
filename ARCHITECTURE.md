@@ -303,10 +303,10 @@ work.
   replaced by the vertex colour times the texture (unit 4); untextured meshes
   sample a 1 x 1 white texel, so they draw exactly as in 1.4. Texels are used
   as stored, like every other Strata colour (there is no sRGB decode and no
-  output transform; see [Colour space](#colour-space)). Every mesh has a model matrix (identity until
-  `strata_set_mesh_transform`), sent with the inverse transpose of its 3 x 3
-  in a per-mesh range of uniform binding 3 and applied in the opaque, cascade
-  and cube-shadow passes. `STRATA_MESH_UNLIT` meshes are drawn last in the
+  output transform; see [Colour space](#colour-space)). Every mesh has a
+  model matrix (identity until `strata_set_mesh_transform`), sent with the
+  inverse transpose of its 3 x 3 in a per-mesh range of uniform binding 3
+  and applied in the opaque, cascade and cube-shadow passes. `STRATA_MESH_UNLIT` meshes are drawn last in the
   opaque pass as colour times texture, with no lights or fog, and are left
   out of every shadow pass, so a star's surface can sit around a point light.
 - **Nearest filtering (ABI 1.10).** `STRATA_TEXTURE_NEAREST` sets
