@@ -147,14 +147,14 @@ What a host sees:
   a design tool, passed in unchanged, looks as picked. Partial alpha and
   antialiased edges blend with what is beneath in the same unencoded values,
   and a texture multiplies the colour by its texels.
-- **A host context with `GL_FRAMEBUFFER_SRGB` enabled** on an sRGB-capable
-  framebuffer gets the GL encode on top of all this, so none of these points
-  hold for it.
 - **Lit surfaces** multiply that value by the light. Their mid-tones come out
   darker and more saturated than a linear pipeline with an sRGB output encode
   would show them.
 - **Decoding an sRGB colour to linear** before passing it in makes every colour
   darker still, because nothing encodes it again.
+- **A host context with `GL_FRAMEBUFFER_SRGB` enabled** on an sRGB-capable
+  framebuffer gets the GL encode on top of all this, so none of the points
+  above hold for it.
 
 An output encode would change every golden image, so it cannot be the
 default. **Later:** an opt-in sRGB encode as the last step of each colour
