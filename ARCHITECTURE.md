@@ -142,9 +142,14 @@ and a golden PNG all hold those bytes, and they are viewed as sRGB.
 
 What a host sees:
 
-- **Unlit draws** (lines, points, text, rects, `STRATA_MESH_UNLIT` meshes)
-  reach the screen exactly as passed. An sRGB colour from a design tool,
-  passed in unchanged, looks as picked.
+- **Unlit draws** (lines, points, text, rects, untextured `STRATA_MESH_UNLIT`
+  meshes) reach the screen exactly as passed when opaque. An sRGB colour from
+  a design tool, passed in unchanged, looks as picked. Partial alpha and
+  antialiased edges blend with what is beneath in the same unencoded values,
+  and a texture multiplies the colour by its texels.
+- **A host context with `GL_FRAMEBUFFER_SRGB` enabled** on an sRGB-capable
+  framebuffer gets the GL encode on top of all this, so none of these points
+  hold for it.
 - **Lit surfaces** multiply that value by the light. Their mid-tones come out
   darker and more saturated than a linear pipeline with an sRGB output encode
   would show them.

@@ -27,10 +27,14 @@
  * shaders write the result into the colour target unencoded, and a display, a
  * browser canvas or a PNG viewer shows those bytes as sRGB.
  * strata_read_pixels_rgba8 returns the same bytes.
- * So a colour that is drawn without lighting (lines, points, text, rects,
- * STRATA_MESH_UNLIT meshes) reaches the screen exactly as it was passed:
- * an sRGB colour from a design tool, passed in unchanged, looks as picked
- * there. Lit surfaces multiply that value by the light. Their mid-tones come
+ * So an opaque colour drawn without lighting (lines, points, text, rects,
+ * untextured STRATA_MESH_UNLIT meshes) reaches the screen exactly as it was
+ * passed: an sRGB colour from a design tool, passed in unchanged, looks as
+ * picked there. Partial alpha and antialiased edges blend with what is
+ * beneath in the same unencoded values, and a texture multiplies the colour
+ * by its texels. A host that enables GL_FRAMEBUFFER_SRGB on an sRGB-capable
+ * host-context framebuffer gets the GL encode on top, and none of this
+ * holds. Lit surfaces multiply that value by the light. Their mid-tones come
  * out darker and more saturated than a linear pipeline with an sRGB encode
  * would show them. Decoding an sRGB colour to linear before passing it in
  * makes every colour darker still, because nothing encodes it again.
