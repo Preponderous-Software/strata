@@ -115,6 +115,11 @@
   everything further. None of this holds when a host context enables
   `GL_FRAMEBUFFER_SRGB` itself. An opt-in output encode is still open. No ABI, code
   or pixel change. (#48)
+- Docs: caught up with what has landed since 0.7.0. README.md's status table
+  gains wide lines (ABI 1.13) and RGBA mesh colours (ABI 1.15), and no longer
+  lists the OpenUSD modules as still to come. ARCHITECTURE.md gains the light
+  levels (ABI 1.16), RGBA vertex colours, and `src/core/` and `web/kit/` in its
+  layer table. No ABI, code or pixel change.
 
 - Web kit: the loader can cover one section of a page instead of the
   viewport. `StrataLoader.load()` and `show()` take `contain: true` with

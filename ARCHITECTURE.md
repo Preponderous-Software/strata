@@ -25,8 +25,10 @@ is built now. Where the RFC plans more, that is called out as **later**.
 | `src/rhi/` | `GpuDevice`, the interface the passes draw through; its GL 4.5 DSA backend and its GLES 3.0 / WebGL 2 backend, with the GLSL 4.50 to GLSL ES 3.00 rewrite (see [docs/WEB.md](docs/WEB.md)) | **yes, only here** |
 | `src/render/` | Primitive meshes, sun and sky model, cascade maths, point lights, terrain and static meshes, overlays, pass list, `Renderer` | no: draws through `GpuDevice` |
 | `src/image/` | PNG reading and writing (stb), golden-image comparison | no |
+| `src/core/` | Errors, the log sink, and the event queue, frame clock and drive channel (`Drive`, with the JSON lines it speaks; see [docs/DRIVE.md](docs/DRIVE.md)) | no |
 | `tools/` | `strata-golden`, `strata-imgcmp`, the scene-file parser | no |
 | `bindings/` | `csharp/Strata.Interop` (P/Invoke) and `python/strata` (ctypes): declarations of the C ABI, each checked against the library's layout tables | no |
+| `web/kit/` | The shell around a scene embedded in a web page: a header-only C++ host, page and loading scripts, a build script and smoke tests (see [docs/WEB.md](docs/WEB.md#the-web-kit)). It draws through the C ABI | context creation only |
 | `modules/sim/` | Deterministic simulation building blocks: seeded RNG, entity-component registry, 2D fields with diffusion, fixed-step clock, state hash, colormaps. C++ only (`strata::sim`), not in the C ABI | no |
 
 `render/` never calls GL directly. Everything goes through `GpuDevice`, which
@@ -217,6 +219,14 @@ renderer. The C# harness reproduces the C++ golden with zero differing pixels.
   below), distance fog to the horizon colour, and an analytic sky gradient with
   a sun disc and glow (`STRATA_CLEAR_SKY`). Sky, ambient, fog and light colour
   all come from the same time-of-day curve.
+- **Light levels (ABI 1.16).** `strata_set_ambient` and
+  `strata_set_sun_intensity` adjust the evaluated curve for hosts
+  (`applyLightLevels` in `src/render/sun.cpp`): the hemisphere ambient becomes
+  `ambient · tint + lift`, and the key light, sun or moon, is multiplied by
+  the intensity and tint. Its direction, its shadows, the sky, the fog and
+  point lights stay as they were. Both settings stay across
+  `strata_set_lighting`, and the defaults draw exactly what they drew without
+  them. `STRATA_LIGHTING_LEGACY` ignores both.
 - **L1** is the same path with `cascade_count = 1`.
 
 ### `STRATA_LIGHTING_SPACE` (ABI 1.5)
@@ -227,7 +237,8 @@ Only point lights light the scene. It is for scenes whose light source sits
 in them, such as a star at the centre of a planetary system: a point light at
 the star with a range far beyond the scene gives near-constant intensity and
 the correct per-fragment direction to every body. Point-light shadows still
-work.
+work. `strata_set_ambient` (ABI 1.16) applies to the flat ambient too;
+`strata_set_sun_intensity` has no key light to scale here and is ignored.
 
 ### Point lights (L3)
 
@@ -347,6 +358,10 @@ work.
   ones use the opaque pass's fragment shaders, so they receive sun and
   point-light shadows; unlit ones are colour times texture. They cast no
   shadows and are absent from `strata_read_depth_f32`.
+- **RGBA vertex colours (ABI 1.15).** `STRATA_MESH_COLORS_RGBA`, a
+  `StrataTexturedMesh` flag, makes the build read `mesh.colors` as RGBA
+  quadruples instead of RGB triples. The alpha is validated and dropped: a
+  mesh's alpha is still `color[3]`, and the vertex format stays the same.
 - This is a narrow precursor to RFC 0020 §9 (cooked meshes, instancing,
   materials): no tangents, normal maps, instancing or LOD.
 
