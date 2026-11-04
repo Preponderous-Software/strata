@@ -137,12 +137,16 @@ and a terrain tile (**T1**); and `v0.1.0` the skeleton and lighting
 | Nearest filtering *(ABI 1.10)* | `STRATA_TEXTURE_NEAREST`: textures sampled texel by texel, so cell fields and pixel art keep hard edges when magnified | `tex_nearest_field` |
 | Translucency and on-top overlays *(ABI 1.11)* | Alpha-blended translucent meshes (sorted back to front, lit or unlit), lines and points drawn on top of the scene, and filled screen rectangles as panels behind text | `o2_translucent_on_top` |
 | Drive channel *(ABI 1.12)* | Injected events (`strata_push_event`), a shared frame clock (`strata_frame_seconds`), `strata_is_driven`, and the `STRATA_DRIVE` socket a playtesting harness uses to inject input, step the clock (`STRATA_DRIVE_CLOCK`, `STRATA_DRIVE_STEP`), force a headless surface (`STRATA_DRIVE_SURFACE`) and take screenshots | none: `strata-drive-e2e` checks two stepped runs draw identical frames |
+| Wide lines *(ABI 1.13)* | `strata_submit_wide_lines`: lines any number of pixels or world units wide, drawn as camera-facing quads with an antialiased edge (`GL_LINES` is one pixel wide, and WebGL 2 draws no wider), with width and colour varying along a segment and optional round caps (`STRATA_LINES_ROUND_CAPS`) | `w1_wide_lines` |
 | World labels *(ABI 1.14)* | `strata_project_point` (a world point to drawable pixels and view distance with the camera last set, and whether it is in front) and `strata_submit_world_text` (screen text anchored at a world point plus a pixel offset, hidden behind the camera); `project_point` / `submit_world_text` in Python, `Host::label` in the web kit (kit 1.2) | `o3_world_labels` |
+| RGBA mesh colours *(ABI 1.15)* | `STRATA_MESH_COLORS_RGBA`: `strata_add_textured_mesh` reads `mesh.colors` as RGBA quadruples instead of RGB triples; the alpha is validated and ignored | none: a unit test and a Python test check that quadruples draw what the same RGB triples draw |
 | Web kit *(no ABI change)* | `kit/` in the wasm tarball: `strata_kit.h` (WebGL 2 context, engine, quality tiers, orbit camera, lost-context restore), `strata-kit.js` (sizing, adaptive quality, camera input, project and pick in CSS pixels), `strata-loader.js` (progress and fallbacks), `build-kit.sh`, and smoke and capture tests | none: CI builds `web/kit/example` and runs `testing/smoke.cjs` on it (tap == pick at DPR 1/2/3, context loss) |
 | Light levels *(ABI 1.16)* | `strata_set_ambient` (ambient × tint + lift, SUN and SPACE) and `strata_set_sun_intensity` (the sun or moon scaled and tinted, direction and shadows kept), staying across `strata_set_lighting`; the defaults draw the same pixels as 1.12 | `sun_levels_overcast` (beside `l2_csm_morning`) |
 
-Next come streaming and larger terrain (T2–T4), meshes and materials (M1–M4),
-and optional OpenUSD modules (`STRATA_WITH_USD`, off by default).
+Next come streaming and larger terrain (T2–T4), and meshes and materials
+(M1–M4). The optional OpenUSD modules (`modules/usd`, `modules/save`) are
+built only with `-DSTRATA_WITH_USD=ON`, which is off by default. See
+[modules/usd/README.md](modules/usd/README.md).
 
 Alongside the renderer, `modules/sim` (`strata::sim`, C++ only, built by
 default) holds deterministic simulation building blocks: a seeded RNG, an
