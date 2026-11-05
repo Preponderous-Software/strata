@@ -34,7 +34,7 @@ code on both:
 
 | Desktop GL 4.5 feature | On WebGL 2 | Visible difference |
 |---|---|---|
-| Cube map arrays (`samplerCubeArrayShadow`, point-light shadows) | One cube map per shadowed light, on texture units 2 and 5–7, chosen in the shader by a branch | None: the GLES device on llvmpipe draws the 22 desktop goldens with 0 pixels over ΔE 4 |
+| Cube map arrays (`samplerCubeArrayShadow`, point-light shadows) | One cube map per shadowed light, on texture units 2 and 5–7, chosen in the shader by a branch | None: CI draws every desktop golden through the GLES device on llvmpipe at the default tolerance, and the 22 goldens measured when this was written had 0 pixels over ΔE 4 |
 | `GL_DEPTH_CLAMP` (sun shadow casters, overlays past the far plane) | `EXT_depth_clamp` where the browser has it (Chromium does, SwiftShader included). Otherwise the vertex shader stops near/far clipping and the fragment shader writes the clamped depth plus the shadow pass's polygon offset to `gl_FragDepth` | None measured: both paths draw the same pixels in Chromium and on llvmpipe. Without the extension the shadow pass loses early depth testing (slower) |
 | Base vertex and base instance in draws | Folded into the vertex attribute offsets at draw time | None |
 | `layout(binding = N)` in GLSL | Set through the API after linking | None |
@@ -42,11 +42,11 @@ code on both:
 | Depth readback (`strata_read_depth_f32`, ABI 1.9) | Not available: a browser's headless request is a hidden window, which has no offscreen depth target | Returns `STRATA_ERROR_UNSUPPORTED`. The `depth_pack` draw itself runs on the GLES device: natively under `STRATA_GL_API=gles3` it reads the same depths |
 
 Browsers differ from the desktop only in rasterisation detail at polygon
-edges: in headless Chromium (SwiftShader) the 22 golden scenes differ from the
-desktop llvmpipe goldens by 0.004 % to 0.11 % of pixels, all inside the
-desktop tolerance (0.5 %). CI checks them against their own goldens
-(`tests/golden/*/web-swiftshader.png`, 0 pixels over ΔE 4) and against the
-desktop goldens at the desktop tolerance.
+edges: in headless Chromium (SwiftShader) the 22 golden scenes measured when
+this was written differed from the desktop llvmpipe goldens by 0.004 % to
+0.11 % of pixels, all inside the default tolerance (0.5 %). CI checks every
+scene against its own browser golden (`tests/golden/*/web-swiftshader.png`)
+and against the desktop golden, both at the default tolerance.
 
 Limits that matter in a browser:
 
@@ -153,7 +153,7 @@ from `v0.7.0` on (older tarballs have no `kit/`):
 
 | File | What it is |
 |---|---|
-| `strata_kit.h` | Header-only C++ host shell. Creates the WebGL 2 context (`preserveDrawingBuffer` on, so frames can be read back) and the engine; resizing; three quality tiers (sun cascades, shadow map size, point-light budget, point thinning); an orbit camera and its view-projection matrix; the sun from latitude, longitude and time; per-frame batches of primitives, points (alpha clamped), lines, prioritised point lights and, from kit 1.2, engine-drawn world labels (`Host::label`, Strata ABI 1.14); frame stats (`sk_stats`: primitives, points, lines, lights, terrain samples and, from kit 1.1, the meshes the host counts in `Host::meshes`). Exports `sk_init`, `sk_restore`, `sk_resize`, `sk_set_quality`, `sk_set_camera`, `sk_set_sun`, `sk_view_proj`, `sk_stats`, `sk_frame` and `sk_kit_version`. Natively (no Emscripten) the same file opens a headless engine: `sk_init_headless` and `sk_save_png`, so a scene also renders stills |
+| `strata_kit.h` | Header-only C++ host shell. Creates the WebGL 2 context (`preserveDrawingBuffer` on, so frames can be read back) and the engine; resizing; three quality tiers (sun cascades, shadow map size, point-light budget, point thinning); an orbit camera and its view-projection matrix; the sun from latitude, longitude and time; per-frame batches of primitives, points (alpha clamped), lines, prioritised point lights and, from kit 1.2, engine-drawn world labels (`Host::label`, Strata ABI 1.14); frame stats (`sk_stats`: primitives, points, lines, lights, terrain samples and, from kit 1.1, the meshes the host counts in `Host::meshes`). Exports `sk_init`, `sk_restore`, `sk_shutdown`, `sk_resize`, `sk_set_quality`, `sk_set_camera`, `sk_set_sun`, `sk_view_proj`, `sk_stats`, `sk_frame` and `sk_kit_version`. Natively (no Emscripten) the same file opens a headless engine: `sk_init_headless` and `sk_save_png`, so a scene also renders stills |
 | `strata-kit.js` | Dependency-free page shell (`window.StrataKit`): canvas sizing with a capped device pixel ratio; adaptive quality (pixel density first, then the tier, with settle windows, reset when the tab is hidden); orbit, pan, pinch, wheel and keyboard camera; `project()` and `pick()` in CSS pixels; `webglcontextlost`/`webglcontextrestored`; `?quality=`, `?fps=1` and `?drive=1`; label placement with collision and hysteresis (`StrataKit.placeLabels`); `window.__strataKit` for tools |
 | `strata-loader.js` | The loading shell (`window.StrataLoader`): the poster as a blurred backdrop, byte-accurate download progress with the size (or, for a host that boots its own way, `StrataLoader.show()` and `StrataLoader.progress(fraction, label)`: see below), and a fallback to the trailer clip or the poster, with the reason in words, when WebGL 2 is missing, the engine fails, a lost context does not come back, or the device is too slow at the lowest tier |
 | `build-kit.sh` | One parameterised build: emsdk version check, the Strata tarball's SHA-256 (or a source build's `libstrata.a`), fixed flags (`-O2 -fwasm-exceptions`, WebGL 2 only, `MODULARIZE`, and `INCOMING_MODULE_JS_API` with `wasmBinary`, so the glue takes the bytes `strata-loader.js` already fetched instead of downloading the `.wasm` again) and the export list. Copies the page scripts beside the `.wasm`. A host that links its own glue with `strata-loader.js` needs `wasmBinary` in `-sINCOMING_MODULE_JS_API` too: emsdk 6.0.11's default list leaves it out |
@@ -339,6 +339,7 @@ attempt.
 | The browser | `node tests/web/run_goldens.cjs build-web out --platform web-swiftshader` (headless Chromium, SwiftShader) | `web-swiftshader.png` |
 | The browser without `EXT_depth_clamp` | `STRATA_WEB_ENV=STRATA_GLES_NO_DEPTH_CLAMP=1 node tests/web/run_goldens.cjs ...` | `web-swiftshader.png` |
 | The browser against the desktop | `node tests/web/run_goldens.cjs build-web out --platform linux-llvmpipe` | the desktop goldens, default tolerance |
+| The web kit | `web/kit/build-kit.sh web/kit/example/kit.conf` (with `KIT_OUT`, `STRATA_LIB`, `STRATA_INCLUDE`), then `node web/kit/testing/smoke.cjs <url> out --context-loss` | none: the checks are behavioural |
 
 `run_goldens.cjs` needs Playwright (`npm install --prefix tests/web
 playwright@1.61.1 && npx --prefix tests/web playwright install chromium`); the
@@ -346,7 +347,5 @@ Playwright version pins Chromium and therefore SwiftShader. To bless new web
 goldens, add `--bless`: they are written to `<out>/golden/`. Bless from CI's
 pinned Chromium, as for the desktop goldens (see
 [GOLDEN_IMAGES.md](GOLDEN_IMAGES.md)).
-
-| The web kit | `web/kit/build-kit.sh web/kit/example/kit.conf` (with `KIT_OUT`, `STRATA_LIB`, `STRATA_INCLUDE`), then `node web/kit/testing/smoke.cjs <url> out --context-loss` | none: the checks are behavioural |
 
 The README's browser images come from `tools/make_web_media.py build-web`.

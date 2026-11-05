@@ -120,6 +120,14 @@
   lists the OpenUSD modules as still to come. ARCHITECTURE.md gains the light
   levels (ABI 1.16), RGBA vertex colours, and `src/core/` and `web/kit/` in its
   layer table. No ABI, code or pixel change.
+- Docs: docs/DRIVE.md now gives the two replies it left out: a line that is
+  not a JSON object answers with no `op`, and a step cut short by the engine
+  going away replies with `ended: true`. It also says a line over 1 MiB closes
+  the connection. docs/WEB.md no longer says CI holds browser goldens to 0
+  pixels over ΔE 4 (both browser checks use the default tolerance), no longer
+  gives 22 as the current number of golden scenes, lists `sk_shutdown`, and
+  puts the web kit's row back in the Testing table. No ABI, code or pixel
+  change.
 
 - Web kit: the loader can cover one section of a page instead of the
   viewport. `StrataLoader.load()` and `show()` take `contain: true` with
