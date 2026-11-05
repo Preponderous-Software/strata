@@ -83,7 +83,8 @@ booleans and null; no nested objects or arrays). Every reply carries `ok` and
 the request's `op`. A failed request answers `{"ok":false,"op":...,"error":...}`
 and does not disconnect. A line that does not parse as a JSON object has no
 `op` to repeat, so it answers `{"ok":false,"error":...}`, and it does not
-disconnect either. A line longer than 1 MiB closes the connection.
+disconnect either. More than 1 MiB waiting to be read with no newline in it
+closes the connection.
 
 | Harness sends | Fields | Engine replies |
 |---|---|---|
