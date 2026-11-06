@@ -79,16 +79,20 @@ Everything happens on the engine's thread, inside `pollEvent`,
 ### Protocol, version 1
 
 One JSON object per line in each direction (UTF-8, flat: strings, numbers,
-booleans and null; no nested objects or arrays). Every reply carries `ok` and
-the request's `op`. A failed request answers `{"ok":false,"op":...,"error":...}`
-and does not disconnect.
+booleans and null; no nested objects or arrays). Every reply to a JSON object
+carries `ok` and the request's `op`. A failed request answers
+`{"ok":false,"op":...,"error":...}` and does not disconnect. Any other line has
+no `op` to repeat, so it answers `{"ok":false,"error":...}`, and it does not
+disconnect either. The exception is a blank line (empty, or only spaces and
+tabs), which is ignored and gets no reply. More than 1 MiB waiting to be read
+with no newline in it closes the connection.
 
 | Harness sends | Fields | Engine replies |
 |---|---|---|
 | `hello` | `protocol: 1` | `protocol`, `strata` (version), `abi` (`"1.<STRATA_ABI_MINOR>"`, e.g. `"1.16"`), `width`, `height`, `surface`, `clock`, `step`, `frame` |
 | `event` | `type` (`quit`, `key_down`, `key_up`, `mouse_motion`, `mouse_button_down`, `mouse_button_up`, `mouse_wheel`, `resized`, `text_input`), and any of `scancode`, `modifiers`, `repeat`, `button`, `width`, `height`, `x`, `y`, `dx`, `dy`, `text` (at most 31 bytes) | `queued`: the events now waiting |
 | `clock` | `mode: "free"` or `"stepped"`, optional `step` (seconds) | `clock`, `step` |
-| `step` | `frames` (1 to 1000000) | after the last granted frame's `present`: `frame` (frames presented so far) and `frames_run`. Stepped clock only |
+| `step` | `frames` (1 to 1000000) | after the last granted frame's `present`: `frame` (frames presented so far) and `frames_run`. If the engine is destroyed before then, it replies anyway, with those fields and `ended: true`. Stepped clock only |
 | `shot` | `path` | `path`, `width`, `height`: the last presented frame as a PNG (`strata_save_screenshot_png`) |
 | `stats` | | `frame`, `clock`, `step`, `queued`, `draw_calls`, `instances`, `cpu_ms_frame` |
 | `bye` | | the reply, then the connection closes and the engine runs undriven with a free clock |

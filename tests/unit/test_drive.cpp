@@ -347,4 +347,40 @@ TEST(drive_bye_disconnects_cleanly) {
     CHECK(has(lines[0], "\"op\":\"bye\""));
 }
 
+TEST(drive_answers_a_pending_step_when_the_engine_goes_away) {
+    Pair pair;
+    REQUIRE(pair.engine >= 0);
+    {
+        Drive d;
+        d.adopt(pair.engine, ClockMode::Stepped, 0.1);
+        pair.write("{\"op\":\"step\",\"frames\":3}\n");
+        d.beginPoll();
+        d.presented();
+        CHECK(pair.replies().empty());  // two granted frames are still to run
+    }
+    const std::vector<std::string> lines = pair.replies();
+    REQUIRE(lines.size() == 1);
+    CHECK(has(lines[0], "\"ok\":true"));
+    CHECK(has(lines[0], "\"op\":\"step\""));
+    CHECK(has(lines[0], "\"frame\":1"));
+    CHECK(has(lines[0], "\"frames_run\":1"));
+    CHECK(has(lines[0], "\"ended\":true"));
+}
+
+TEST(drive_owes_no_reply_at_destruction_once_the_step_has_answered) {
+    Pair pair;
+    REQUIRE(pair.engine >= 0);
+    {
+        Drive d;
+        d.adopt(pair.engine, ClockMode::Stepped, 0.1);
+        pair.write("{\"op\":\"step\",\"frames\":1}\n");
+        d.beginPoll();
+        d.presented();
+    }
+    const std::vector<std::string> lines = pair.replies();
+    REQUIRE(lines.size() == 1);  // only the step's own reply
+    CHECK(has(lines[0], "\"frames_run\":1"));
+    CHECK(!has(lines[0], "\"ended\""));
+}
+
 #endif
