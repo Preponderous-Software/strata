@@ -79,12 +79,13 @@ Everything happens on the engine's thread, inside `pollEvent`,
 ### Protocol, version 1
 
 One JSON object per line in each direction (UTF-8, flat: strings, numbers,
-booleans and null; no nested objects or arrays). Every reply carries `ok` and
-the request's `op`. A failed request answers `{"ok":false,"op":...,"error":...}`
-and does not disconnect. A line that does not parse as a JSON object has no
-`op` to repeat, so it answers `{"ok":false,"error":...}`, and it does not
-disconnect either. More than 1 MiB waiting to be read with no newline in it
-closes the connection.
+booleans and null; no nested objects or arrays). Every reply to a JSON object
+carries `ok` and the request's `op`. A failed request answers
+`{"ok":false,"op":...,"error":...}` and does not disconnect. Any other line has
+no `op` to repeat, so it answers `{"ok":false,"error":...}`, and it does not
+disconnect either. The exception is a blank line (empty, or only spaces and
+tabs), which is ignored and gets no reply. More than 1 MiB waiting to be read
+with no newline in it closes the connection.
 
 | Harness sends | Fields | Engine replies |
 |---|---|---|

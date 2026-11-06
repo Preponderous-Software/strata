@@ -122,8 +122,9 @@
   layer table. No ABI, code or pixel change.
 - Docs: docs/DRIVE.md now gives the two replies it left out: a line that is
   not a JSON object answers with no `op`, and a step cut short by the engine
-  going away replies with `ended: true`. It also says that more than 1 MiB
-  waiting to be read with no newline closes the connection. docs/WEB.md no
+  going away replies with `ended: true`. It also says that a blank line gets
+  no reply, and that more than 1 MiB waiting to be read with no newline closes
+  the connection. docs/WEB.md no
   longer says CI holds browser goldens to 0 pixels over ΔE 4 (both browser
   checks use the default tolerance), no longer gives 22 as the current number
   of golden scenes, lists the native `sk_shutdown`, and puts the web kit's row
