@@ -615,6 +615,27 @@ TEST(scene_errors_name_the_line_and_what_was_wrong) {
         {"text 0 0 8 1 1 1 1 hello\n", 1, "expected ':' before the text"},
         {"text 0 0 8 1 1 1 1\n", 1, "expected ':' before the text"},
         {"include\n", 1, "expected file name"},
+        // An optional field that is there must parse, and a number must parse whole.
+        {"mesh 1 1 1\nexpect_ray 0 0 0 0 0 1 1 0 oops\n", 2, "expected a distance or nothing after the mesh"},
+        {"mesh 1 1 1\nexpect_ray 0 0 0 0 0 1 1 0 1.5x\n", 2, "expected a distance or nothing after the mesh"},
+        {"expect_ray 0 0 0 0 0 1 1 1x\n", 1, "expected a mesh index or 'none'"},
+        {"expect_ray 0 0 0 0 0 1 1 0.5\n", 1, "expected a mesh index or 'none'"},
+        {"expect_depth 0 0 5x\n", 1, "expected a distance or 'inf'"},
+        {"item cube 0 0 0 1 1 1 1 1 1 oops\n", 1, "expected an alpha or nothing after the colour"},
+        // The day is checked against its own month.
+        {"sun date 2026-02-29 12:00 0 0 0\n", 1, "bad date '2026-02-29'"},
+        {"sun date 2100-02-29 12:00 0 0 0\n", 1, "bad date '2100-02-29'"},
+        {"sun date 2026-04-31 12:00 0 0 0\n", 1, "bad date '2026-04-31'"},
+        // Nothing may follow a directive's last field.
+        {"size 640 360 999\n", 1, "unexpected '999' at the end of the line"},
+        {"mesh 1 1 1\nmesh_unlit extra\n", 2, "unexpected 'extra' at the end of the line"},
+        {"clear 0 0 0 1 sky sky\n", 1, "unexpected 'sky' at the end of the line"},
+        {"light point 0 0 0 1 1 1 1 1 shadow 2\n", 1, "unexpected '2' at the end of the line"},
+        {"mesh 1 1 1\nexpect_ray 0 0 0 0 0 1 1 0 1 2\n", 2, "unexpected '2' at the end of the line"},
+        {"expect_depth 0 0 inf 1\n", 1, "unexpected '1' at the end of the line"},
+        {"item cube 0 0 0 1 1 1 1 1 1 1 1\n", 1, "unexpected '1' at the end of the line"},
+        {"line 0 0 0 1 1 1 1 1 1 1 on_top on_top\n", 1, "unexpected 'on_top' at the end of the line"},
+        {"lighting space 0.2 0.3\n", 1, "unexpected '0.3' at the end of the line"},
     };
     for (const auto& c : cases) {
         const std::string got = failure(c.scene);
@@ -622,6 +643,26 @@ TEST(scene_errors_name_the_line_and_what_was_wrong) {
             strata::test::recordFailure(__FILE__, __LINE__, std::string(c.scene) + "  was refused with: " + got);
         }
     }
+}
+
+TEST(scene_strict_checks_still_accept_well_formed_lines) {
+    const Scene s = parsed(
+        "size 64 32   # a comment after the last field\n"
+        "sun date 2028-02-29 12:00 0 0 0\n"
+        "mesh 1 1 1\n"
+        "mesh_unlit\n"
+        "expect_ray 0 0 5 0 0 -1 10 0 1e1\n"
+        "expect_depth 0 0 2.5e-1\n"
+        "item cube 0 0 0 1 1 1 1 1 1 0.25\n");
+    CHECK(s.width == 64 && s.height == 32);
+    CHECK(s.hasSunDate);
+    REQUIRE(s.rayExpectations.size() == 1);
+    CHECK(s.rayExpectations[0].hasDistance);
+    CHECK_NEAR(s.rayExpectations[0].distance, 10.0, kEps);
+    REQUIRE(s.depthExpectations.size() == 1);
+    CHECK_NEAR(s.depthExpectations[0].distance, 0.25, kEps);
+    REQUIRE(s.items.size() == 1);
+    CHECK_NEAR(s.items[0].color[3], 0.25, kEps);
 }
 
 TEST(scene_checks_made_after_the_whole_file_is_read_name_the_file) {
