@@ -2,6 +2,10 @@
 // C# primitives harness so both draw exactly the same thing.
 //
 //   # comment                     ('#' ends any line, text included)
+//
+// Nothing may follow a directive's last field (or its last option), and an
+// optional field that is present must parse.
+//
 //   size <width> <height>
 //   camera <eye x y z> <target x y z> <fov_y_degrees> <near> <far>
 //   lighting legacy <dir x y z> <ambient>

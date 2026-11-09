@@ -154,6 +154,17 @@
   `STRATA_ABI_VERSION` stays 1; no layout or pixel change. The drive
   channel's hello reports `"abi":"1.15"`. (#53)
 
+- Scene files read by `tools/common/scene_file.cpp` (`strata-golden`)
+  refuse a few malformed lines they used to load (#75); the C# primitives
+  harness parses scenes itself and is unchanged. An `expect_ray` distance or an
+  `item` alpha that is present but does not parse is an error instead of
+  being dropped, so a typo can no longer turn off a distance check. Numbers
+  in `expect_ray`'s mesh index and `expect_depth`'s distance must parse
+  whole (`5x` is no longer read as `5`). A `sun date` day is checked against
+  its month, leap years included. Anything after a directive's last field
+  is refused as `unexpected '<word>' at the end of the line`. Every scene in
+  `tests/scenes` still loads; no library or pixel change.
+
 ## 0.7.0
 
 The web kit: the shell around a Strata scene embedded in a web page, shipped

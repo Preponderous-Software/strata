@@ -24,6 +24,27 @@ void read(std::istringstream& in, T& value, const std::string& where, const char
     if (!(in >> value)) bad(where, std::string("expected ") + what);
 }
 
+// The whole of `token` read as a T, the way `>>` reads it; false if it does not
+// parse or anything is left over ("5x", "1.5.2").
+template <typename T>
+bool readWhole(const std::string& token, T& value) {
+    std::istringstream in(token);
+    return static_cast<bool>(in >> value) && in.peek() == std::istringstream::traits_type::eof();
+}
+
+// Refuse anything left on a line after a directive's last field.
+void expectEnd(std::istringstream& in, const std::string& where) {
+    std::string extra;
+    if (in >> extra) bad(where, "unexpected '" + extra + "' at the end of the line");
+}
+
+bool isLeapYear(int y) { return (y % 4 == 0 && y % 100 != 0) || y % 400 == 0; }
+
+int daysInMonth(int y, int m) {
+    static const int days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    return m == 2 && isLeapYear(y) ? 29 : days[m - 1];
+}
+
 int kindFromName(const std::string& name, const std::string& where) {
     if (name == "cube") return STRATA_PRIMITIVE_CUBE;
     if (name == "capsule") return STRATA_PRIMITIVE_CAPSULE;
@@ -158,7 +179,8 @@ void parse(const std::string& path, Scene& scene, int depth) {
             read(in, scene.sunLatitude, where, "latitude");
             read(in, scene.sunLongitude, where, "longitude");
             int y = 0, mo = 0, d = 0, h = 0, mi = 0;
-            if (std::sscanf(date.c_str(), "%d-%d-%d", &y, &mo, &d) != 3 || mo < 1 || mo > 12 || d < 1 || d > 31) {
+            if (std::sscanf(date.c_str(), "%d-%d-%d", &y, &mo, &d) != 3 || mo < 1 || mo > 12 || d < 1 ||
+                d > daysInMonth(y, mo)) {  // the month is checked first, so daysInMonth gets 1..12
                 bad(where, "bad date '" + date + "'");
             }
             if (std::sscanf(time.c_str(), "%d:%d", &h, &mi) != 2 || h < 0 || h > 23 || mi < 0 || mi > 59) {
@@ -360,14 +382,14 @@ void parse(const std::string& path, Scene& scene, int depth) {
             read(in, r.maxDistance, where, "max distance");
             read(in, target, where, "mesh index or 'none'");
             if (target != "none") {
-                try {
-                    r.mesh = std::stoi(target);
-                } catch (const std::exception&) {
-                    bad(where, "expected a mesh index or 'none'");
-                }
+                if (!readWhole(target, r.mesh)) bad(where, "expected a mesh index or 'none'");
                 if (r.mesh < 0) bad(where, "the mesh index must be >= 0");
             }
-            if (in >> r.distance) r.hasDistance = true;
+            std::string distance;
+            if (in >> distance) {
+                if (!readWhole(distance, r.distance)) bad(where, "expected a distance or nothing after the mesh");
+                r.hasDistance = true;
+            }
             r.line = lineNumber;
             scene.rayExpectations.push_back(r);
         } else if (word == "expect_depth") {
@@ -378,12 +400,8 @@ void parse(const std::string& path, Scene& scene, int depth) {
             read(in, distance, where, "distance or 'inf'");
             if (distance == "inf") {
                 d.distance = std::numeric_limits<float>::infinity();
-            } else {
-                try {
-                    d.distance = std::stof(distance);
-                } catch (const std::exception&) {
-                    bad(where, "expected a distance or 'inf'");
-                }
+            } else if (!readWhole(distance, d.distance)) {
+                bad(where, "expected a distance or 'inf'");
             }
             d.line = lineNumber;
             scene.depthExpectations.push_back(d);
@@ -400,8 +418,10 @@ void parse(const std::string& path, Scene& scene, int depth) {
             for (float& v : item.scale) read(in, v, where, "scale");
             for (int i = 0; i < 3; ++i) read(in, item.color[i], where, "colour");
             item.color[3] = 1.0f;
-            float alpha;
-            if (in >> alpha) item.color[3] = alpha;
+            std::string alpha;
+            if (in >> alpha && !readWhole(alpha, item.color[3])) {
+                bad(where, "expected an alpha or nothing after the colour");
+            }
             scene.items.push_back(item);
         } else if (word == "line") {
             StrataLineVertex a{}, b{};
@@ -512,6 +532,7 @@ void parse(const std::string& path, Scene& scene, int depth) {
         } else {
             bad(where, "unknown directive '" + word + "'");
         }
+        expectEnd(in, where);
     }
 }
 
