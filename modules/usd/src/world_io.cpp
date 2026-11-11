@@ -195,14 +195,18 @@ SdfLayerRefPtr writeLayer(const World* base, const World& cur) {
         }
     }
     for (const auto& kv : cur.variants) {
-        if (kv.second.empty()) continue;
-        if (!full) {
-            auto it = base->variants.find(kv.first);
-            if (it != base->variants.end() && it->second == kv.second) continue;
-        }
+        auto it = full ? cur.variants.end() : base->variants.find(kv.first);
+        const bool inBase = !full && it != base->variants.end();
+        if (inBase && it->second == kv.second) continue;
+        // A cleared selection is written only over a baseline that has one: an
+        // explicit empty selection, which blocks the weaker layers' opinion
+        // (SetVariantSelection with "" would author nothing at all).
+        if (kv.second.empty() && (!inBase || it->second.empty())) continue;
         const auto bar = kv.first.find('|');
         if (bar == std::string::npos) throw std::runtime_error("variant key needs <prim>|<set>: " + kv.first);
-        ensurePrim(L, kv.first.substr(0, bar), false)->SetVariantSelection(kv.first.substr(bar + 1), kv.second);
+        SdfPrimSpecHandle p = ensurePrim(L, kv.first.substr(0, bar), false);
+        if (kv.second.empty()) p->BlockVariantSelection(kv.first.substr(bar + 1));
+        else p->SetVariantSelection(kv.first.substr(bar + 1), kv.second);
     }
     return L;
 }

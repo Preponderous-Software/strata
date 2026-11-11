@@ -9,7 +9,8 @@
 //     /Globals             one int64 attribute per global
 //     /Entities/<Coll>/<Prefix><id>   Xform, prepend references = <prefab>; one attribute per field
 //   A deleted entity is `over ... (active = false)` in the delta.
-//   A variant selection "<prim>|<set>" is a variant-selection opinion.
+//   A variant selection "<prim>|<set>" is a variant-selection opinion; a
+//   selection cleared since the baseline is an explicit empty selection (a block).
 #pragma once
 
 #include <string>

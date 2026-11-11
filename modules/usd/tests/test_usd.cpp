@@ -108,6 +108,23 @@ int main(int argc, char** argv) {
     CHECK(usd::readManifest(pxr::SdfLayer::OpenAsAnonymous(out + "/save.usdc"), back, &err));
     CHECK(back.gameId == "test" && back.baseHash == m.baseHash && back.formatVersion == usd::kFormatVersion);
 
+    std::printf("- a cleared variant selection round-trips (an explicit block over the baseline)\n");
+    {
+        World cleared = cur;
+        cleared.variants["/Prefabs/Thing|look"] = "";
+        auto cd = usd::writeDelta(base, cleared, m);
+        CHECK(cd->Export(out + "/cleared.usdc"));
+        got = load({kContent, out + "/base.usdc", out + "/cleared.usdc"}, &err);
+        CHECK_MSG(world::equal(got, cleared, &why), err + why);
+        CHECK(got.variants.at("/Prefabs/Thing|look").empty());
+        // Unchanged empty selection: no opinion at all.
+        World none = schema();
+        none.grid.init(20, 13, 8, none.grid.channels);
+        CHECK(usd::writeFull(none)->Export(out + "/nobase.usdc"));
+        auto nd = usd::writeDelta(none, none, m);
+        CHECK_MSG(primSpecs(nd) == 0, std::to_string(primSpecs(nd)) + " prim specs for an unchanged world");
+    }
+
     std::printf("- deterministic bytes\n");
     CHECK(usd::writeDelta(base, cur, m)->Export(out + "/save2.usdc"));
     std::ifstream a(out + "/save.usdc", std::ios::binary), b(out + "/save2.usdc", std::ios::binary);

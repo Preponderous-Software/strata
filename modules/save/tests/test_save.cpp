@@ -227,6 +227,29 @@ void testRoundTrip() {
                 std::to_string(readAll(dir + "/" + save::fs::list(dir)[0]).size()).c_str(), r2.bytes);
 }
 
+void testClearedVariant() {
+    SECTION("a variant selection cleared since the base saves, loads and keeps saving");
+    const std::string mood = "/Prefabs/Agent|mood";  // the toy game's variant key
+    const std::string dir = freshDir("variant-clear");
+    World w;
+    auto slot = newGame(dir, w);
+    CHECK(w.variants.at(mood) == "calm");
+    toy::step(w);
+    w.variants[mood] = "";
+    auto r = slot->save(w, tickOf(w));
+    CHECK_MSG(r.ok, r.error);
+    toy::step(w);
+    w.variants[mood] = "";
+    r = slot->save(w, tickOf(w));
+    CHECK_MSG(r.ok, "the save after a cleared selection: " + r.error);
+    slot.reset();
+    slot = openSlot(dir);
+    auto loaded = slot->load();
+    std::string why;
+    CHECK_MSG(loaded.ok && !loaded.usedFallback && world::equal(loaded.current, w, &why), loaded.error + why);
+    CHECK(loaded.ok && loaded.current.variants.at(mood).empty());
+}
+
 void testUnsupportedChangesRefused() {
     SECTION("unsupported changes are refused, leaving the slot untouched");
     const std::string dir = freshDir("refuse");
@@ -887,6 +910,7 @@ int main(int argc, char** argv) {
         testSha256();
         testHead();
         testRoundTrip();
+        testClearedVariant();
         testUnsupportedChangesRefused();
         testCrashPoints();
         testVerifyBeforeCommit();
