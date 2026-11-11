@@ -20,7 +20,9 @@
    What it does for the page:
 
    - Sizes the drawing buffer to the canvas's CSS size times the device pixel
-     ratio, capped (dprCap), on every frame and on ResizeObserver.
+     ratio, capped (dprCap), on every frame and on ResizeObserver. A canvas
+     with no CSS size of its own has it pinned, once, at its first displayed
+     size (with a console warning), so the buffer cannot feed back into it.
    - Adaptive quality: when frames average over slowMs, first lowers the
      pixel density towards 1, then the quality tier (shadows), with a settle
      window after each step. A hidden tab resets the measurement. ?quality=
@@ -101,6 +103,27 @@
     const onFatal = opts.onFatal || ((code, msg) => console.error("strata-kit:", code, msg));
 
     /* --------------------------------------------------------- sizing */
+    // A canvas with no CSS size is laid out at its width/height attributes,
+    // so sizing the drawing buffer to the displayed size times the DPR would
+    // grow it on every resize at a DPR over 1 (#89). Such a canvas is found
+    // by doubling both attributes: a canvas with a CSS width or height (the
+    // other side may follow the aspect ratio) keeps its displayed size, one
+    // sized only by its attributes does not. Its CSS size is then pinned,
+    // once, at what it showed.
+    kit.cssPinned = false;
+    (function pinUnsizedCanvas() {
+      const aw = canvas.width, ah = canvas.height, cw = canvas.clientWidth, ch = canvas.clientHeight;
+      if (!cw || !ch) return;  // not laid out (display: none); nothing to measure
+      canvas.width = aw * 2; canvas.height = ah * 2;
+      const follows = canvas.clientWidth !== cw || canvas.clientHeight !== ch;
+      canvas.width = aw; canvas.height = ah;
+      if (!follows) return;
+      canvas.style.width = cw + "px";
+      canvas.style.height = ch + "px";
+      kit.cssPinned = true;
+      console.warn(`strata-kit: #${canvas.id} has no CSS size, so it was pinned at ${cw}x${ch} CSS px; ` +
+        "give it a CSS width and height (e.g. width: 100%; height: 100%)");
+    })();
     kit.resize = function () {
       kit.dpr = Math.min(window.devicePixelRatio || 1, kit.dprCap);
       const w = Math.max(1, Math.round(canvas.clientWidth * kit.dpr));

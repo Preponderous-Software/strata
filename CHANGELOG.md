@@ -97,6 +97,16 @@
   to squeeze the text and the button onto several lines each, side by side.
   The smoke test's loader checks now include the bar at 390 px. The kit
   version stays 1.1.
+- Web kit: a canvas with no CSS size no longer grows on every frame at a
+  device pixel ratio over 1 (#89). Such a canvas is shown at its `width` and
+  `height` attributes, which the kit sets to its displayed size times the
+  DPR, so it doubled until the browser's canvas limit; docs/WEB.md's page
+  example had one. `StrataKit.create` now finds a canvas sized only by its
+  attributes, pins its CSS size once at what it showed (`kit.cssPinned`)
+  and warns in the console; a canvas with a CSS width or height is left as
+  it is. The WEB.md example gives its canvas a CSS size, and the smoke test
+  checks, with a stub module, that an unstyled canvas at DPR 2 keeps its
+  size over 12 frames of the real loop. Part of the unreleased kit 1.2.
 - Docs: `shadow_distance` should be scaled to the scene. The shadow bias is
   measured in cascade texels, and a cascade's size follows `shadow_distance`
   (capped at the far plane), so a scene a few units across under the

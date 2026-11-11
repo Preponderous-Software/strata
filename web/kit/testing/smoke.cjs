@@ -28,6 +28,10 @@
 // and at 390 px the slow bar's text and buttons keep one line each; with
 // contain: true the shell covers its mount (a section below the fold), not
 // the viewport, and without it, the viewport as before.
+// Then strata-kit.js (beside testing/) is checked on blank pages with a stub
+// module in place of the wasm: at DPR 2 an unstyled canvas (no CSS size)
+// keeps one size over 12 frames of the real loop, its CSS size pinned, and
+// canvases with a CSS width (and height) keep theirs, unpinned.
 // --live keeps the page's own frame loop (no ?drive=1); captures are then of
 // whatever frame is on screen. Exits 1 on any failure.
 'use strict';
@@ -267,6 +271,81 @@ async function loaderChecks(browser) {
   }
 }
 
+// strata-kit.js on its own, on a blank page, with a stub module standing in
+// for the wasm (the kit only calls its sk_* exports): checks of the page
+// shell's own logic that no particular scene's CSS can hide.
+const KIT_STUB = `window.__stubModule = function () {
+  const heap = new ArrayBuffer(4096), i32 = new Int32Array(heap), f32 = new Float32Array(heap);
+  f32.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 256);
+  const size = (w, h) => { i32[6] = w; i32[7] = h; };
+  return {HEAP32: i32, HEAPF32: f32, stringToNewUTF8: () => 0, _free() {},
+    _sk_init(sel, w, h) { size(w, h); return 0; }, _sk_resize: size, _sk_restore: () => 0,
+    _sk_set_quality() {}, _sk_set_camera() {}, _sk_frame() { i32[8]++; }, _sk_stats: () => 0,
+    _sk_view_proj: () => 1024};
+};`;
+
+async function kitStubPage(context, body) {
+  const src = path.join(__dirname, '..', 'strata-kit.js');
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.setContent(`<!doctype html><html><head></head><body>${body}</body></html>`);
+  await page.addScriptTag({ content: fs.readFileSync(src, 'utf8') });
+  await page.addScriptTag({ content: KIT_STUB });
+  return { page, errors };
+}
+
+async function kitChecks(browser) {
+  if (!fs.existsSync(path.join(__dirname, '..', 'strata-kit.js'))) {
+    console.log('-- kit: strata-kit.js is not beside testing/, skipped');
+    return;
+  }
+  console.log('-- kit (stub module)');
+  const context = await browser.newContext(kit.deviceFor(2));
+  try {
+    await canvasSizeChecks(context);
+  } catch (e) {
+    check(false, `kit: ${String(e).split('\n')[0]}`);
+  } finally {
+    await context.close();
+  }
+}
+
+// A canvas sized only by its width/height attributes is shown at them, so a
+// buffer of CSS size x DPR used to feed back into its CSS size on every
+// resize (#89). Each case runs the real frame loop (and ResizeObserver) for
+// 12 frames at DPR 2.
+async function canvasSizeChecks(context) {
+  const cases = [
+    { name: 'an unstyled canvas', css: '', pinned: true },
+    { name: 'a canvas with a CSS size', css: 'width: 100%; height: 300px; display: block', pinned: false },
+    { name: 'a canvas with only a CSS width', css: 'width: 100%; display: block', pinned: false },
+  ];
+  for (const c of cases) {
+    const { page, errors } = await kitStubPage(context, `<canvas id="view" style="${c.css}"></canvas>`);
+    const r = await page.evaluate(async () => {
+      const canvas = document.getElementById('view');
+      const k = StrataKit.create({ module: window.__stubModule(), canvas, idleOrbit: false });
+      k.start();
+      const seen = [];
+      for (let i = 0; i < 12; i++) {
+        await new Promise((res) => requestAnimationFrame(() => res()));
+        seen.push(`${canvas.clientWidth}x${canvas.clientHeight}/${canvas.width}x${canvas.height}`);
+      }
+      k.running = false;
+      return { seen, pinned: k.cssPinned, dpr: k.dpr, css: [canvas.clientWidth, canvas.clientHeight],
+        buf: [canvas.width, canvas.height], engine: k.stats() };
+    });
+    const stable = new Set(r.seen).size === 1;
+    check(stable && r.dpr === 2 && r.buf[0] === Math.round(r.css[0] * r.dpr) && r.buf[1] === Math.round(r.css[1] * r.dpr) &&
+      r.engine.width === r.buf[0] && r.engine.height === r.buf[1],
+      `kit: ${c.name} at DPR 2 keeps its size over 12 frames (CSS/buffer ${stable ? r.seen[0] : r.seen.join(' -> ')})`);
+    check(r.pinned === c.pinned, `kit: ${c.name} is ${r.pinned ? '' : 'not '}pinned (want ${c.pinned ? '' : 'not '}pinned)`);
+    check(errors.length === 0, `kit: ${c.name}: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
+    await page.close();
+  }
+}
+
 async function tapEqualsPick(page, o, label, touch) {
   await canvasIntoView(page);
   // Only targets the canvas itself is under: a point covered by the page's
@@ -304,6 +383,7 @@ async function tapEqualsPick(page, o, label, touch) {
   const browser = await kit.launch();
   try {
     await loaderChecks(browser);
+    await kitChecks(browser);
     for (const dpr of o.dprs) await runDpr(browser, o, dpr);
   } finally {
     await browser.close();
