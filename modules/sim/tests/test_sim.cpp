@@ -43,6 +43,47 @@ TEST(sim_rng_helpers_stay_in_range) {
     CHECK(rng.below(0u) == 0u);
 }
 
+TEST(sim_rng_range_sequence_is_pinned) {
+    // Recorded before range() moved to 64-bit arithmetic: spans that never
+    // overflowed must give the same numbers bit for bit.
+    Rng rng(99u, 7u);
+    const int32_t small[8] = {122431, 482922, 13324, 637635, 277066, 958423, 267279, 782211};
+    for (int32_t e : small) CHECK(rng.range(-1000, 1000000) == e);
+    const int32_t wide[4] = {-1082834896, -1069289109, -714263249, -1906939618};
+    for (int32_t e : wide) CHECK(rng.range(-2000000000, 100000000) == e);
+    CHECK(rng.state() == 6811827256461322661ULL);
+}
+
+TEST(sim_rng_range_handles_spans_past_int32) {
+    Rng rng(11u);
+    CHECK(rng.range(5, 5) == 5);
+    CHECK(rng.range(5, 4) == 5);
+    const int32_t first = rng.range(INT32_MIN, INT32_MAX);
+    bool varies = false, negative = false, positive = false;
+    for (int i = 0; i < 100; ++i) {
+        const int32_t v = rng.range(INT32_MIN, INT32_MAX);
+        varies = varies || v != first;
+        negative = negative || v < 0;
+        positive = positive || v > 0;
+    }
+    CHECK(varies);
+    CHECK(negative && positive);
+    bool low = false, high = false;
+    for (int i = 0; i < 1000; ++i) {
+        const int32_t v = rng.range(-2000000000, 2000000000);
+        REQUIRE(v >= -2000000000 && v <= 2000000000);
+        low = low || v < -1000000000;
+        high = high || v > 1000000000;
+    }
+    CHECK(low && high);
+    for (int i = 0; i < 100; ++i) {
+        const int32_t v = rng.range(INT32_MAX - 1, INT32_MAX);
+        CHECK(v == INT32_MAX - 1 || v == INT32_MAX);
+        const int32_t w = rng.range(INT32_MIN, INT32_MIN + 1);
+        CHECK(w == INT32_MIN || w == INT32_MIN + 1);
+    }
+}
+
 TEST(sim_rng_same_seed_same_sequence) {
     Rng a(1234u), b(1234u), c(1235u);
     bool differs = false;

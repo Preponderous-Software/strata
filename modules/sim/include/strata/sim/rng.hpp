@@ -45,10 +45,14 @@ public:
         }
     }
 
-    // Uniform integer in [lo, hi] (inclusive). hi < lo returns lo.
+    // Uniform integer in [lo, hi] (inclusive). hi < lo returns lo. Works for
+    // any span, including the full int32 range; the arithmetic is done in 64
+    // bits, so nothing overflows.
     int32_t range(int32_t lo, int32_t hi) {
         if (hi <= lo) return lo;
-        return lo + static_cast<int32_t>(below(static_cast<uint32_t>(hi - lo) + 1u));
+        const uint32_t span = static_cast<uint32_t>(static_cast<int64_t>(hi) - static_cast<int64_t>(lo));
+        const uint32_t offset = span == UINT32_MAX ? nextU32() : below(span + 1u);
+        return static_cast<int32_t>(static_cast<int64_t>(lo) + static_cast<int64_t>(offset));
     }
 
     // Uniform float in [0, 1): the top 24 bits, so every value is exact.

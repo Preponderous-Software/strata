@@ -171,6 +171,14 @@
   living slot's generation is bumped as `destroy()` bumps it; new entities
   still take the lowest slot first. `capacity()` no longer drops to 0 on
   `clear()`. No library, ABI or pixel change.
+- Sim module: `Rng::range(lo, hi)` works for spans wider than `INT32_MAX`
+  (#81). It computed `hi - lo` in `int32_t`, which overflows (undefined
+  behaviour) for such spans; with the usual wrapping
+  `range(INT32_MIN, INT32_MAX)` always returned `lo`. The span and the result
+  are now computed in 64 bits, and the full int32 range takes one
+  `nextU32()`. Every span that did not overflow gives the same numbers as
+  before, bit for bit (a pinned-sequence test checks it), so seeded runs and
+  their state hashes are unchanged. No library, ABI or pixel change.
 
 ## 0.7.0
 
