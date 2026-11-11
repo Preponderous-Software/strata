@@ -107,6 +107,17 @@
   it is. The WEB.md example gives its canvas a CSS size, and the smoke test
   checks, with a stub module, that an unstyled canvas at DPR 2 keeps its
   size over 12 frames of the real loop. Part of the unreleased kit 1.2.
+- Web kit: multi-touch no longer makes taps nobody made (#90). Every
+  pointer-down reset the shared drag distance and every pointer-up under
+  6 px tapped, so a second finger touched during an orbit selected
+  something, a two-finger tap or small pinch tapped twice (the second
+  usually clearing the first's selection), and a right click tapped. A
+  gesture now runs from the first pointer down to the last pointer up and
+  taps once, on that last pointer-up, only if exactly one pointer was down
+  in it, it moved under 6 CSS pixels in all, and it was not a right or
+  middle mouse button. The smoke test's stub-module checks drive two
+  synthetic touch pointers and real right, middle and left clicks. Part of
+  the unreleased kit 1.2.
 - Docs: `shadow_distance` should be scaled to the scene. The shadow bias is
   measured in cascade texels, and a cascade's size follows `shadow_distance`
   (capped at the far plane), so a scene a few units across under the
