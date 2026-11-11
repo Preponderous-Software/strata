@@ -203,6 +203,15 @@
   lengths for these, so a short sequence was read past its end in native
   code. Tests in `tests/python/test_argument_checks.py` need no library.
 
+- C# binding: `StrataNative` declares `strata_status_string`,
+  `strata_set_log_callback` and `strata_camera_look_at`, which it was
+  missing, and `StrataAbi` has `MaxTextures` and `MaxTextureSize` (#83). The
+  log callback is a `StrataNative.StrataLogFn` delegate that the binding
+  keeps referenced while it is installed, so the GC cannot collect it under
+  the library. A new test checks that every `STRATA_API` function in
+  `strata.h` has a matching `DllImport` entry point, so the binding cannot
+  fall behind the header again.
+
 ## 0.7.0
 
 The web kit: the shell around a Strata scene embedded in a web page, shipped
