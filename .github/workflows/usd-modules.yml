@@ -157,10 +157,13 @@ jobs:
         run: ctest --test-dir build -R '^strata-save-crash-tests$' --output-on-failure
 
       - name: Benchmark and regression gate (RFC 0019 §9)
+        # shell: bash adds pipefail, so a failing benchmark fails the step
+        # instead of being masked by tee's exit status.
+        shell: bash
         run: |
           bench=build/modules/save/strata-save-bench
-          "$bench" "$RUNNER_TEMP/bench1k" 1000 64 300 5 2>/dev/null | tee results.jsonl
-          "$bench" "$RUNNER_TEMP/bench10k" 10000 256 300 5 2>/dev/null | tee -a results.jsonl
+          "$bench" "$RUNNER_TEMP/bench1k" 1000 64 300 5 | tee results.jsonl
+          "$bench" "$RUNNER_TEMP/bench10k" 10000 256 300 5 | tee -a results.jsonl
           python3 modules/save/bench/gate.py results.jsonl modules/save/bench/baseline.json
 
       - uses: actions/upload-artifact@v4
@@ -298,5 +301,5 @@ jobs:
 
       - name: Benchmark (no gate on Windows; the baseline is Linux)
         run: |
-          build/modules/save/Release/strata-save-bench.exe "$RUNNER_TEMP/bench1k" 1000 64 300 3 2>/dev/null | tee results.jsonl
+          build/modules/save/Release/strata-save-bench.exe "$RUNNER_TEMP/bench1k" 1000 64 300 3 | tee results.jsonl
           grep -q '"round_trip":"EXACT"' results.jsonl

@@ -8,7 +8,9 @@ Each results line is one strata-save-bench JSON object. The gate fails when
   - a metric regresses by more than 20% against the stored baseline for the
     same agent count (plus a small absolute slack, so sub-millisecond timings
     cannot fail on noise), or
-  - a round trip is not EXACT.
+  - a round trip is not EXACT, or
+  - a size in BUDGETS has no result (the benchmark failed, crashed or was not
+    run for it), so an empty or partial results file never passes.
 To accept a deliberate change, update baseline.json in the same PR with the
 numbers the CI run printed.
 """
@@ -31,6 +33,10 @@ def main() -> int:
     results = [json.loads(line) for line in open(sys.argv[1]) if line.strip()]
     baseline = json.load(open(sys.argv[2]))
     failures = []
+    seen = {r.get("agents") for r in results}
+    for n in sorted(BUDGETS):
+        if n not in seen:
+            failures.append(f"{n} agents: no result (did strata-save-bench fail?)")
     for r in results:
         n = r["agents"]
         tag = f"{n} agents"

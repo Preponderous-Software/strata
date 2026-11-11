@@ -179,6 +179,15 @@
   `nextU32()`. Every span that did not overflow gives the same numbers as
   before, bit for bit (a pinned-sequence test checks it), so seeded runs and
   their state hashes are unchanged. No library, ABI or pixel change.
+- CI: the Linux save-benchmark gate fails when `strata-save-bench` does
+  (#82). The step ran under `bash -e` without `pipefail`, so `tee`'s exit
+  status hid a failed or crashed benchmark, and `modules/save/bench/gate.py`
+  passed whatever lines it was given, an empty file included. The step now
+  runs with `shell: bash` (which adds `pipefail`), the benchmark's stderr is
+  no longer discarded (on Windows either), and the gate fails with an
+  `::error::` for every budgeted size (1000 and 10000 agents) that has no
+  result. New Python tests (`tests/python/test_save_bench_gate.py`) check
+  that an empty or partial results file fails. No library change.
 
 ## 0.7.0
 
