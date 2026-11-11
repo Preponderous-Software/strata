@@ -196,6 +196,13 @@
   `STRATA_MESH_COLORS_RGBA` said a 1.7 to 1.12 library rejects it; 1.13 and
   1.14 libraries do too, so the range reads 1.7 to 1.14. No code change.
 
+- Python binding: `Engine.add_mesh` raises `ValueError` when `normals` has
+  fewer than 3 floats a vertex or `uvs` fewer than 2, as it already did for
+  `colors`, and `create_texture_rgba8` / `update_texture_rgba8` raise it when
+  `rgba` is shorter than `width * height * 4` bytes (#79). The C ABI takes no
+  lengths for these, so a short sequence was read past its end in native
+  code. Tests in `tests/python/test_argument_checks.py` need no library.
+
 ## 0.7.0
 
 The web kit: the shell around a Strata scene embedded in a web page, shipped
