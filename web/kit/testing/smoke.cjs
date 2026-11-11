@@ -28,6 +28,14 @@
 // and at 390 px the slow bar's text and buttons keep one line each; with
 // contain: true the shell covers its mount (a section below the fold), not
 // the viewport, and without it, the viewport as before.
+// Then strata-kit.js (beside testing/) is checked on blank pages with a stub
+// module in place of the wasm: at DPR 2 an unstyled canvas (no CSS size)
+// keeps one size over 12 frames of the real loop, its CSS size pinned, and
+// canvases with a CSS width (and height) keep theirs, unpinned.
+// Gestures on the same stub (#90): two synthetic touch pointers (a two-finger
+// tap, a second finger during an orbit, a small pinch) and a right or
+// middle click never call onTap; one finger moved under 6 px, a real
+// touchscreen tap and a left click each call it once.
 // --live keeps the page's own frame loop (no ?drive=1); captures are then of
 // whatever frame is on screen. Exits 1 on any failure.
 'use strict';
@@ -267,6 +275,146 @@ async function loaderChecks(browser) {
   }
 }
 
+// strata-kit.js on its own, on a blank page, with a stub module standing in
+// for the wasm (the kit only calls its sk_* exports): checks of the page
+// shell's own logic that no particular scene's CSS can hide.
+const KIT_STUB = `window.__stubModule = function () {
+  const heap = new ArrayBuffer(4096), i32 = new Int32Array(heap), f32 = new Float32Array(heap);
+  f32.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 256);
+  const size = (w, h) => { i32[6] = w; i32[7] = h; };
+  return {HEAP32: i32, HEAPF32: f32, stringToNewUTF8: () => 0, _free() {},
+    _sk_init(sel, w, h) { size(w, h); return 0; }, _sk_resize: size, _sk_restore: () => 0,
+    _sk_set_quality() {}, _sk_set_camera() {}, _sk_frame() { i32[8]++; }, _sk_stats: () => 0,
+    _sk_view_proj: () => 1024};
+};`;
+
+async function kitStubPage(context, body) {
+  const src = path.join(__dirname, '..', 'strata-kit.js');
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.setContent(`<!doctype html><html><head></head><body>${body}</body></html>`);
+  await page.addScriptTag({ content: fs.readFileSync(src, 'utf8') });
+  await page.addScriptTag({ content: KIT_STUB });
+  return { page, errors };
+}
+
+async function kitChecks(browser) {
+  if (!fs.existsSync(path.join(__dirname, '..', 'strata-kit.js'))) {
+    console.log('-- kit: strata-kit.js is not beside testing/, skipped');
+    return;
+  }
+  console.log('-- kit (stub module)');
+  const context = await browser.newContext(kit.deviceFor(2));
+  try {
+    await canvasSizeChecks(context);
+    await gestureChecks(context);
+  } catch (e) {
+    check(false, `kit: ${String(e).split('\n')[0]}`);
+  } finally {
+    await context.close();
+  }
+}
+
+// A canvas sized only by its width/height attributes is shown at them, so a
+// buffer of CSS size x DPR used to feed back into its CSS size on every
+// resize (#89). Each case runs the real frame loop (and ResizeObserver) for
+// 12 frames at DPR 2.
+async function canvasSizeChecks(context) {
+  const cases = [
+    { name: 'an unstyled canvas', css: '', pinned: true },
+    { name: 'a canvas with a CSS size', css: 'width: 100%; height: 300px; display: block', pinned: false },
+    { name: 'a canvas with only a CSS width', css: 'width: 100%; display: block', pinned: false },
+  ];
+  for (const c of cases) {
+    const { page, errors } = await kitStubPage(context, `<canvas id="view" style="${c.css}"></canvas>`);
+    const r = await page.evaluate(async () => {
+      const canvas = document.getElementById('view');
+      const k = StrataKit.create({ module: window.__stubModule(), canvas, idleOrbit: false });
+      k.start();
+      const seen = [];
+      for (let i = 0; i < 12; i++) {
+        await new Promise((res) => requestAnimationFrame(() => res()));
+        seen.push(`${canvas.clientWidth}x${canvas.clientHeight}/${canvas.width}x${canvas.height}`);
+      }
+      k.running = false;
+      return { seen, pinned: k.cssPinned, dpr: k.dpr, css: [canvas.clientWidth, canvas.clientHeight],
+        buf: [canvas.width, canvas.height], engine: k.stats() };
+    });
+    const stable = new Set(r.seen).size === 1;
+    check(stable && r.dpr === 2 && r.buf[0] === Math.round(r.css[0] * r.dpr) && r.buf[1] === Math.round(r.css[1] * r.dpr) &&
+      r.engine.width === r.buf[0] && r.engine.height === r.buf[1],
+      `kit: ${c.name} at DPR 2 keeps its size over 12 frames (CSS/buffer ${stable ? r.seen[0] : r.seen.join(' -> ')})`);
+    check(r.pinned === c.pinned, `kit: ${c.name} is ${r.pinned ? '' : 'not '}pinned (want ${c.pinned ? '' : 'not '}pinned)`);
+    check(errors.length === 0, `kit: ${c.name}: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
+    await page.close();
+  }
+}
+
+// One gesture, one tap at most (#90): a second finger used to reset the
+// drag distance, and every finger lifted under 6 px tapped. Touch pointers
+// are synthetic PointerEvents (two at once, which Playwright's touchscreen
+// cannot make); the clean tap and the mouse clicks are real input.
+async function gestureChecks(context) {
+  const { page, errors } = await kitStubPage(context,
+    '<canvas id="view" style="display:block;width:400px;height:300px;touch-action:none"></canvas>');
+  await page.evaluate(() => {
+    const canvas = document.getElementById('view');
+    window.__taps = [];
+    StrataKit.create({ module: window.__stubModule(), canvas, driven: true, idleOrbit: false,
+      pick: (x, y) => ({ id: `${Math.round(x)},${Math.round(y)}` }),
+      onTap: (hit) => window.__taps.push(hit && hit.id) });
+    const r = canvas.getBoundingClientRect();
+    // steps: [type, pointerId, x, y] in canvas CSS pixels; pointer 1 is primary.
+    window.__touch = (steps) => {
+      window.__taps = [];
+      for (const [type, id, x, y] of steps) {
+        canvas.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', isPrimary: id === 1,
+          clientX: r.left + x, clientY: r.top + y, button: type === 'pointermove' ? -1 : 0,
+          buttons: type === 'pointerup' ? 0 : 1, bubbles: true, cancelable: true }));
+      }
+      return window.__taps;
+    };
+  });
+  const touches = [
+    { name: 'a two-finger tap', steps: [['pointerdown', 1, 100, 100], ['pointerdown', 2, 160, 100],
+      ['pointerup', 2, 160, 100], ['pointerup', 1, 100, 100]] },
+    { name: 'a two-finger tap, first finger lifted first', steps: [['pointerdown', 1, 100, 100],
+      ['pointerdown', 2, 160, 100], ['pointerup', 1, 100, 100], ['pointerup', 2, 160, 100]] },
+    { name: 'a second finger touched briefly during a one-finger orbit', steps: [['pointerdown', 1, 100, 100],
+      ['pointermove', 1, 130, 110], ['pointermove', 1, 160, 120], ['pointerdown', 2, 250, 200],
+      ['pointerup', 2, 250, 200], ['pointermove', 1, 170, 120], ['pointerup', 1, 170, 120]] },
+    { name: 'a small pinch', steps: [['pointerdown', 1, 100, 100], ['pointerdown', 2, 140, 100],
+      ['pointermove', 1, 99, 100], ['pointermove', 2, 141, 100], ['pointerup', 1, 99, 100], ['pointerup', 2, 141, 100]] },
+    { name: 'a cancelled touch', steps: [['pointerdown', 1, 100, 100], ['pointercancel', 1, 100, 100]] },
+  ];
+  for (const t of touches) {
+    const taps = await page.evaluate((steps) => window.__touch(steps), t.steps);
+    check(taps.length === 0, `kit: ${t.name} does not tap (${taps.length} tap(s)${taps.length ? ': ' + taps.join(' ') : ''})`);
+  }
+  const one = await page.evaluate(() => window.__touch([['pointerdown', 1, 120, 80], ['pointermove', 1, 122, 81],
+    ['pointerup', 1, 122, 81]]));
+  check(one.length === 1 && one[0] === '122,81', `kit: one finger moved 3 px taps once where it lifted (${one.join(' ') || 'no tap'})`);
+
+  const box = await page.evaluate(() => { const r = document.getElementById('view').getBoundingClientRect(); return { x: r.left, y: r.top }; });
+  const real = async (what, act) => {
+    await page.evaluate(() => { window.__taps = []; });
+    await act();
+    await page.waitForTimeout(50);
+    return page.evaluate(() => window.__taps);
+  };
+  const tapped = await real('tap', () => page.touchscreen.tap(box.x + 200, box.y + 150));
+  check(tapped.length === 1 && tapped[0] === '200,150', `kit: a real touchscreen tap taps once (${tapped.join(' ') || 'no tap'})`);
+  const right = await real('right', () => page.mouse.click(box.x + 200, box.y + 150, { button: 'right' }));
+  check(right.length === 0, `kit: a right click does not tap (${right.length} tap(s))`);
+  const middle = await real('middle', () => page.mouse.click(box.x + 200, box.y + 150, { button: 'middle' }));
+  check(middle.length === 0, `kit: a middle click does not tap (${middle.length} tap(s))`);
+  const left = await real('left', () => page.mouse.click(box.x + 210, box.y + 140));
+  check(left.length === 1 && left[0] === '210,140', `kit: a left click taps once (${left.join(' ') || 'no tap'})`);
+  check(errors.length === 0, `kit: gestures: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
+  await page.close();
+}
+
 async function tapEqualsPick(page, o, label, touch) {
   await canvasIntoView(page);
   // Only targets the canvas itself is under: a point covered by the page's
@@ -304,6 +452,7 @@ async function tapEqualsPick(page, o, label, touch) {
   const browser = await kit.launch();
   try {
     await loaderChecks(browser);
+    await kitChecks(browser);
     for (const dpr of o.dprs) await runDpr(browser, o, dpr);
   } finally {
     await browser.close();

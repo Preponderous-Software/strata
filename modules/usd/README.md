@@ -28,6 +28,9 @@ so the engine is tested without any real game's code:
 - verify-before-commit refusing a truncated temp file and a valid-but-wrong one;
 - damaged, truncated, emptied and deleted saves, a damaged or deleted `HEAD`
   and a damaged base: each is detected, and only integrity failures fall back;
+  the saves after a fallback (or a migration after one) keep the valid
+  `HEAD.prev` and every older intact save; a never-saved slot with a damaged
+  `HEAD` loads its intact base;
 - USD's own behaviour (a truncated sublayer is skipped with a warning and the
   bare base world loads) next to Strata's refusal;
 - mod order, mod-list mismatch (refused, or forced with a warning), changed mod

@@ -97,6 +97,27 @@
   to squeeze the text and the button onto several lines each, side by side.
   The smoke test's loader checks now include the bar at 390 px. The kit
   version stays 1.1.
+- Web kit: a canvas with no CSS size no longer grows on every frame at a
+  device pixel ratio over 1 (#89). Such a canvas is shown at its `width` and
+  `height` attributes, which the kit sets to its displayed size times the
+  DPR, so it doubled until the browser's canvas limit; docs/WEB.md's page
+  example had one. `StrataKit.create` now finds a canvas sized only by its
+  attributes, pins its CSS size once at what it showed (`kit.cssPinned`)
+  and warns in the console; a canvas with a CSS width or height is left as
+  it is. The WEB.md example gives its canvas a CSS size, and the smoke test
+  checks, with a stub module, that an unstyled canvas at DPR 2 keeps its
+  size over 12 frames of the real loop. Part of the unreleased kit 1.2.
+- Web kit: multi-touch no longer makes taps nobody made (#90). Every
+  pointer-down reset the shared drag distance and every pointer-up under
+  6 px tapped, so a second finger touched during an orbit selected
+  something, a two-finger tap or small pinch tapped twice (the second
+  usually clearing the first's selection), and a right click tapped. A
+  gesture now runs from the first pointer down to the last pointer up and
+  taps once, on that last pointer-up, only if exactly one pointer was down
+  in it, it moved under 6 CSS pixels in all, and it was not a right or
+  middle mouse button. The smoke test's stub-module checks drive two
+  synthetic touch pointers and real right, middle and left clicks. Part of
+  the unreleased kit 1.2.
 - Docs: `shadow_distance` should be scaled to the scene. The shadow bias is
   measured in cascade texels, and a cascade's size follows `shadow_distance`
   (capped at the far plane), so a scene a few units across under the
@@ -164,6 +185,80 @@
   its month, leap years included. Anything after a directive's last field
   is refused as `unexpected '<word>' at the end of the line`. Every scene in
   `tests/scenes` still loads; no library or pixel change.
+- Sim module: `Registry::clear()` no longer brings old handles back to life
+  (#80). It threw the slot generations away, so the first entity created
+  after it was `{0, 0}` again and a handle kept from before the clear read as
+  alive and pointed at the new entity. Slots are now kept and freed, and each
+  living slot's generation is bumped as `destroy()` bumps it; new entities
+  still take the lowest slot first. `capacity()` no longer drops to 0 on
+  `clear()`. No library, ABI or pixel change.
+- Sim module: `Rng::range(lo, hi)` works for spans wider than `INT32_MAX`
+  (#81). It computed `hi - lo` in `int32_t`, which overflows (undefined
+  behaviour) for such spans; with the usual wrapping
+  `range(INT32_MIN, INT32_MAX)` always returned `lo`. The span and the result
+  are now computed in 64 bits, and the full int32 range takes one
+  `nextU32()`. Every span that did not overflow gives the same numbers as
+  before, bit for bit (a pinned-sequence test checks it), so seeded runs and
+  their state hashes are unchanged. No library, ABI or pixel change.
+- CI: the Linux save-benchmark gate fails when `strata-save-bench` does
+  (#82). The step ran under `bash -e` without `pipefail`, so `tee`'s exit
+  status hid a failed or crashed benchmark, and `modules/save/bench/gate.py`
+  passed whatever lines it was given, an empty file included. The step now
+  runs with `shell: bash` (which adds `pipefail`), the benchmark's stderr is
+  no longer discarded (on Windows either), and the gate fails with an
+  `::error::` for every budgeted size (1000 and 10000 agents) that has no
+  result. New Python tests (`tests/python/test_save_bench_gate.py`) check
+  that an empty or partial results file fails. No library change.
+- Docs: two comments in `strata.h` are corrected (#84). The ABI 1.7
+  textures paragraph said texel alpha is ignored because meshes are opaque;
+  since ABI 1.11 a `STRATA_MESH_TRANSLUCENT` mesh's alpha is `mesh.color[3]`
+  times the texel's alpha, as the translucent flag's own comment says.
+  `STRATA_MESH_COLORS_RGBA` said a 1.7 to 1.12 library rejects it; 1.13 and
+  1.14 libraries do too, so the range reads 1.7 to 1.14. No code change.
+- Python binding: `Engine.add_mesh` raises `ValueError` when `normals` has
+  fewer than 3 floats a vertex or `uvs` fewer than 2, as it already did for
+  `colors`, and `create_texture_rgba8` / `update_texture_rgba8` raise it when
+  `rgba` is shorter than `width * height * 4` bytes (#79). The C ABI takes no
+  lengths for these, so a short sequence was read past its end in native
+  code. Tests in `tests/python/test_argument_checks.py` need no library.
+- C# binding: `StrataNative` declares `strata_status_string`,
+  `strata_set_log_callback` and `strata_camera_look_at`, which it was
+  missing, and `StrataAbi` has `MaxTextures` and `MaxTextureSize` (#83). The
+  log callback is a `StrataNative.StrataLogFn` delegate that the binding
+  keeps referenced while it is installed, so the GC cannot collect it under
+  the library. A new test checks that every `STRATA_API` function in
+  `strata.h` has a matching `DllImport` entry point, so the binding cannot
+  fall behind the header again.
+- Save module: loading past a damaged `HEAD` no longer costs the older saves
+  (#85). The next save hard-linked the damaged `HEAD` over the valid
+  `HEAD.prev`, and its history held only the loaded save, so prune deleted
+  every older intact save; a migration after a fallback pruned the original
+  save it had just promised to keep. `HEAD.prev` is now replaced only when
+  the current `HEAD` parses, and after a fallback the slot's history lists
+  every save whose bytes still match the hash in its name, loaded save
+  first, so the next save prunes by the usual `keep` limit instead. A
+  migration keeps the original save in the history right after the migrated
+  one. No ABI change; saves written before are read as they were.
+- USD module: a variant selection cleared since the baseline is saved (#86).
+  `writeDelta` skipped empty selections, and `SetVariantSelection(set, "")`
+  erases the opinion rather than authoring one, so the baseline's selection
+  came back on load. A cleared selection is now written as an explicit empty
+  selection (`BlockVariantSelection`), which blocks the weaker layers.
+  Unchanged selections still write nothing, so existing save bytes do not
+  change.
+- Save module: a never-saved slot whose `HEAD` is damaged loads its base
+  (#87). It failed with `no save in slot`, although the base was intact. Now
+  the newest base whose bytes match the hash in its name loads as a
+  never-saved slot, with `usedFallback` and a warning; the next save rewrites
+  `HEAD`. A missing `HEAD` behaves as before, a damaged base is still
+  refused, and the `no save in slot` error now lists why each file was
+  rejected.
+- USD module: `hydrate` no longer sizes an allocation from the grid header
+  alone (#88). It allocated the whole grid before reading any chunk, so a
+  header claiming a huge grid over few chunks could throw `bad_alloc`, which
+  the never-saved load path did not catch. Every chunk is now counted, found
+  and size-checked before the grid is allocated, and that path catches
+  exceptions as the save candidates' path does.
 
 ## 0.7.0
 

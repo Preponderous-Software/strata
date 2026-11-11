@@ -165,13 +165,21 @@ public:
     // Number of slots ever allocated (living or free).
     size_t capacity() const { return generations_.size(); }
 
-    // Destroys every entity and forgets every slot.
+    // Destroys every entity. Slots are kept and freed rather than forgotten,
+    // and each living slot's generation is bumped as destroy() does, so a
+    // handle taken before clear() never reads as alive again, even once its
+    // slot is reused. Slots are then recycled lowest first, as after destroy().
     void clear() {
-        generations_.clear();
-        alive_.clear();
         free_ = {};
+        for (uint32_t i = 0; i < static_cast<uint32_t>(generations_.size()); ++i) {
+            if (alive_[i] != 0) {
+                clearComponents(i);
+                alive_[i] = 0;
+                ++generations_[i];
+            }
+            free_.push(i);
+        }
         aliveCount_ = 0;
-        clearPools(std::index_sequence_for<Components...>{});
     }
 
 private:
@@ -200,10 +208,6 @@ private:
     }
     void clearComponents(uint32_t index) {
         ((poolOf<Components>().present[index] = 0, poolOf<Components>().values[index] = Components{}), ...);
-    }
-    template <size_t... I>
-    void clearPools(std::index_sequence<I...>) {
-        ((std::get<I>(pools_).values.clear(), std::get<I>(pools_).present.clear()), ...);
     }
 
     std::tuple<detail::Pool<Components>...> pools_;

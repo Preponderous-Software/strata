@@ -75,6 +75,10 @@ std::string headSave(const std::string& dir) {
     return h.saveFile;
 }
 
+// Does `file` (a save in `dir`) still load, by itself, as `expect`? Probed in
+// a copy of the slot whose HEAD names only that save, with fallback off.
+bool loadsAs(const std::string& dir, const std::string& file, const World& expect, int version, std::string* why);
+
 std::unique_ptr<Slot> openSlot(const std::string& dir, int version = 2, save::Layers layers = toy::layers()) {
     std::string err;
     auto s = Slot::open(dir, toy::saveSchema(version), std::move(layers), &err);
@@ -223,6 +227,29 @@ void testRoundTrip() {
                 std::to_string(readAll(dir + "/" + save::fs::list(dir)[0]).size()).c_str(), r2.bytes);
 }
 
+void testClearedVariant() {
+    SECTION("a variant selection cleared since the base saves, loads and keeps saving");
+    const std::string mood = "/Prefabs/Agent|mood";  // the toy game's variant key
+    const std::string dir = freshDir("variant-clear");
+    World w;
+    auto slot = newGame(dir, w);
+    CHECK(w.variants.at(mood) == "calm");
+    toy::step(w);
+    w.variants[mood] = "";
+    auto r = slot->save(w, tickOf(w));
+    CHECK_MSG(r.ok, r.error);
+    toy::step(w);
+    w.variants[mood] = "";
+    r = slot->save(w, tickOf(w));
+    CHECK_MSG(r.ok, "the save after a cleared selection: " + r.error);
+    slot.reset();
+    slot = openSlot(dir);
+    auto loaded = slot->load();
+    std::string why;
+    CHECK_MSG(loaded.ok && !loaded.usedFallback && world::equal(loaded.current, w, &why), loaded.error + why);
+    CHECK(loaded.ok && loaded.current.variants.at(mood).empty());
+}
+
 void testUnsupportedChangesRefused() {
     SECTION("unsupported changes are refused, leaving the slot untouched");
     const std::string dir = freshDir("refuse");
@@ -306,6 +333,38 @@ void testVerifyBeforeCommit() {
     CHECK_MSG(!r.ok && r.error.find("verify refused") != std::string::npos, r.error);
     std::printf("  refused: %.110s\n", r.error.c_str());
     CHECK(readAll(dir + "/HEAD") == head && saveFiles(dir) == saves && !hasTemps(dir));
+}
+
+bool loadsAs(const std::string& dir, const std::string& file, const World& expect, int version, std::string* why) {
+    const std::string probe = dir + "-probe";
+    std::error_code ec;
+    std::filesystem::remove_all(std::filesystem::u8path(probe), ec);
+    std::filesystem::copy(std::filesystem::u8path(dir), std::filesystem::u8path(probe), ec);
+    std::remove((probe + "/LOCK").c_str());
+    std::remove((probe + "/HEAD.prev").c_str());
+    usd::Manifest m;
+    auto layer = pxr::SdfLayer::OpenAsAnonymous(dir + "/" + file);
+    if (!layer || !usd::readManifest(layer, m, why)) return false;
+    save::Head h;
+    h.baseSha = m.baseHash;
+    h.baseFile = "base-" + m.baseHash + ".usdc";
+    h.baseSize = readAll(dir + "/" + h.baseFile).size();
+    h.saveFile = file;
+    h.saveSha = file.substr(18, 64);
+    h.saveSize = readAll(dir + "/" + file).size();
+    h.history.emplace_back(file, m.baseHash);
+    writeAll(probe + "/HEAD", save::formatHead(h));
+    auto s = openSlot(probe, version);
+    if (!s) return false;
+    save::LoadOptions strict;
+    strict.fallback = false;
+    strict.allowMigration = false;
+    auto r = s->load(strict);
+    if (!r.ok) {
+        if (why) *why = r.error;
+        return false;
+    }
+    return world::equal(r.current, expect, why);
 }
 
 // Three saves at ticks 10, 20, 30 in a fresh slot.
@@ -398,11 +457,78 @@ void testDamagedHead() {
         CHECK_MSG(r.ok && r.usedFallback && world::equal(r.current, states[2], &why),
                   std::string(names[k]) + ": " + r.error + why);
         CHECK(!r.rejected.empty() && r.rejected[0].compare(0, 5, "HEAD:") == 0);
+        const std::string prevBefore = readAll(dir + "/HEAD.prev");
+        std::vector<std::string> older = saveFiles(dir);
+        CHECK(older.size() == 3);
         World next = r.current;
         toy::step(next);
         CHECK(slot->save(next, tickOf(next)).ok);
         save::Head parsed;
         CHECK_MSG(save::parseHead(readAll(dir + "/HEAD"), parsed, nullptr), "the next save rewrites a valid HEAD");
+        // The damaged HEAD never replaces the valid HEAD.prev (#85).
+        if (!prevBefore.empty()) CHECK_MSG(readAll(dir + "/HEAD.prev") == prevBefore, names[k]);
+        // A second save rotates the rewritten HEAD into HEAD.prev; the fallback's
+        // history must still protect every older save.
+        toy::step(next);
+        CHECK(slot->save(next, tickOf(next)).ok);
+        slot.reset();
+        for (int s = 0; s < 3; ++s) {
+            CHECK_MSG(save::fs::exists(dir + "/" + older[s]), std::string(names[k]) + ": pruned " + older[s]);
+            CHECK_MSG(loadsAs(dir, older[s], states[s], 2, &why), std::string(names[k]) + ": " + older[s] + ": " + why);
+        }
+    }
+}
+
+void testDamagedHeadNeverSaved() {
+    SECTION("a never-saved slot with a damaged HEAD loads its intact base, and the next save rewrites HEAD");
+    const char* names[] = {"garbage", "truncated", "one bit flipped"};
+    for (int k = 0; k < 3; ++k) {
+        const std::string dir = freshDir("head-base");
+        World w;
+        auto slot = newGame(dir, w);
+        slot.reset();
+        CHECK(!save::fs::exists(dir + "/HEAD.prev") && saveFiles(dir).empty());
+        std::string h = readAll(dir + "/HEAD");
+        if (k == 0) writeAll(dir + "/HEAD", "not a head\n");
+        if (k == 1) writeAll(dir + "/HEAD", h.substr(0, h.size() / 2));
+        if (k == 2) {
+            h[h.size() / 2] = static_cast<char>(h[h.size() / 2] ^ 4);
+            writeAll(dir + "/HEAD", h);
+        }
+        slot = openSlot(dir);
+        auto r = slot->load();
+        std::string why;
+        CHECK_MSG(r.ok && r.usedFallback && r.saveFile.empty() && world::equal(r.current, w, &why),
+                  std::string(names[k]) + ": " + r.error + why);
+        CHECK(!r.rejected.empty() && r.rejected[0].compare(0, 5, "HEAD:") == 0 && !r.warnings.empty());
+        World next = r.current;
+        toy::step(next);
+        auto sr = slot->save(next, tickOf(next));
+        CHECK_MSG(sr.ok, sr.error);
+        save::Head parsed;
+        CHECK_MSG(save::parseHead(readAll(dir + "/HEAD"), parsed, nullptr) && parsed.saveFile == sr.file,
+                  std::string(names[k]) + ": the next save rewrites a valid HEAD");
+        slot.reset();
+        slot = openSlot(dir);
+        r = slot->load();
+        CHECK_MSG(r.ok && !r.usedFallback && world::equal(r.current, next, &why), r.error + why);
+    }
+    {
+        // A damaged base as well: refused, never replaced by a fresh world.
+        const std::string dir = freshDir("head-base2");
+        World w;
+        auto slot = newGame(dir, w);
+        slot.reset();
+        writeAll(dir + "/HEAD", "not a head\n");
+        for (const auto& n : save::fs::list(dir))
+            if (n.compare(0, 5, "base-") == 0) {
+                std::string b = readAll(dir + "/" + n);
+                b[b.size() / 2] = static_cast<char>(b[b.size() / 2] ^ 1);
+                writeAll(dir + "/" + n, b);
+            }
+        slot = openSlot(dir);
+        auto r = slot->load();
+        CHECK_MSG(!r.ok && r.error.find("no save") != std::string::npos, r.error);
     }
 }
 
@@ -605,6 +731,46 @@ void testMigration() {
     CHECK_MSG(!old.ok && old.error.find("newer game version") != std::string::npos, old.error);
 }
 
+void testMigrationAfterFallback() {
+    SECTION("a migration after a damaged HEAD keeps the original saves and the valid HEAD.prev");
+    const std::string dir = freshDir("migrate-fallback");
+    World w;
+    auto slot = newGame(dir, w, 1);
+    World states[3];
+    for (int k = 0; k < 3; ++k) {
+        for (int t = 0; t < 10; ++t) toy::step(w);
+        CHECK(slot->save(w, tickOf(w)).ok);
+        states[k] = w;
+    }
+    slot.reset();
+    std::map<std::string, std::string> before;
+    for (const auto& n : save::fs::list(dir))
+        if (n != "LOCK" && n != "HEAD") before[n] = readAll(dir + "/" + n);
+    writeAll(dir + "/HEAD", "not a head\n");
+    World expected = states[2];
+    std::string err, why;
+    CHECK(toy::saveSchema(2).upgrade.at(1)(expected, &err));
+    slot = openSlot(dir, 2);
+    auto r = slot->load();
+    CHECK_MSG(r.ok && r.migrated && r.usedFallback && world::equal(r.current, expected, &why), r.error + why);
+    for (const auto& kv : before)
+        CHECK_MSG(save::fs::exists(dir + "/" + kv.first) && readAll(dir + "/" + kv.first) == kv.second,
+                  "original file changed or deleted: " + kv.first);
+    // Two more saves rotate HEAD.prev; the original v1 saves stay readable.
+    World next = r.current;
+    for (int k = 0; k < 2; ++k) {
+        toy::step(next);
+        CHECK(slot->save(next, tickOf(next)).ok);
+    }
+    slot.reset();
+    std::vector<std::string> originals;  // names sort by tick
+    for (const auto& kv : before)
+        if (kv.first.compare(0, 5, "save-") == 0) originals.push_back(kv.first);
+    CHECK(originals.size() == 3);
+    for (size_t k = 0; k < originals.size() && k < 3; ++k)
+        CHECK_MSG(loadsAs(dir, originals[k], states[k], 1, &why), "v1 save " + originals[k] + ": " + why);
+}
+
 void testAsync() {
     SECTION("async save: snapshot on the caller, busy while in flight, saves the snapshot");
     const std::string dir = freshDir("async");
@@ -797,16 +963,19 @@ int main(int argc, char** argv) {
         testSha256();
         testHead();
         testRoundTrip();
+        testClearedVariant();
         testUnsupportedChangesRefused();
         testCrashPoints();
         testVerifyBeforeCommit();
         testDamagedSaves();
         testDamagedHead();
+        testDamagedHeadNeverSaved();
         testDamagedBase();
         testUsdSilentSkipHazard();
         testMods();
         testPolicyRefusals();
         testMigration();
+        testMigrationAfterFallback();
         testAsync();
         testLockAndPrune();
     }

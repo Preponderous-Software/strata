@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <filesystem>
 #include <set>
 #include <sstream>
 #ifdef _WIN32
@@ -295,9 +296,13 @@ bool Slot::writeHead(const Head& h, const SaveOptions& opt, std::string* err) {
         setErr(err, "simulated crash after HEAD.tmp");
         return false;
     }
-    if (fs::exists(headPath)) {
+    std::string curText;
+    Head cur;
+    if (fs::readSmall(headPath, curText, 1 << 20) && parseHead(curText, cur, nullptr)) {
         // Keep the previous HEAD by hard link, so HEAD itself is never absent:
-        // the rename below replaces it atomically.
+        // the rename below replaces it atomically. Only a HEAD that parses is
+        // kept: a damaged HEAD never replaces HEAD.prev, whose history is what
+        // protects the older saves from prune.
         if (!fs::remove(prev) || !fs::hardLink(headPath, prev)) {
             setErr(err, "cannot keep HEAD.prev");
             return false;
@@ -429,25 +434,36 @@ LoadResult Slot::load(const LoadOptions& opt) {
         return true;
     };
 
-    // Never-saved slot: HEAD names only the base.
-    if (headOk && head.saveFile.empty()) {
+    // A slot that holds only its base (never saved): compose and hydrate the
+    // base named by `h`, which must be intact. Sets `e` on failure.
+    auto loadBaseOnly = [&](const Head& h, std::string& e) {
         Attempt a;
         std::vector<std::string> stack;
-        World base = schema_.templateFor(schema_.version);
-        base = world::emptyLike(base);
-        if (!baseStack(head.baseSha, stack, a)) {
-            res.error = a.why;
-            return res;
+        World base = world::emptyLike(schema_.templateFor(schema_.version));
+        if (!baseStack(h.baseSha, stack, a)) {
+            e = a.why;
+            return false;
         }
-        if (!hydrateStack(stack, base, &why)) {
-            res.error = "base world does not load: " + why;
-            return res;
+        try {
+            if (!hydrateStack(stack, base, &why)) {
+                e = "base world does not load: " + why;
+                return false;
+            }
+        } catch (const std::exception& x) {
+            e = std::string("base world does not load: exception: ") + x.what();
+            return false;
         }
         res.current = base;
         baseline_ = std::make_shared<const World>(std::move(base));
-        head_ = head;
+        head_ = h;
         loaded_ = true;
         res.ok = true;
+        return true;
+    };
+
+    // Never-saved slot: HEAD names only the base.
+    if (headOk && head.saveFile.empty()) {
+        loadBaseOnly(head, res.error);
         return res;
     }
 
@@ -477,6 +493,35 @@ LoadResult Slot::load(const LoadOptions& opt) {
             add(f.second, sha, 0);
         }
     };
+    // After a fallback, the next HEAD's history: `first` (the save just loaded
+    // or committed), then every other save whose bytes still match the hash in
+    // its name, newest first. HEAD no longer vouches for them, so without this
+    // the next save would prune every save the fallback could still reach.
+    auto intactHistory = [&](const std::string& first, const std::string& firstBase) {
+        std::vector<std::pair<std::string, std::string>> out{{first, firstBase}};
+        std::vector<std::pair<int64_t, std::string>> found;
+        for (const auto& n : fs::list(dir_)) {
+            int64_t t;
+            std::string sha;
+            if (n != first && parseSaveName(n, t, sha)) found.emplace_back(t, n);
+        }
+        std::sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a > b; });
+        for (const auto& f : found) {
+            int64_t t;
+            std::string sha, got;
+            parseSaveName(f.second, t, sha);
+            const std::string path = fs::join(dir_, f.second);
+            if (!sha256File(path, got) || got != sha) continue;
+            usd::Manifest m;
+            TfErrorMark mark;
+            SdfLayerRefPtr l = SdfLayer::OpenAsAnonymous(path);
+            const bool ok = l && mark.IsClean() && usd::readManifest(l, m, nullptr) && isHex64(m.baseHash);
+            mark.Clear();
+            if (ok) out.emplace_back(f.second, m.baseHash);
+        }
+        return out;
+    };
+
     Head prev;
     const bool prevOk = fs::readSmall(fs::join(dir_, "HEAD.prev"), text, 1 << 20) && parseHead(text, prev, nullptr);
     if (headOk) {
@@ -489,8 +534,50 @@ LoadResult Slot::load(const LoadOptions& opt) {
         addScan();
         if (prevOk) addHead(prev);
     }
+    if (cands.empty() && !headOk && fs::exists(fs::join(dir_, "HEAD"))) {
+        // A damaged HEAD and no save file at all: a never-saved slot (the first
+        // HEAD has no HEAD.prev). Load its newest intact base, verified by the
+        // hash in its name, as a never-saved slot; the next save rewrites HEAD.
+        // A missing HEAD is left alone: create() can still start the slot over.
+        struct BaseFile {
+            std::filesystem::file_time_type mtime;
+            std::string name, sha;
+            uint64_t size;
+        };
+        std::vector<BaseFile> bases;
+        for (const auto& n : fs::list(dir_)) {
+            std::string sha, got;
+            uint64_t size = 0;
+            if (!parseBaseName(n, sha)) continue;
+            if (!sha256File(fs::join(dir_, n), got, &size) || got != sha) {
+                res.rejected.push_back(n + ": checksum mismatch (damaged file)");
+                continue;
+            }
+            std::error_code ec;
+            const auto t = std::filesystem::last_write_time(std::filesystem::u8path(fs::join(dir_, n)), ec);
+            bases.push_back({ec ? std::filesystem::file_time_type::min() : t, n, sha, size});
+        }
+        std::sort(bases.begin(), bases.end(), [](const BaseFile& a, const BaseFile& b) {
+            return a.mtime != b.mtime ? a.mtime > b.mtime : a.name > b.name;
+        });
+        for (const auto& b : bases) {
+            Head h;
+            h.baseFile = b.name;
+            h.baseSha = b.sha;
+            h.baseSize = b.size;
+            std::string e;
+            if (loadBaseOnly(h, e)) {
+                res.usedFallback = true;
+                res.warnings.push_back("HEAD is damaged and the slot holds no save; loaded the base world " + b.name +
+                                       " (see rejected)");
+                return res;
+            }
+            res.rejected.push_back(b.name + ": " + e);
+        }
+    }
     if (cands.empty()) {
         res.error = "no save in slot " + dir_;
+        for (size_t i = headOk ? 0 : 1; i < res.rejected.size(); ++i) res.error += "; " + res.rejected[i];
         return res;
     }
 
@@ -598,11 +685,20 @@ LoadResult Slot::load(const LoadOptions& opt) {
                                             nh.saveFile, nh.saveSha, nh.saveSize, nullptr, &e)) {
                                 a = {Fail::Policy, "migration: " + e};
                             } else {
+                                // The original save stays in the history right
+                                // after the migrated one, so prune never takes it.
+                                // After a fallback HEAD's history is not trusted:
+                                // every intact save is kept instead.
+                                const bool fellBack = !headOk || ci > 0;
+                                std::vector<std::pair<std::string, std::string>> older{{c.file, m.baseHash}};
+                                if (fellBack) older = intactHistory(c.file, m.baseHash);
+                                else older.insert(older.end(), head.history.begin(), head.history.end());
                                 nh.history.emplace_back(nh.saveFile, nh.baseSha);
-                                if (headOk)
-                                    for (const auto& h : head.history)
-                                        if (h.first != nh.saveFile) nh.history.push_back(h);
-                                if (nh.history.size() > static_cast<size_t>(keep)) nh.history.resize(keep);
+                                std::set<std::string> listed{nh.saveFile};
+                                for (const auto& h : older)
+                                    if (listed.insert(h.first).second) nh.history.push_back(h);
+                                if (nh.history.size() > static_cast<size_t>(std::max(keep, 2)))
+                                    nh.history.resize(static_cast<size_t>(std::max(keep, 2)));
                                 if (!writeHead(nh, SaveOptions(), &e)) {
                                     a = {Fail::Policy, "migration: " + e};
                                 } else {
@@ -654,9 +750,10 @@ LoadResult Slot::load(const LoadOptions& opt) {
                     sha256File(fs::join(dir_, res.saveFile), g, &sz);
                     nh.saveSize = sz;
                 }
-                nh.history = headOk && !res.usedFallback ? head.history
-                                                         : std::vector<std::pair<std::string, std::string>>{
-                                                               {res.saveFile, m.baseHash}};
+                // After a fallback, every intact save stays reachable (and safe
+                // from prune) until the player has saved past it normally.
+                nh.history = (res.migrated || !res.usedFallback) ? head.history
+                                                                 : intactHistory(res.saveFile, m.baseHash);
                 head_ = nh;
                 loaded_ = true;
                 return res;

@@ -195,14 +195,18 @@ SdfLayerRefPtr writeLayer(const World* base, const World& cur) {
         }
     }
     for (const auto& kv : cur.variants) {
-        if (kv.second.empty()) continue;
-        if (!full) {
-            auto it = base->variants.find(kv.first);
-            if (it != base->variants.end() && it->second == kv.second) continue;
-        }
+        auto it = full ? cur.variants.end() : base->variants.find(kv.first);
+        const bool inBase = !full && it != base->variants.end();
+        if (inBase && it->second == kv.second) continue;
+        // A cleared selection is written only over a baseline that has one: an
+        // explicit empty selection, which blocks the weaker layers' opinion
+        // (SetVariantSelection with "" would author nothing at all).
+        if (kv.second.empty() && (!inBase || it->second.empty())) continue;
         const auto bar = kv.first.find('|');
         if (bar == std::string::npos) throw std::runtime_error("variant key needs <prim>|<set>: " + kv.first);
-        ensurePrim(L, kv.first.substr(0, bar), false)->SetVariantSelection(kv.first.substr(bar + 1), kv.second);
+        SdfPrimSpecHandle p = ensurePrim(L, kv.first.substr(0, bar), false);
+        if (kv.second.empty()) p->BlockVariantSelection(kv.first.substr(bar + 1));
+        else p->SetVariantSelection(kv.first.substr(bar + 1), kv.second);
     }
     return L;
 }
@@ -260,25 +264,46 @@ bool hydrate(const UsdStageRefPtr& stage, World& out, std::string* err) {
         !gp.GetAttribute(TfToken("eng:grid:chunk")).Get(&chunk))
         return fail("grid header missing");
     if (w < 0 || h < 0 || chunk <= 0 || w > 1 << 16 || h > 1 << 16 || chunk > 1024) return fail("bad grid header");
-    out.grid.init(w, h, chunk, out.grid.channels);
+    // Every chunk is found and checked BEFORE the grid is allocated: the header
+    // alone (which any layer can author) never sizes an allocation. First the
+    // chunk count, so a huge header over few prims fails without visiting them.
     const int ncx = (w + chunk - 1) / chunk, ncy = (h + chunk - 1) / chunk;
+    const size_t nchunks = static_cast<size_t>(ncx) * static_cast<size_t>(ncy);
+    size_t present = 0;
+    for (const UsdPrim& c : gp.GetAllChildren()) {
+        (void)c;
+        if (++present >= nchunks) break;
+    }
+    if (present < nchunks)
+        return fail("grid header needs " + std::to_string(nchunks) + " chunks; " + std::to_string(present) +
+                    " present");
+    const size_t nch = out.grid.channels.size();
+    std::vector<VtIntArray> arrays(nchunks * nch);
     for (int cy = 0; cy < ncy; ++cy)
         for (int cx = 0; cx < ncx; ++cx) {
             UsdPrim cp = gp.GetChild(TfToken(chunkName(cx, cy)));
             if (!cp) return fail("missing chunk " + chunkName(cx, cy));
             const size_t want = static_cast<size_t>(std::min(w, (cx + 1) * chunk) - cx * chunk) *
                                 static_cast<size_t>(std::min(h, (cy + 1) * chunk) - cy * chunk);
-            for (size_t c = 0; c < out.grid.channels.size(); ++c) {
-                VtIntArray a;
+            for (size_t c = 0; c < nch; ++c) {
+                VtIntArray& a = arrays[(static_cast<size_t>(cy) * ncx + cx) * nch + c];
                 if (!cp.GetAttribute(TfToken(out.grid.channels[c])).Get(&a))
                     return fail("missing channel " + out.grid.channels[c] + " in " + chunkName(cx, cy));
                 if (a.size() != want) return fail("chunk " + chunkName(cx, cy) + " has the wrong size");
+            }
+        }
+    out.grid.init(w, h, chunk, out.grid.channels);
+    for (int cy = 0; cy < ncy; ++cy)
+        for (int cx = 0; cx < ncx; ++cx)
+            for (size_t c = 0; c < nch; ++c) {
+                VtIntArray& a = arrays[(static_cast<size_t>(cy) * ncx + cx) * nch + c];
+                const VtIntArray& ca = a;  // const access: never detaches a shared array
                 size_t k = 0;
                 for (int y = cy * chunk; y < std::min(h, (cy + 1) * chunk); ++y)
                     for (int x = cx * chunk; x < std::min(w, (cx + 1) * chunk); ++x)
-                        out.grid.data[c][static_cast<size_t>(y) * w + x] = a[k++];
+                        out.grid.data[c][static_cast<size_t>(y) * w + x] = ca[k++];
+                a = VtIntArray();  // release each chunk once copied
             }
-        }
     out.globals.clear();
     if (UsdPrim glob = stage->GetPrimAtPath(SdfPath("/World/Globals")))
         for (const auto& a : glob.GetAuthoredAttributes()) {

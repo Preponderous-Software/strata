@@ -9,7 +9,8 @@
 //     /Globals             one int64 attribute per global
 //     /Entities/<Coll>/<Prefix><id>   Xform, prepend references = <prefab>; one attribute per field
 //   A deleted entity is `over ... (active = false)` in the delta.
-//   A variant selection "<prim>|<set>" is a variant-selection opinion.
+//   A variant selection "<prim>|<set>" is a variant-selection opinion; a
+//   selection cleared since the baseline is an explicit empty selection (a block).
 #pragma once
 
 #include <string>
@@ -34,7 +35,9 @@ pxr::UsdStageRefPtr compose(const std::vector<std::string>& layersWeakestFirst, 
 
 // Read a composed stage into `out`, which must be a schema template
 // (strata::world::emptyLike). Any malformed input (bad names, duplicate ids,
-// missing fields, wrong types, short chunks) is an error, never a crash.
+// missing fields, wrong types, short chunks) is an error, never a crash. Every
+// grid chunk is found and size-checked before the grid is allocated, so a
+// header alone (from any layer) cannot size an allocation.
 bool hydrate(const pxr::UsdStageRefPtr& stage, world::World& out, std::string* err = nullptr);
 
 // Save manifest, stored in the save layer's customLayerData under eng:*.

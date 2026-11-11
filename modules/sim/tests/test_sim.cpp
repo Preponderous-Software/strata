@@ -43,6 +43,47 @@ TEST(sim_rng_helpers_stay_in_range) {
     CHECK(rng.below(0u) == 0u);
 }
 
+TEST(sim_rng_range_sequence_is_pinned) {
+    // Recorded before range() moved to 64-bit arithmetic: spans that never
+    // overflowed must give the same numbers bit for bit.
+    Rng rng(99u, 7u);
+    const int32_t small[8] = {122431, 482922, 13324, 637635, 277066, 958423, 267279, 782211};
+    for (int32_t e : small) CHECK(rng.range(-1000, 1000000) == e);
+    const int32_t wide[4] = {-1082834896, -1069289109, -714263249, -1906939618};
+    for (int32_t e : wide) CHECK(rng.range(-2000000000, 100000000) == e);
+    CHECK(rng.state() == 6811827256461322661ULL);
+}
+
+TEST(sim_rng_range_handles_spans_past_int32) {
+    Rng rng(11u);
+    CHECK(rng.range(5, 5) == 5);
+    CHECK(rng.range(5, 4) == 5);
+    const int32_t first = rng.range(INT32_MIN, INT32_MAX);
+    bool varies = false, negative = false, positive = false;
+    for (int i = 0; i < 100; ++i) {
+        const int32_t v = rng.range(INT32_MIN, INT32_MAX);
+        varies = varies || v != first;
+        negative = negative || v < 0;
+        positive = positive || v > 0;
+    }
+    CHECK(varies);
+    CHECK(negative && positive);
+    bool low = false, high = false;
+    for (int i = 0; i < 1000; ++i) {
+        const int32_t v = rng.range(-2000000000, 2000000000);
+        REQUIRE(v >= -2000000000 && v <= 2000000000);
+        low = low || v < -1000000000;
+        high = high || v > 1000000000;
+    }
+    CHECK(low && high);
+    for (int i = 0; i < 100; ++i) {
+        const int32_t v = rng.range(INT32_MAX - 1, INT32_MAX);
+        CHECK(v == INT32_MAX - 1 || v == INT32_MAX);
+        const int32_t w = rng.range(INT32_MIN, INT32_MIN + 1);
+        CHECK(w == INT32_MIN || w == INT32_MIN + 1);
+    }
+}
+
 TEST(sim_rng_same_seed_same_sequence) {
     Rng a(1234u), b(1234u), c(1235u);
     bool differs = false;
@@ -87,6 +128,41 @@ TEST(sim_registry_create_destroy_and_generations) {
     CHECK(w.alive(b));
     w.destroy(a);  // stale handle: no effect
     CHECK(w.alive(c));
+}
+
+TEST(sim_registry_clear_invalidates_old_handles) {
+    World w;
+    Entity a = w.create();
+    Entity b = w.create();
+    w.add(a, Pos{1, 2});
+    w.add(b, Tag{7});
+    w.destroy(b);
+    Entity b2 = w.create();  // b's slot, next generation
+    w.clear();
+    CHECK(w.size() == 0);
+    CHECK(!w.alive(a));
+    CHECK(!w.alive(b2));
+    int visited = 0;
+    w.each<Pos>([&](Entity, Pos&) { ++visited; });
+    CHECK(visited == 0);
+
+    // Slots are reused lowest first, but never with a pre-clear generation.
+    Entity a2 = w.create();
+    Entity c = w.create();
+    CHECK(a2.index == a.index);
+    CHECK(c.index == b2.index);
+    CHECK(w.alive(a2));
+    CHECK(w.alive(c));
+    CHECK(!w.alive(a));
+    CHECK(!w.alive(b));
+    CHECK(!w.alive(b2));
+    CHECK(a2 != a);
+    CHECK(c != b2);
+    CHECK(!w.has<Pos>(a2));  // components did not survive the clear
+    CHECK(!w.has<Tag>(c));
+    CHECK(w.size() == 2);
+    w.destroy(a);  // a stale handle cannot destroy the new entity
+    CHECK(w.alive(a2));
 }
 
 TEST(sim_registry_each_is_ordered_and_filtered) {

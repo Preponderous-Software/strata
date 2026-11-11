@@ -20,7 +20,9 @@
    What it does for the page:
 
    - Sizes the drawing buffer to the canvas's CSS size times the device pixel
-     ratio, capped (dprCap), on every frame and on ResizeObserver.
+     ratio, capped (dprCap), on every frame and on ResizeObserver. A canvas
+     with no CSS size of its own has it pinned, once, at its first displayed
+     size (with a console warning), so the buffer cannot feed back into it.
    - Adaptive quality: when frames average over slowMs, first lowers the
      pixel density towards 1, then the quality tier (shadows), with a settle
      window after each step. A hidden tab resets the measurement. ?quality=
@@ -28,7 +30,9 @@
    - One orbit/pan/zoom controller: pointer capture, drag to orbit,
      right-drag or shift-drag or two fingers to pan, pinch and wheel to zoom,
      arrow keys and +/-, and a slow idle orbit (none under reduced motion).
-     A tap is a pointer that moved under 6 CSS pixels.
+     A tap is a gesture of exactly one pointer (the primary mouse button, a
+     pen or one finger) that moved under 6 CSS pixels: one onTap on its
+     pointer-up. Two fingers, or a right or middle click, never tap.
    - project() and pick() in CSS pixels. Pointer coordinates are never scaled
      by the drawing buffer's size, so the device pixel ratio (and its cap)
      never enters picking.
@@ -101,6 +105,27 @@
     const onFatal = opts.onFatal || ((code, msg) => console.error("strata-kit:", code, msg));
 
     /* --------------------------------------------------------- sizing */
+    // A canvas with no CSS size is laid out at its width/height attributes,
+    // so sizing the drawing buffer to the displayed size times the DPR would
+    // grow it on every resize at a DPR over 1 (#89). Such a canvas is found
+    // by doubling both attributes: a canvas with a CSS width or height (the
+    // other side may follow the aspect ratio) keeps its displayed size, one
+    // sized only by its attributes does not. Its CSS size is then pinned,
+    // once, at what it showed.
+    kit.cssPinned = false;
+    (function pinUnsizedCanvas() {
+      const aw = canvas.width, ah = canvas.height, cw = canvas.clientWidth, ch = canvas.clientHeight;
+      if (!cw || !ch) return;  // not laid out (display: none); nothing to measure
+      canvas.width = aw * 2; canvas.height = ah * 2;
+      const follows = canvas.clientWidth !== cw || canvas.clientHeight !== ch;
+      canvas.width = aw; canvas.height = ah;
+      if (!follows) return;
+      canvas.style.width = cw + "px";
+      canvas.style.height = ch + "px";
+      kit.cssPinned = true;
+      console.warn(`strata-kit: #${canvas.id} has no CSS size, so it was pinned at ${cw}x${ch} CSS px; ` +
+        "give it a CSS width and height (e.g. width: 100%; height: 100%)");
+    })();
     kit.resize = function () {
       kit.dpr = Math.min(window.devicePixelRatio || 1, kit.dprCap);
       const w = Math.max(1, Math.round(canvas.clientWidth * kit.dpr));
@@ -159,7 +184,11 @@
 
     /* ----------------------------------------------------------- input */
     const pointers = new Map();
-    let dragMoved = 0, pinchStart = null;
+    // One gesture runs from the first pointer down to the last pointer up. It
+    // is a tap (one onTap, on that last pointer-up) only if exactly one
+    // pointer was down in it, that pointer moved under 6 CSS pixels in all,
+    // and it was not a secondary mouse button (#90).
+    let gesture = null, pinchStart = null;
     const touch = () => { kit.lastInput = performance.now(); };
     kit.touch = touch;
     kit.clampCam = function () {
@@ -175,8 +204,13 @@
     };
     canvas.addEventListener("pointerdown", (e) => {
       try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
-      pointers.set(e.pointerId, {x: e.clientX, y: e.clientY, button: e.button, shift: e.shiftKey});
-      dragMoved = 0;
+      // A primary pointer means no other pointer of its type is down, so any
+      // left over of that type (an up that never reached the canvas) is stale.
+      if (e.isPrimary) for (const [id, q] of pointers) if (q.type === e.pointerType) pointers.delete(id);
+      if (!pointers.size) gesture = {count: 0, moved: 0, tappable: true};
+      pointers.set(e.pointerId, {x: e.clientX, y: e.clientY, button: e.button, shift: e.shiftKey, type: e.pointerType});
+      gesture.count++;
+      if (e.pointerType === "mouse" && e.button !== 0) gesture.tappable = false;
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
         pinchStart = {d: Math.hypot(a.x - b.x, a.y - b.y), dist: cam.dist, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2};
@@ -191,7 +225,7 @@
         return;
       }
       const dx = e.clientX - p.x, dy = e.clientY - p.y;
-      dragMoved += Math.abs(dx) + Math.abs(dy);
+      if (gesture) gesture.moved += Math.abs(dx) + Math.abs(dy);
       p.x = e.clientX; p.y = e.clientY;
       if (pointers.size === 2 && pinchStart) {
         const [a, b] = [...pointers.values()];
@@ -212,8 +246,11 @@
       const p = pointers.get(e.pointerId);
       pointers.delete(e.pointerId);
       if (pointers.size < 2) pinchStart = null;
-      if (!pointers.size) canvas.classList.remove("dragging");
-      if (p && dragMoved < 6 && e.type === "pointerup") kit.tapAt(e.clientX, e.clientY);
+      if (pointers.size) return;
+      canvas.classList.remove("dragging");
+      const g = gesture;
+      gesture = null;
+      if (p && g && e.type === "pointerup" && g.count === 1 && g.tappable && g.moved < 6) kit.tapAt(e.clientX, e.clientY);
     }
     canvas.addEventListener("pointerup", endPointer);
     canvas.addEventListener("pointercancel", endPointer);

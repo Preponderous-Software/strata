@@ -196,6 +196,12 @@ def load_release(version: str, sha256: Optional[str] = None, cache_dir: Optional
     return Library(open_library(path), str(path))
 
 
+def _check_rgba(rgba, width: int, height: int) -> None:
+    want = width * height * 4
+    if len(rgba) < want:
+        raise ValueError("rgba has %d bytes; %d x %d texels need %d (RGBA8)" % (len(rgba), width, height, want))
+
+
 class Engine:
     """One strata_create'd engine. Main thread only, like the C ABI.
 
@@ -351,15 +357,27 @@ class Engine:
     ) -> int:
         """ABI 1.4 (1.7 with uvs, a texture or flags). Returns the mesh id.
 
+        normals are xyz triples and uvs are uv pairs, one per vertex.
         colors are RGB triples per vertex, or RGBA quadruples with
-        flags=MESH_COLORS_RGBA (ABI 1.15). Too few raises ValueError (the
-        library would read past the end); RGBA without the flag warns, since
-        the library reads it as RGB and every vertex after the first is
-        coloured wrongly."""
+        flags=MESH_COLORS_RGBA (ABI 1.15). Too few normals, uvs or colors
+        raises ValueError (the library would read past the end); RGBA without
+        the flag warns, since the library reads it as RGB and every vertex
+        after the first is coloured wrongly."""
         pos = array("f", positions)
         idx = array("I", indices)
         if len(pos) % 3:
             raise ValueError("positions must be xyz triples")
+        vertices = len(pos) // 3
+        if normals is not None:
+            normals = array("f", normals)
+            if len(normals) < 3 * vertices:
+                raise ValueError("normals has %d floats; %d vertices need %d (xyz)"
+                                 % (len(normals), vertices, 3 * vertices))
+        if uvs is not None:
+            uvs = array("f", uvs)
+            if len(uvs) < 2 * vertices:
+                raise ValueError("uvs has %d floats; %d vertices need %d (uv)"
+                                 % (len(uvs), vertices, 2 * vertices))
         if colors is not None:
             colors = array("f", colors)
             per = 4 if flags & _abi.MESH_COLORS_RGBA else 3
@@ -410,14 +428,20 @@ class Engine:
         self._call("strata_set_mesh_transform", mesh_id, _floats(model, 16) if model is not None else None)
 
     def create_texture_rgba8(self, width: int, height: int, rgba: bytes, flags: int = 0) -> int:
-        """ABI 1.7. rgba is width * height * 4 bytes, top row first. Returns the texture id."""
+        """ABI 1.7. rgba is width * height * 4 bytes, top row first. Returns the texture id.
+
+        Fewer bytes raises ValueError (the library would read past the end)."""
+        _check_rgba(rgba, width, height)
         data = (ctypes.c_uint8 * len(rgba)).from_buffer_copy(rgba)
         out = ctypes.c_uint32()
         self._call("strata_create_texture_rgba8", width, height, data, flags, ctypes.byref(out))
         return out.value
 
     def update_texture_rgba8(self, texture: int, x: int, y: int, width: int, height: int, rgba: bytes) -> None:
-        """ABI 1.8."""
+        """ABI 1.8. rgba is width * height * 4 bytes for the rectangle, top row first.
+
+        Fewer bytes raises ValueError (the library would read past the end)."""
+        _check_rgba(rgba, width, height)
         data = (ctypes.c_uint8 * len(rgba)).from_buffer_copy(rgba)
         self._call("strata_update_texture_rgba8", texture, x, y, width, height, data)
 

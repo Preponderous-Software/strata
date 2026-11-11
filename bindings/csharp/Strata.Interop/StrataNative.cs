@@ -40,6 +40,8 @@ namespace Strata.Interop {
         public const int MaxShadowedPointLights = 4;     // ABI 1.2
         public const int MaxMeshes = 256;                // ABI 1.4
         public const int MaxMeshVertices = 16777216;     // ABI 1.4
+        public const int MaxTextures = 256;              // ABI 1.7
+        public const int MaxTextureSize = 8192;          // ABI 1.7, largest width or height
 
         public const uint PointSoft = 0x1u;   // ABI 1.5
         public const uint PointOnTop = 0x2u;  // ABI 1.11
@@ -260,6 +262,37 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_struct_size(int structId);
         [DllImport(Library)] public static extern int strata_struct_field_offset(int structId, int fieldId);
         [DllImport(Library)] public static extern IntPtr strata_last_error();
+        /// <summary>Short text for a status ("invalid argument"); never null. Read it with Marshal.PtrToStringUTF8.</summary>
+        [DllImport(Library)] public static extern IntPtr strata_status_string(int status);
+
+        /// <summary>
+        /// StrataLogFn. level: 0 debug, 1 info, 2 warning, 3 error. message is
+        /// UTF-8, valid only during the call (Marshal.PtrToStringUTF8).
+        /// </summary>
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void StrataLogFn(int level, IntPtr message, IntPtr user);
+
+        // The delegate installed by strata_set_log_callback. The library holds
+        // only a function pointer to it, so it must stay referenced here, or the
+        // GC could collect it while native code still calls it.
+        private static StrataLogFn logCallback;
+
+        [DllImport(Library, EntryPoint = "strata_set_log_callback")]
+        private static extern void strata_set_log_callback_native(StrataLogFn fn, IntPtr user);
+
+        /// <summary>
+        /// Optional log sink, process-wide; null restores the default (stderr).
+        /// Called on the thread that logs, which is always the engine's thread.
+        /// The delegate is kept referenced until it is replaced, so a lambda can
+        /// be passed directly.
+        /// </summary>
+        public static void strata_set_log_callback(StrataLogFn fn, IntPtr user) {
+            strata_set_log_callback_native(fn, user);
+            logCallback = fn;  // after the call, so the old delegate lives until the library stops using it
+        }
+
+        /// <summary>The delegate strata_set_log_callback installed, or null.</summary>
+        public static StrataLogFn InstalledLogCallback => logCallback;
         [DllImport(Library)] public static extern int strata_create(StrataEngineDesc* desc, IntPtr* engine);
         [DllImport(Library)] public static extern void strata_destroy(IntPtr engine);
         [DllImport(Library)] public static extern IntPtr strata_gpu_description(IntPtr engine);
@@ -273,6 +306,8 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_get_drawable_size(IntPtr engine, int* width, int* height);
         [DllImport(Library)] public static extern int strata_resize(IntPtr engine, int width, int height);
         [DllImport(Library)] public static extern int strata_set_camera(IntPtr engine, StrataCamera* camera);
+        /// <summary>Fills *camera with a right-handed look-at view and an OpenGL (depth -1..1) perspective projection. Needs no engine.</summary>
+        [DllImport(Library)] public static extern int strata_camera_look_at(float* eye, float* target, float* up, float fovYDegrees, float aspect, float nearPlane, float farPlane, StrataCamera* camera);
         [DllImport(Library)] public static extern int strata_lighting_defaults(int mode, StrataLighting* lighting);
         [DllImport(Library)] public static extern int strata_set_lighting(IntPtr engine, StrataLighting* lighting);
         /// <summary>ABI 1.6. Seconds since 1970-01-01 UTC; degrees, north and east positive. Needs no engine.</summary>

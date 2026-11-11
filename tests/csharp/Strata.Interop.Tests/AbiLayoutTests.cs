@@ -7,10 +7,19 @@ using Xunit;
 namespace Strata.Interop.Tests {
 
     public class NativeLibraryFixture {
+        // One instance is made per test class, but a resolver can be set only
+        // once per assembly.
+        private static readonly object Gate = new object();
+        private static bool resolverSet;
+
         public NativeLibraryFixture() {
             string dir = Environment.GetEnvironmentVariable("STRATA_NATIVE_DIR");
             if (string.IsNullOrEmpty(dir)) throw new InvalidOperationException("set STRATA_NATIVE_DIR to the directory holding libstrata");
-            StrataNative.UseLibraryDirectory(dir);
+            lock (Gate) {
+                if (resolverSet) return;
+                StrataNative.UseLibraryDirectory(dir);
+                resolverSet = true;
+            }
         }
     }
 

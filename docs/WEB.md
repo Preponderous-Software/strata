@@ -199,6 +199,10 @@ KIT_EXPORTS=_my_set_rows STRATA_VERSION=<v> STRATA_SHA256=<from SHA256SUMS> kit/
 The page loads the module through the loader and hands it to the kit:
 
 ```html
+<style>
+  /* The canvas needs a CSS size: the kit sizes the drawing buffer from it. */
+  #view { display: block; width: 100%; height: 70vh; touch-action: none; }
+</style>
 <canvas id="view"></canvas>
 <script src="strata-loader.js"></script>
 <script src="strata-kit.js"></script>
@@ -256,6 +260,19 @@ Rules the kit keeps, which a hand-written shell tends to lose:
   so the drawing buffer's size, and so the device pixel ratio and its cap,
   never enter picking. The smoke test's tap == pick check at DPR 3 (above the
   default cap of 2) is what fails if that is broken.
+- **The canvas has a CSS size.** The drawing buffer is the canvas's CSS
+  size times the DPR, so a canvas sized only by its `width` and `height`
+  attributes (no CSS width or height) would grow on every resize at a DPR
+  over 1. `create` finds such a canvas, pins its CSS size at what it first
+  showed and warns in the console (`kit.cssPinned`); give it a CSS size to
+  keep it responsive. The smoke test checks that an unstyled canvas at DPR 2
+  keeps its size over a run of frames.
+- **One gesture, at most one tap.** A gesture runs from the first pointer
+  down to the last pointer up, and calls `onTap` once, on that last
+  pointer-up, only if exactly one pointer was down in it and it moved under
+  6 CSS pixels in all. A two-finger tap, a small pinch, a second finger
+  during an orbit and a right or middle click never tap. The smoke test
+  checks these with two synthetic touch pointers.
 - **Pixel density is given up before shadows.** Frames over `slowMs`
   (default 28 ms) averaged over 1.5 s first lower the DPR cap by a quarter,
   down to 1, then the tier; each step waits 2.5 s to settle. Only then does
