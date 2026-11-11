@@ -329,9 +329,10 @@ typedef struct StrataMesh {
 
 /* ABI 1.7. Textures are RGBA8 images a host uploads once and textured meshes
  * sample. Texels are used as stored, in the same space as every other Strata
- * colour (no sRGB decoding), and multiply the mesh's vertex colour; alpha is
- * ignored (meshes are opaque). Rows run top to bottom, so v = 0 is the
- * image's first row; u runs left to right. */
+ * colour (no sRGB decoding), and multiply the mesh's vertex colour. Texel
+ * alpha is ignored on an opaque mesh; on a STRATA_MESH_TRANSLUCENT mesh
+ * (ABI 1.11) it multiplies mesh.color[3]. Rows run top to bottom, so v = 0 is
+ * the image's first row; u runs left to right. */
 #define STRATA_MAX_TEXTURES 256
 #define STRATA_MAX_TEXTURE_SIZE 8192 /* largest width or height */
 
@@ -364,7 +365,7 @@ typedef struct StrataMesh {
  * The fourth component is validated like the others (finite, >= 0) and then
  * ignored: a mesh's alpha is still mesh.color[3] (STRATA_MESH_TRANSLUCENT).
  * strata_add_mesh has no flags, so it always reads RGB; pass the mesh through
- * strata_add_textured_mesh with texture 0 to use this. A 1.7 to 1.12 library
+ * strata_add_textured_mesh with texture 0 to use this. A 1.7 to 1.14 library
  * rejects the flag as unknown; check strata_abi_minor() >= 15 first. */
 #define STRATA_MESH_COLORS_RGBA 0x4u
 

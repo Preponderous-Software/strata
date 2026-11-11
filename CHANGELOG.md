@@ -189,6 +189,13 @@
   result. New Python tests (`tests/python/test_save_bench_gate.py`) check
   that an empty or partial results file fails. No library change.
 
+- Docs: two comments in `strata.h` are corrected (#84). The ABI 1.7
+  textures paragraph said texel alpha is ignored because meshes are opaque;
+  since ABI 1.11 a `STRATA_MESH_TRANSLUCENT` mesh's alpha is `mesh.color[3]`
+  times the texel's alpha, as the translucent flag's own comment says.
+  `STRATA_MESH_COLORS_RGBA` said a 1.7 to 1.12 library rejects it; 1.13 and
+  1.14 libraries do too, so the range reads 1.7 to 1.14. No code change.
+
 ## 0.7.0
 
 The web kit: the shell around a Strata scene embedded in a web page, shipped
