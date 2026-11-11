@@ -89,6 +89,41 @@ TEST(sim_registry_create_destroy_and_generations) {
     CHECK(w.alive(c));
 }
 
+TEST(sim_registry_clear_invalidates_old_handles) {
+    World w;
+    Entity a = w.create();
+    Entity b = w.create();
+    w.add(a, Pos{1, 2});
+    w.add(b, Tag{7});
+    w.destroy(b);
+    Entity b2 = w.create();  // b's slot, next generation
+    w.clear();
+    CHECK(w.size() == 0);
+    CHECK(!w.alive(a));
+    CHECK(!w.alive(b2));
+    int visited = 0;
+    w.each<Pos>([&](Entity, Pos&) { ++visited; });
+    CHECK(visited == 0);
+
+    // Slots are reused lowest first, but never with a pre-clear generation.
+    Entity a2 = w.create();
+    Entity c = w.create();
+    CHECK(a2.index == a.index);
+    CHECK(c.index == b2.index);
+    CHECK(w.alive(a2));
+    CHECK(w.alive(c));
+    CHECK(!w.alive(a));
+    CHECK(!w.alive(b));
+    CHECK(!w.alive(b2));
+    CHECK(a2 != a);
+    CHECK(c != b2);
+    CHECK(!w.has<Pos>(a2));  // components did not survive the clear
+    CHECK(!w.has<Tag>(c));
+    CHECK(w.size() == 2);
+    w.destroy(a);  // a stale handle cannot destroy the new entity
+    CHECK(w.alive(a2));
+}
+
 TEST(sim_registry_each_is_ordered_and_filtered) {
     World w;
     std::vector<Entity> es;

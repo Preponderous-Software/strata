@@ -164,6 +164,13 @@
   its month, leap years included. Anything after a directive's last field
   is refused as `unexpected '<word>' at the end of the line`. Every scene in
   `tests/scenes` still loads; no library or pixel change.
+- Sim module: `Registry::clear()` no longer brings old handles back to life
+  (#80). It threw the slot generations away, so the first entity created
+  after it was `{0, 0}` again and a handle kept from before the clear read as
+  alive and pointed at the new entity. Slots are now kept and freed, and each
+  living slot's generation is bumped as `destroy()` bumps it; new entities
+  still take the lowest slot first. `capacity()` no longer drops to 0 on
+  `clear()`. No library, ABI or pixel change.
 
 ## 0.7.0
 
