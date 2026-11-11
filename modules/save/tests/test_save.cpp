@@ -479,6 +479,59 @@ void testDamagedHead() {
     }
 }
 
+void testDamagedHeadNeverSaved() {
+    SECTION("a never-saved slot with a damaged HEAD loads its intact base, and the next save rewrites HEAD");
+    const char* names[] = {"garbage", "truncated", "one bit flipped"};
+    for (int k = 0; k < 3; ++k) {
+        const std::string dir = freshDir("head-base");
+        World w;
+        auto slot = newGame(dir, w);
+        slot.reset();
+        CHECK(!save::fs::exists(dir + "/HEAD.prev") && saveFiles(dir).empty());
+        std::string h = readAll(dir + "/HEAD");
+        if (k == 0) writeAll(dir + "/HEAD", "not a head\n");
+        if (k == 1) writeAll(dir + "/HEAD", h.substr(0, h.size() / 2));
+        if (k == 2) {
+            h[h.size() / 2] = static_cast<char>(h[h.size() / 2] ^ 4);
+            writeAll(dir + "/HEAD", h);
+        }
+        slot = openSlot(dir);
+        auto r = slot->load();
+        std::string why;
+        CHECK_MSG(r.ok && r.usedFallback && r.saveFile.empty() && world::equal(r.current, w, &why),
+                  std::string(names[k]) + ": " + r.error + why);
+        CHECK(!r.rejected.empty() && r.rejected[0].compare(0, 5, "HEAD:") == 0 && !r.warnings.empty());
+        World next = r.current;
+        toy::step(next);
+        auto sr = slot->save(next, tickOf(next));
+        CHECK_MSG(sr.ok, sr.error);
+        save::Head parsed;
+        CHECK_MSG(save::parseHead(readAll(dir + "/HEAD"), parsed, nullptr) && parsed.saveFile == sr.file,
+                  std::string(names[k]) + ": the next save rewrites a valid HEAD");
+        slot.reset();
+        slot = openSlot(dir);
+        r = slot->load();
+        CHECK_MSG(r.ok && !r.usedFallback && world::equal(r.current, next, &why), r.error + why);
+    }
+    {
+        // A damaged base as well: refused, never replaced by a fresh world.
+        const std::string dir = freshDir("head-base2");
+        World w;
+        auto slot = newGame(dir, w);
+        slot.reset();
+        writeAll(dir + "/HEAD", "not a head\n");
+        for (const auto& n : save::fs::list(dir))
+            if (n.compare(0, 5, "base-") == 0) {
+                std::string b = readAll(dir + "/" + n);
+                b[b.size() / 2] = static_cast<char>(b[b.size() / 2] ^ 1);
+                writeAll(dir + "/" + n, b);
+            }
+        slot = openSlot(dir);
+        auto r = slot->load();
+        CHECK_MSG(!r.ok && r.error.find("no save") != std::string::npos, r.error);
+    }
+}
+
 void testDamagedBase() {
     SECTION("a damaged or missing base is refused, never loaded as a fresh world");
     for (int k = 0; k < 2; ++k) {
@@ -916,6 +969,7 @@ int main(int argc, char** argv) {
         testVerifyBeforeCommit();
         testDamagedSaves();
         testDamagedHead();
+        testDamagedHeadNeverSaved();
         testDamagedBase();
         testUsdSilentSkipHazard();
         testMods();

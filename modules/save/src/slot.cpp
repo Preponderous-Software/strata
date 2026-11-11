@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <filesystem>
 #include <set>
 #include <sstream>
 #ifdef _WIN32
@@ -433,25 +434,31 @@ LoadResult Slot::load(const LoadOptions& opt) {
         return true;
     };
 
-    // Never-saved slot: HEAD names only the base.
-    if (headOk && head.saveFile.empty()) {
+    // A slot that holds only its base (never saved): compose and hydrate the
+    // base named by `h`, which must be intact. Sets `e` on failure.
+    auto loadBaseOnly = [&](const Head& h, std::string& e) {
         Attempt a;
         std::vector<std::string> stack;
-        World base = schema_.templateFor(schema_.version);
-        base = world::emptyLike(base);
-        if (!baseStack(head.baseSha, stack, a)) {
-            res.error = a.why;
-            return res;
+        World base = world::emptyLike(schema_.templateFor(schema_.version));
+        if (!baseStack(h.baseSha, stack, a)) {
+            e = a.why;
+            return false;
         }
         if (!hydrateStack(stack, base, &why)) {
-            res.error = "base world does not load: " + why;
-            return res;
+            e = "base world does not load: " + why;
+            return false;
         }
         res.current = base;
         baseline_ = std::make_shared<const World>(std::move(base));
-        head_ = head;
+        head_ = h;
         loaded_ = true;
         res.ok = true;
+        return true;
+    };
+
+    // Never-saved slot: HEAD names only the base.
+    if (headOk && head.saveFile.empty()) {
+        loadBaseOnly(head, res.error);
         return res;
     }
 
@@ -522,8 +529,50 @@ LoadResult Slot::load(const LoadOptions& opt) {
         addScan();
         if (prevOk) addHead(prev);
     }
+    if (cands.empty() && !headOk && fs::exists(fs::join(dir_, "HEAD"))) {
+        // A damaged HEAD and no save file at all: a never-saved slot (the first
+        // HEAD has no HEAD.prev). Load its newest intact base, verified by the
+        // hash in its name, as a never-saved slot; the next save rewrites HEAD.
+        // A missing HEAD is left alone: create() can still start the slot over.
+        struct BaseFile {
+            std::filesystem::file_time_type mtime;
+            std::string name, sha;
+            uint64_t size;
+        };
+        std::vector<BaseFile> bases;
+        for (const auto& n : fs::list(dir_)) {
+            std::string sha, got;
+            uint64_t size = 0;
+            if (!parseBaseName(n, sha)) continue;
+            if (!sha256File(fs::join(dir_, n), got, &size) || got != sha) {
+                res.rejected.push_back(n + ": checksum mismatch (damaged file)");
+                continue;
+            }
+            std::error_code ec;
+            const auto t = std::filesystem::last_write_time(std::filesystem::u8path(fs::join(dir_, n)), ec);
+            bases.push_back({ec ? std::filesystem::file_time_type::min() : t, n, sha, size});
+        }
+        std::sort(bases.begin(), bases.end(), [](const BaseFile& a, const BaseFile& b) {
+            return a.mtime != b.mtime ? a.mtime > b.mtime : a.name > b.name;
+        });
+        for (const auto& b : bases) {
+            Head h;
+            h.baseFile = b.name;
+            h.baseSha = b.sha;
+            h.baseSize = b.size;
+            std::string e;
+            if (loadBaseOnly(h, e)) {
+                res.usedFallback = true;
+                res.warnings.push_back("HEAD is damaged and the slot holds no save; loaded the base world " + b.name +
+                                       " (see rejected)");
+                return res;
+            }
+            res.rejected.push_back(b.name + ": " + e);
+        }
+    }
     if (cands.empty()) {
         res.error = "no save in slot " + dir_;
+        for (size_t i = headOk ? 0 : 1; i < res.rejected.size(); ++i) res.error += "; " + res.rejected[i];
         return res;
     }
 

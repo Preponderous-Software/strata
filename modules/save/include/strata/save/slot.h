@@ -25,6 +25,9 @@
 //  - A damaged HEAD is never kept as HEAD.prev. After a fallback, the next
 //    HEAD's history lists every intact save in the slot (loaded save first), so
 //    pruning never deletes a save the fallback could still reach.
+//  - A never-saved slot whose HEAD is damaged loads its newest intact base
+//    (verified by the hash in its name) as a never-saved slot, with
+//    usedFallback and a warning; the next save rewrites HEAD.
 //  - Older schemas are migrated on a copy: new base + new delta, verified, then
 //    committed through the same protocol. The original files are never edited,
 //    and the original save stays in the history, so it is never pruned.
