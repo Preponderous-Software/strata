@@ -145,6 +145,21 @@ int main(int argc, char** argv) {
     bad("missing field", "#usda 1.0\nover \"World\" {\nover \"Entities\" {\nover \"Things\" {\ndef Xform \"T_000999\" {}\n}\n}\n}\n");
     bad("short chunk", "#usda 1.0\nover \"World\" {\nover \"Grid\" {\nover \"C_000_000\" {\nint[] t:a = [1, 2]\n}\n}\n}\n");
     bad("non-int64 global", "#usda 1.0\nover \"World\" {\nover \"Globals\" {\nstring t:extra = \"x\"\n}\n}\n");
+    // A header that would size 16 GiB per channel, with no chunks, or with empty
+    // chunk prims: refused before the grid is allocated (#88).
+    const std::string huge = "#usda 1.0\nover \"World\" {\nover \"Grid\" {\nint eng:grid:width = 65536\n"
+                             "int eng:grid:height = 65536\nint eng:grid:chunk = ";
+    bad("65536 x 65536 header, no chunks", huge + "1\n}\n}\n");
+    {
+        std::string empty = huge + "1024\n";
+        for (int cy = 0; cy < 64; ++cy)
+            for (int cx = 0; cx < 64; ++cx) {
+                char name[64];
+                std::snprintf(name, sizeof name, "def Scope \"C_%03d_%03d\" {}\n", cx, cy);
+                empty += name;
+            }
+        bad("65536 x 65536 header, empty chunks", empty + "}\n}\n");
+    }
     bad("unparseable", "#usda 1.0\nover \"World\" {\nthis is not usda\n");
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "ALL PASSED", failures);
     return failures ? 1 : 0;

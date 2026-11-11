@@ -444,8 +444,13 @@ LoadResult Slot::load(const LoadOptions& opt) {
             e = a.why;
             return false;
         }
-        if (!hydrateStack(stack, base, &why)) {
-            e = "base world does not load: " + why;
+        try {
+            if (!hydrateStack(stack, base, &why)) {
+                e = "base world does not load: " + why;
+                return false;
+            }
+        } catch (const std::exception& x) {
+            e = std::string("base world does not load: exception: ") + x.what();
             return false;
         }
         res.current = base;
