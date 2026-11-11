@@ -22,8 +22,12 @@
 //  - Integrity failures fall back to the previous saves (newest first) and say
 //    so. Policy refusals (another game, a newer format or schema, a different mod
 //    list) never fall back, because an older save would silently lose progress.
+//  - A damaged HEAD is never kept as HEAD.prev. After a fallback, the next
+//    HEAD's history lists every intact save in the slot (loaded save first), so
+//    pruning never deletes a save the fallback could still reach.
 //  - Older schemas are migrated on a copy: new base + new delta, verified, then
-//    committed through the same protocol. The original files are never edited.
+//    committed through the same protocol. The original files are never edited,
+//    and the original save stays in the history, so it is never pruned.
 #pragma once
 
 #include <atomic>

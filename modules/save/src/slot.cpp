@@ -295,9 +295,13 @@ bool Slot::writeHead(const Head& h, const SaveOptions& opt, std::string* err) {
         setErr(err, "simulated crash after HEAD.tmp");
         return false;
     }
-    if (fs::exists(headPath)) {
+    std::string curText;
+    Head cur;
+    if (fs::readSmall(headPath, curText, 1 << 20) && parseHead(curText, cur, nullptr)) {
         // Keep the previous HEAD by hard link, so HEAD itself is never absent:
-        // the rename below replaces it atomically.
+        // the rename below replaces it atomically. Only a HEAD that parses is
+        // kept: a damaged HEAD never replaces HEAD.prev, whose history is what
+        // protects the older saves from prune.
         if (!fs::remove(prev) || !fs::hardLink(headPath, prev)) {
             setErr(err, "cannot keep HEAD.prev");
             return false;
@@ -477,6 +481,35 @@ LoadResult Slot::load(const LoadOptions& opt) {
             add(f.second, sha, 0);
         }
     };
+    // After a fallback, the next HEAD's history: `first` (the save just loaded
+    // or committed), then every other save whose bytes still match the hash in
+    // its name, newest first. HEAD no longer vouches for them, so without this
+    // the next save would prune every save the fallback could still reach.
+    auto intactHistory = [&](const std::string& first, const std::string& firstBase) {
+        std::vector<std::pair<std::string, std::string>> out{{first, firstBase}};
+        std::vector<std::pair<int64_t, std::string>> found;
+        for (const auto& n : fs::list(dir_)) {
+            int64_t t;
+            std::string sha;
+            if (n != first && parseSaveName(n, t, sha)) found.emplace_back(t, n);
+        }
+        std::sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a > b; });
+        for (const auto& f : found) {
+            int64_t t;
+            std::string sha, got;
+            parseSaveName(f.second, t, sha);
+            const std::string path = fs::join(dir_, f.second);
+            if (!sha256File(path, got) || got != sha) continue;
+            usd::Manifest m;
+            TfErrorMark mark;
+            SdfLayerRefPtr l = SdfLayer::OpenAsAnonymous(path);
+            const bool ok = l && mark.IsClean() && usd::readManifest(l, m, nullptr) && isHex64(m.baseHash);
+            mark.Clear();
+            if (ok) out.emplace_back(f.second, m.baseHash);
+        }
+        return out;
+    };
+
     Head prev;
     const bool prevOk = fs::readSmall(fs::join(dir_, "HEAD.prev"), text, 1 << 20) && parseHead(text, prev, nullptr);
     if (headOk) {
@@ -598,11 +631,20 @@ LoadResult Slot::load(const LoadOptions& opt) {
                                             nh.saveFile, nh.saveSha, nh.saveSize, nullptr, &e)) {
                                 a = {Fail::Policy, "migration: " + e};
                             } else {
+                                // The original save stays in the history right
+                                // after the migrated one, so prune never takes it.
+                                // After a fallback HEAD's history is not trusted:
+                                // every intact save is kept instead.
+                                const bool fellBack = !headOk || ci > 0;
+                                std::vector<std::pair<std::string, std::string>> older{{c.file, m.baseHash}};
+                                if (fellBack) older = intactHistory(c.file, m.baseHash);
+                                else older.insert(older.end(), head.history.begin(), head.history.end());
                                 nh.history.emplace_back(nh.saveFile, nh.baseSha);
-                                if (headOk)
-                                    for (const auto& h : head.history)
-                                        if (h.first != nh.saveFile) nh.history.push_back(h);
-                                if (nh.history.size() > static_cast<size_t>(keep)) nh.history.resize(keep);
+                                std::set<std::string> listed{nh.saveFile};
+                                for (const auto& h : older)
+                                    if (listed.insert(h.first).second) nh.history.push_back(h);
+                                if (nh.history.size() > static_cast<size_t>(std::max(keep, 2)))
+                                    nh.history.resize(static_cast<size_t>(std::max(keep, 2)));
                                 if (!writeHead(nh, SaveOptions(), &e)) {
                                     a = {Fail::Policy, "migration: " + e};
                                 } else {
@@ -654,9 +696,10 @@ LoadResult Slot::load(const LoadOptions& opt) {
                     sha256File(fs::join(dir_, res.saveFile), g, &sz);
                     nh.saveSize = sz;
                 }
-                nh.history = headOk && !res.usedFallback ? head.history
-                                                         : std::vector<std::pair<std::string, std::string>>{
-                                                               {res.saveFile, m.baseHash}};
+                // After a fallback, every intact save stays reachable (and safe
+                // from prune) until the player has saved past it normally.
+                nh.history = (res.migrated || !res.usedFallback) ? head.history
+                                                                 : intactHistory(res.saveFile, m.baseHash);
                 head_ = nh;
                 loaded_ = true;
                 return res;

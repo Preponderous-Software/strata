@@ -75,6 +75,10 @@ std::string headSave(const std::string& dir) {
     return h.saveFile;
 }
 
+// Does `file` (a save in `dir`) still load, by itself, as `expect`? Probed in
+// a copy of the slot whose HEAD names only that save, with fallback off.
+bool loadsAs(const std::string& dir, const std::string& file, const World& expect, int version, std::string* why);
+
 std::unique_ptr<Slot> openSlot(const std::string& dir, int version = 2, save::Layers layers = toy::layers()) {
     std::string err;
     auto s = Slot::open(dir, toy::saveSchema(version), std::move(layers), &err);
@@ -308,6 +312,38 @@ void testVerifyBeforeCommit() {
     CHECK(readAll(dir + "/HEAD") == head && saveFiles(dir) == saves && !hasTemps(dir));
 }
 
+bool loadsAs(const std::string& dir, const std::string& file, const World& expect, int version, std::string* why) {
+    const std::string probe = dir + "-probe";
+    std::error_code ec;
+    std::filesystem::remove_all(std::filesystem::u8path(probe), ec);
+    std::filesystem::copy(std::filesystem::u8path(dir), std::filesystem::u8path(probe), ec);
+    std::remove((probe + "/LOCK").c_str());
+    std::remove((probe + "/HEAD.prev").c_str());
+    usd::Manifest m;
+    auto layer = pxr::SdfLayer::OpenAsAnonymous(dir + "/" + file);
+    if (!layer || !usd::readManifest(layer, m, why)) return false;
+    save::Head h;
+    h.baseSha = m.baseHash;
+    h.baseFile = "base-" + m.baseHash + ".usdc";
+    h.baseSize = readAll(dir + "/" + h.baseFile).size();
+    h.saveFile = file;
+    h.saveSha = file.substr(18, 64);
+    h.saveSize = readAll(dir + "/" + file).size();
+    h.history.emplace_back(file, m.baseHash);
+    writeAll(probe + "/HEAD", save::formatHead(h));
+    auto s = openSlot(probe, version);
+    if (!s) return false;
+    save::LoadOptions strict;
+    strict.fallback = false;
+    strict.allowMigration = false;
+    auto r = s->load(strict);
+    if (!r.ok) {
+        if (why) *why = r.error;
+        return false;
+    }
+    return world::equal(r.current, expect, why);
+}
+
 // Three saves at ticks 10, 20, 30 in a fresh slot.
 std::unique_ptr<Slot> threeSaves(const std::string& dir, World states[3]) {
     World w;
@@ -398,11 +434,25 @@ void testDamagedHead() {
         CHECK_MSG(r.ok && r.usedFallback && world::equal(r.current, states[2], &why),
                   std::string(names[k]) + ": " + r.error + why);
         CHECK(!r.rejected.empty() && r.rejected[0].compare(0, 5, "HEAD:") == 0);
+        const std::string prevBefore = readAll(dir + "/HEAD.prev");
+        std::vector<std::string> older = saveFiles(dir);
+        CHECK(older.size() == 3);
         World next = r.current;
         toy::step(next);
         CHECK(slot->save(next, tickOf(next)).ok);
         save::Head parsed;
         CHECK_MSG(save::parseHead(readAll(dir + "/HEAD"), parsed, nullptr), "the next save rewrites a valid HEAD");
+        // The damaged HEAD never replaces the valid HEAD.prev (#85).
+        if (!prevBefore.empty()) CHECK_MSG(readAll(dir + "/HEAD.prev") == prevBefore, names[k]);
+        // A second save rotates the rewritten HEAD into HEAD.prev; the fallback's
+        // history must still protect every older save.
+        toy::step(next);
+        CHECK(slot->save(next, tickOf(next)).ok);
+        slot.reset();
+        for (int s = 0; s < 3; ++s) {
+            CHECK_MSG(save::fs::exists(dir + "/" + older[s]), std::string(names[k]) + ": pruned " + older[s]);
+            CHECK_MSG(loadsAs(dir, older[s], states[s], 2, &why), std::string(names[k]) + ": " + older[s] + ": " + why);
+        }
     }
 }
 
@@ -603,6 +653,46 @@ void testMigration() {
     slot = openSlot(dir, 1);
     auto old = slot->load();
     CHECK_MSG(!old.ok && old.error.find("newer game version") != std::string::npos, old.error);
+}
+
+void testMigrationAfterFallback() {
+    SECTION("a migration after a damaged HEAD keeps the original saves and the valid HEAD.prev");
+    const std::string dir = freshDir("migrate-fallback");
+    World w;
+    auto slot = newGame(dir, w, 1);
+    World states[3];
+    for (int k = 0; k < 3; ++k) {
+        for (int t = 0; t < 10; ++t) toy::step(w);
+        CHECK(slot->save(w, tickOf(w)).ok);
+        states[k] = w;
+    }
+    slot.reset();
+    std::map<std::string, std::string> before;
+    for (const auto& n : save::fs::list(dir))
+        if (n != "LOCK" && n != "HEAD") before[n] = readAll(dir + "/" + n);
+    writeAll(dir + "/HEAD", "not a head\n");
+    World expected = states[2];
+    std::string err, why;
+    CHECK(toy::saveSchema(2).upgrade.at(1)(expected, &err));
+    slot = openSlot(dir, 2);
+    auto r = slot->load();
+    CHECK_MSG(r.ok && r.migrated && r.usedFallback && world::equal(r.current, expected, &why), r.error + why);
+    for (const auto& kv : before)
+        CHECK_MSG(save::fs::exists(dir + "/" + kv.first) && readAll(dir + "/" + kv.first) == kv.second,
+                  "original file changed or deleted: " + kv.first);
+    // Two more saves rotate HEAD.prev; the original v1 saves stay readable.
+    World next = r.current;
+    for (int k = 0; k < 2; ++k) {
+        toy::step(next);
+        CHECK(slot->save(next, tickOf(next)).ok);
+    }
+    slot.reset();
+    std::vector<std::string> originals;  // names sort by tick
+    for (const auto& kv : before)
+        if (kv.first.compare(0, 5, "save-") == 0) originals.push_back(kv.first);
+    CHECK(originals.size() == 3);
+    for (size_t k = 0; k < originals.size() && k < 3; ++k)
+        CHECK_MSG(loadsAs(dir, originals[k], states[k], 1, &why), "v1 save " + originals[k] + ": " + why);
 }
 
 void testAsync() {
@@ -807,6 +897,7 @@ int main(int argc, char** argv) {
         testMods();
         testPolicyRefusals();
         testMigration();
+        testMigrationAfterFallback();
         testAsync();
         testLockAndPrune();
     }
