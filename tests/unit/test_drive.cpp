@@ -1,7 +1,9 @@
 // ABI 1.12: injected events, the frame clock and the drive channel. The drive
 // protocol is exercised through a socket pair with no GL: the test plays the
 // harness, writes its lines first, then runs the engine's side of a frame.
+#include <cmath>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -29,6 +31,16 @@ StrataEvent key(int32_t type, int32_t scancode) {
     e.scancode = scancode;
     return e;
 }
+
+// The parser's error for `line`, or "" when the line parses. A harness sees
+// this text after "bad JSON: " in the drive channel's reply.
+std::string parseError(const std::string& line) {
+    strata::json::Object o;
+    std::string error;
+    return strata::json::parseObject(line, o, &error) ? std::string() : error;
+}
+
+bool startsWith(const std::string& text, const char* prefix) { return text.rfind(prefix, 0) == 0; }
 
 #if defined(STRATA_TEST_SOCKETS)
 struct Pair {
@@ -125,6 +137,77 @@ TEST(json_line_writer_escapes_and_orders_fields) {
     strata::json::Object back;
     REQUIRE(strata::json::parseObject(line, back, nullptr));
     CHECK(back["path"].text == "a\"b\\c\n");
+}
+
+TEST(json_line_decodes_every_escape_and_surrogate_pairs) {
+    strata::json::Object o;
+    std::string error;
+    // \ud83d\ude00 is U+1F600, four bytes in UTF-8.
+    REQUIRE(strata::json::parseObject("{\"e\":\"\\/\\b\\f\\r\\t\",\"p\":\"\\ud83d\\ude00\"}", o, &error));
+    CHECK(o["e"].text == "/\b\f\r\t");
+    CHECK(o["p"].text == "\xf0\x9f\x98\x80");
+    CHECK(parseError("{\"e\":\"\\ud83dx\"}") == "lone surrogate at byte 12");
+    CHECK(parseError("{\"e\":\"\\ud83d\\u0041\"}") == "bad surrogate pair at byte 18");
+    CHECK(parseError("{\"e\":\"\\u00zz\"}") == "bad \\u escape at byte 11");
+    CHECK(parseError("{\"e\":\"\\u00") == "short \\u escape at byte 8");
+    CHECK(parseError("{\"e\":\"\\x\"}") == "bad escape at byte 8");
+}
+
+TEST(json_line_errors_name_the_problem_and_the_byte) {
+    CHECK(parseError("{\"a\" 1}") == "expected ':' at byte 5");
+    CHECK(parseError("{\"a\":1,}") == "expected a string at byte 7");
+    CHECK(parseError("{\"a\":1 \"b\":2}") == "expected ',' or '}' at byte 7");
+    CHECK(parseError("{\"a\":x}") == "unexpected character at byte 5");
+    CHECK(parseError("{\"a\":tru}") == "unexpected token at byte 5");
+    CHECK(parseError("{\"a\":") == "expected a value at byte 5");
+    CHECK(parseError("{\"a\":-}") == "bad number at byte 5");
+    CHECK(parseError("{\"a\":1e999}") == "bad number at byte 5");  // overflows to infinity
+    CHECK(parseError("{\"a\":\"x\ty\"}") == "control character in a string at byte 8");
+    CHECK(parseError("{\"a\":\"\\") == "unterminated string at byte 7");
+    CHECK(parseError("{\"a\":1} x") == "trailing characters at byte 8");
+    CHECK(startsWith(parseError("{\"a\":{\"b\":1}}"), "nested objects and arrays are not part of the protocol"));
+    CHECK(parseError("{}").empty());
+}
+
+TEST(json_line_allows_whitespace_and_keeps_the_last_duplicate_key) {
+    strata::json::Object o;
+    std::string error;
+    REQUIRE(strata::json::parseObject(" \t{ \"a\" : 1 ,\r\n \"b\" : \"x\" } \n", o, &error));
+    CHECK(o.size() == 2);
+    CHECK(o["a"].number == 1.0);
+    CHECK(o["b"].text == "x");
+    REQUIRE(strata::json::parseObject("{\"a\":1,\"a\":2}", o, &error));
+    CHECK(o.size() == 1);
+    CHECK(o["a"].number == 2.0);
+}
+
+TEST(json_line_a_failed_parse_leaves_the_object_empty) {
+    strata::json::Object o;
+    REQUIRE(strata::json::parseObject("{\"a\":1}", o, nullptr));
+    REQUIRE(o.size() == 1);
+    // Fails after "a" was already stored; the caller never sees half an object.
+    CHECK(!strata::json::parseObject("{\"a\":1,\"b\":x}", o, nullptr));
+    CHECK(o.empty());
+}
+
+TEST(json_line_writer_nulls_non_finite_numbers_and_escapes_control_characters) {
+    CHECK(strata::json::Writer().str() == "{}");
+    const std::string nonFinite = strata::json::Writer()
+                                      .field("nan", std::nan(""))
+                                      .field("inf", std::numeric_limits<double>::infinity())
+                                      .str();
+    CHECK(nonFinite == "{\"nan\":null,\"inf\":null}");
+    const std::string missing = strata::json::Writer().field("p", static_cast<const char*>(nullptr)).str();
+    CHECK(missing == "{\"p\":\"\"}");
+    const std::string integers =
+        strata::json::Writer().field("i", -3).field("big", 9007199254740993LL).field("f", false).str();
+    CHECK(integers == "{\"i\":-3,\"big\":9007199254740993,\"f\":false}");
+    const std::string control = strata::json::quote(std::string("\x01\b"));
+    CHECK(control == "\"\\u0001\\u0008\"");
+    // %.17g keeps every double exact through a write and a parse.
+    strata::json::Object back;
+    REQUIRE(strata::json::parseObject(strata::json::Writer().field("x", 0.1).str(), back, nullptr));
+    CHECK(back["x"].number == 0.1);
 }
 
 TEST(event_type_names_round_trip) {
