@@ -209,21 +209,18 @@
   `::error::` for every budgeted size (1000 and 10000 agents) that has no
   result. New Python tests (`tests/python/test_save_bench_gate.py`) check
   that an empty or partial results file fails. No library change.
-
 - Docs: two comments in `strata.h` are corrected (#84). The ABI 1.7
   textures paragraph said texel alpha is ignored because meshes are opaque;
   since ABI 1.11 a `STRATA_MESH_TRANSLUCENT` mesh's alpha is `mesh.color[3]`
   times the texel's alpha, as the translucent flag's own comment says.
   `STRATA_MESH_COLORS_RGBA` said a 1.7 to 1.12 library rejects it; 1.13 and
   1.14 libraries do too, so the range reads 1.7 to 1.14. No code change.
-
 - Python binding: `Engine.add_mesh` raises `ValueError` when `normals` has
   fewer than 3 floats a vertex or `uvs` fewer than 2, as it already did for
   `colors`, and `create_texture_rgba8` / `update_texture_rgba8` raise it when
   `rgba` is shorter than `width * height * 4` bytes (#79). The C ABI takes no
   lengths for these, so a short sequence was read past its end in native
   code. Tests in `tests/python/test_argument_checks.py` need no library.
-
 - C# binding: `StrataNative` declares `strata_status_string`,
   `strata_set_log_callback` and `strata_camera_look_at`, which it was
   missing, and `StrataAbi` has `MaxTextures` and `MaxTextureSize` (#83). The
@@ -232,6 +229,36 @@
   the library. A new test checks that every `STRATA_API` function in
   `strata.h` has a matching `DllImport` entry point, so the binding cannot
   fall behind the header again.
+- Save module: loading past a damaged `HEAD` no longer costs the older saves
+  (#85). The next save hard-linked the damaged `HEAD` over the valid
+  `HEAD.prev`, and its history held only the loaded save, so prune deleted
+  every older intact save; a migration after a fallback pruned the original
+  save it had just promised to keep. `HEAD.prev` is now replaced only when
+  the current `HEAD` parses, and after a fallback the slot's history lists
+  every save whose bytes still match the hash in its name, loaded save
+  first, so the next save prunes by the usual `keep` limit instead. A
+  migration keeps the original save in the history right after the migrated
+  one. No ABI change; saves written before are read as they were.
+- USD module: a variant selection cleared since the baseline is saved (#86).
+  `writeDelta` skipped empty selections, and `SetVariantSelection(set, "")`
+  erases the opinion rather than authoring one, so the baseline's selection
+  came back on load. A cleared selection is now written as an explicit empty
+  selection (`BlockVariantSelection`), which blocks the weaker layers.
+  Unchanged selections still write nothing, so existing save bytes do not
+  change.
+- Save module: a never-saved slot whose `HEAD` is damaged loads its base
+  (#87). It failed with `no save in slot`, although the base was intact. Now
+  the newest base whose bytes match the hash in its name loads as a
+  never-saved slot, with `usedFallback` and a warning; the next save rewrites
+  `HEAD`. A missing `HEAD` behaves as before, a damaged base is still
+  refused, and the `no save in slot` error now lists why each file was
+  rejected.
+- USD module: `hydrate` no longer sizes an allocation from the grid header
+  alone (#88). It allocated the whole grid before reading any chunk, so a
+  header claiming a huge grid over few chunks could throw `bad_alloc`, which
+  the never-saved load path did not catch. Every chunk is now counted, found
+  and size-checked before the grid is allocated, and that path catches
+  exceptions as the save candidates' path does.
 
 ## 0.7.0
 

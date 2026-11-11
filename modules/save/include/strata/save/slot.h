@@ -22,9 +22,9 @@
 //  - Integrity failures fall back to the previous saves (newest first) and say
 //    so. Policy refusals (another game, a newer format or schema, a different mod
 //    list) never fall back, because an older save would silently lose progress.
-//  - A damaged HEAD is never kept as HEAD.prev. After a fallback, the next
-//    HEAD's history lists every intact save in the slot (loaded save first), so
-//    pruning never deletes a save the fallback could still reach.
+//  - A damaged HEAD is never kept as HEAD.prev. After a fallback, the slot's
+//    history lists every intact save in it (loaded save first), so the next
+//    save prunes by the usual `keep` limit instead of deleting every older save.
 //  - A never-saved slot whose HEAD is damaged loads its newest intact base
 //    (verified by the hash in its name) as a never-saved slot, with
 //    usedFallback and a warning; the next save rewrites HEAD.
