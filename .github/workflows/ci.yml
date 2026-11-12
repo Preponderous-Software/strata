@@ -21,12 +21,17 @@ env:
   SNAPSHOT: 20261001T000000Z
 
 jobs:
+  # Every job has a timeout-minutes of several times its longest normal run,
+  # so a hung step (a stalled package mirror, say) fails the run in minutes
+  # instead of holding it for GitHub's six-hour default.
+  #
   # Release binaries are built on manylinux_2_28 (glibc 2.28, a current GCC
   # toolset), so libstrata.so loads on Ubuntu 20.04 and later. The golden
   # job tests these exact binaries rather than a second build.
   build-linux:
     name: Build (Linux, manylinux_2_28)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     container: quay.io/pypa/manylinux_2_28_x86_64@sha256:39df0042d5cc900b085aa25a0659368b42a0006c54c474299b785b44c1b4ff82
     steps:
       - uses: actions/checkout@v4
@@ -73,6 +78,7 @@ jobs:
     name: Golden images (llvmpipe) and C# harness
     needs: build-linux
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     container: ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
     env:
       LIBGL_ALWAYS_SOFTWARE: "1"
@@ -151,6 +157,7 @@ jobs:
   sanitize:
     name: Sanitizers (ASan + UBSan, headless)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     container: ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
     env:
       LIBGL_ALWAYS_SOFTWARE: "1"
@@ -186,6 +193,7 @@ jobs:
   build-web:
     name: Build (Emscripten, WebGL 2) and browser goldens
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     env:
       EMSDK_VERSION: "6.0.11"
       PLAYWRIGHT_VERSION: "1.61.1"
@@ -291,6 +299,7 @@ jobs:
   build-windows:
     name: Build (Windows, MSVC)
     runs-on: windows-2022
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Configure
@@ -329,6 +338,7 @@ jobs:
     name: Package release assets
     needs: [build-linux, build-web, build-windows]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       # Only for tools/known_releases.py and the binding's KNOWN_RELEASES.
       - uses: actions/checkout@v4
@@ -419,6 +429,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [build-linux, golden-linux, sanitize, build-web, build-windows, package]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
