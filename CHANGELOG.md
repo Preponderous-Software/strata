@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Value noise and fractal Brownian motion in `modules/sim`
+  (`strata/sim/noise.hpp`). `valueNoise(x, y, seed)` is smoothstep-blended
+  lattice value noise from an integer hash; `fbm(x, y, FbmParams)` sums
+  `octaves` layers (each with its own seed and lattice offset) with `gain`
+  and `lacunarity`, normalised to [-1, 1]. No global state; the same seed
+  gives the same values on every compiler. Games built on Strata that drew
+  terrain or patches from one or two octaves got smooth, round edges: the
+  header carries a table, measured on this implementation with the new
+  `strata-sim-fbm-dimension` tool, of the box-counting dimension of a level
+  set's edge (about 1.0 for 1-4 octaves; 1.01 to 1.31 for gain 0.5 to 0.75
+  at 9 octaves; natural coastlines are about 1.1-1.3). Unit tests pin the
+  values for fixed seeds and check that more gain gives a rougher edge. C++
+  only: no ABI change, and no golden changes.
+
 - Wide lines (ABI 1.13, #46). `strata_submit_lines` draws `GL_LINES`, which
   are one pixel wide, and WebGL 2 draws no wider, so at DPR 2 or 3 a road,
   river or route nearly vanished. `strata_submit_wide_lines(engine,

@@ -1,11 +1,12 @@
 # Strata simulation module: deterministic CPU-side building blocks for grid
 # simulations -- a seeded RNG, an entity-component registry with a fixed
 # iteration order, 2D scalar fields with diffusion and decay, a fixed-timestep
-# accumulator, a state fingerprint and field colormaps. No GL, no
+# accumulator, a state fingerprint, field colormaps and seeded value noise
+# with fractal Brownian motion. No GL, no
 # dependencies; C++ only (it is not part of the C ABI). Built when
 # STRATA_WITH_SIM is ON (the default).
 
-add_library(strata_sim STATIC src/field.cpp)
+add_library(strata_sim STATIC src/field.cpp src/noise.cpp)
 target_include_directories(strata_sim PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
@@ -25,11 +26,20 @@ if(STRATA_BUILD_TESTS)
     add_executable(strata-sim-tests
         ${PROJECT_SOURCE_DIR}/tests/unit/main.cpp
         tests/test_sim.cpp)
-    target_include_directories(strata-sim-tests PRIVATE ${PROJECT_SOURCE_DIR}/tests/unit)
+    target_include_directories(strata-sim-tests PRIVATE ${PROJECT_SOURCE_DIR}/tests/unit ${CMAKE_CURRENT_SOURCE_DIR}/tools)
     target_link_libraries(strata-sim-tests PRIVATE strata_sim)
     if(NOT MSVC)
         target_compile_options(strata-sim-tests PRIVATE -ffp-contract=off)
     endif()
     strata_set_warnings(strata-sim-tests)
     add_test(NAME strata-sim-tests COMMAND strata-sim-tests)
+
+    # Prints the measured gain -> fractal dimension table in noise.hpp (not
+    # run by ctest: the full table takes about a minute).
+    add_executable(strata-sim-fbm-dimension tools/fbm_dimension.cpp)
+    target_link_libraries(strata-sim-fbm-dimension PRIVATE strata_sim)
+    if(NOT MSVC)
+        target_compile_options(strata-sim-fbm-dimension PRIVATE -ffp-contract=off)
+    endif()
+    strata_set_warnings(strata-sim-fbm-dimension)
 endif()

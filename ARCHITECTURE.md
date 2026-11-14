@@ -29,7 +29,7 @@ is built now. Where the RFC plans more, that is called out as **later**.
 | `tools/` | `strata-golden`, `strata-imgcmp`, the scene-file parser | no |
 | `bindings/` | `csharp/Strata.Interop` (P/Invoke) and `python/strata` (ctypes): declarations of the C ABI, each checked against the library's layout tables | no |
 | `web/kit/` | The shell around a scene embedded in a web page: a header-only C++ host, page and loading scripts, a build script and smoke tests (see [docs/WEB.md](docs/WEB.md#the-web-kit)). It draws through the C ABI | context creation only |
-| `modules/sim/` | Deterministic simulation building blocks: seeded RNG, entity-component registry, 2D fields with diffusion, fixed-step clock, state hash, colormaps. C++ only (`strata::sim`), not in the C ABI | no |
+| `modules/sim/` | Deterministic simulation building blocks: seeded RNG, entity-component registry, 2D fields with diffusion, fixed-step clock, state hash, colormaps, value noise and fbm. C++ only (`strata::sim`), not in the C ABI | no |
 
 `render/` never calls GL directly. Everything goes through `GpuDevice`, which
 is how the GLES 3.0 backend (WebGL 2 in a browser) draws the same passes as the
