@@ -157,7 +157,9 @@ jobs:
   sanitize:
     name: Sanitizers (ASan + UBSan, headless)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Same snapshot mirror as the golden job, so the same headroom: on
+    # main run 43660773967 its install step alone took 23 minutes.
+    timeout-minutes: 45
     container: ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
     env:
       LIBGL_ALWAYS_SOFTWARE: "1"
