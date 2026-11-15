@@ -7,9 +7,11 @@
 #include "strata/sim/field.hpp"
 #include "strata/sim/fixed_step.hpp"
 #include "strata/sim/hash.hpp"
+#include "strata/sim/noise.hpp"
 #include "strata/sim/registry.hpp"
 #include "strata/sim/rng.hpp"
 #include "test.hpp"
+#include "fbm_dimension.hpp"
 
 using namespace strata::sim;
 
@@ -357,4 +359,75 @@ TEST(sim_colormap_endpoints_and_layout) {
     CHECK(rgb[0] == 0.5f && rgb[1] == 0.25f);
     CHECK(rgb[15] == 1.0f);  // cell (2, 1) is the sixth triple
     CHECK(rgb[3] == 0.0f);
+}
+
+// ---------------------------------------------------------------- noise
+
+TEST(sim_noise_values_are_pinned) {
+    // Recorded when the noise was added. A change here changes every
+    // terrain generated from a seed; it must be deliberate.
+    CHECK(latticeHash(0, 0, 0u) == 0x944fb554u);
+    CHECK(latticeHash(-5, 7, 42u) == 0x5818a332u);
+    FbmParams p;
+    p.seed = 1234u;
+    p.octaves = 6;
+    p.gain = 0.6f;
+    const float xs[4] = {0.0f, 0.37f, -12.5f, 100.25f};
+    const float noise[4] = {0.688756227f, 0.254520804f, -0.0458951704f, 0.0907022059f};
+    const float frac[4] = {-0.169958144f, -0.153145447f, -0.296367735f, -0.0396123827f};
+    for (int i = 0; i < 4; ++i) {
+        CHECK(valueNoise(xs[i], xs[i] * 0.5f + 0.3f, 99u) == noise[i]);
+        CHECK(fbm(xs[i], 1.75f - xs[i], p) == frac[i]);
+    }
+}
+
+TEST(sim_noise_is_bounded_continuous_and_seeded) {
+    FbmParams p;
+    p.octaves = 9;
+    p.gain = 0.7f;
+    Rng rng(5u);
+    int differ = 0;
+    for (int i = 0; i < 20000; ++i) {
+        const float x = rng.uniform(-1000.0f, 1000.0f);
+        const float y = rng.uniform(-1000.0f, 1000.0f);
+        const float v = valueNoise(x, y, 3u);
+        CHECK(v >= -1.0f && v <= 1.0f);
+        const float f = fbm(x, y, p);
+        CHECK(f >= -1.0f && f <= 1.0f);
+        // Smoothstep blending is continuous: a tiny step moves the value a
+        // little (the slope is at most 3 per lattice unit).
+        CHECK(std::fabs(valueNoise(x + 1.0e-3f, y, 3u) - v) < 0.01f);
+        if (valueNoise(x, y, 4u) != v) ++differ;
+    }
+    CHECK(differ > 19900);  // another seed is another field
+    // Lattice points take their hashed value exactly.
+    CHECK(valueNoise(3.0f, -2.0f, 8u) ==
+          static_cast<float>(static_cast<double>(latticeHash(3, -2, 8u) >> 8u) * (2.0 / 16777216.0) - 1.0));
+    // Out-of-range octave counts are clamped, not undefined.
+    FbmParams one = p;
+    one.octaves = 1;
+    FbmParams zero = p;
+    zero.octaves = 0;
+    CHECK(fbm(0.3f, 0.6f, zero) == fbm(0.3f, 0.6f, one));
+    // Extreme and non-finite inputs stay defined and bounded.
+    const float odd[5] = {2147483647.0f, -2147483648.0f, 1.0e30f, -INFINITY, NAN};
+    for (float x : odd) {
+        const float v = valueNoise(x, 0.5f, 1u);
+        CHECK(v >= -1.0f && v <= 1.0f);
+    }
+}
+
+TEST(sim_fbm_gain_raises_edge_dimension) {
+    // With eight octaves, gain sets how rough a level set's edge is (see the
+    // measured table in noise.hpp); with two it stays a smooth curve.
+    double low = 0, high = 0, few = 0;
+    for (uint32_t seed = 1u; seed <= 2u; ++seed) {
+        low += fbmdim::edgeDimension(512, 8, 0.45f, seed, 0.6f, 2, 32) / 2.0;
+        high += fbmdim::edgeDimension(512, 8, 0.75f, seed, 0.6f, 2, 32) / 2.0;
+        few += fbmdim::edgeDimension(512, 2, 0.75f, seed, 0.6f, 2, 32) / 2.0;
+    }
+    CHECK(high > low + 0.15);
+    CHECK(high > 1.15);
+    CHECK(low < 1.08);
+    CHECK(few < 1.08);
 }

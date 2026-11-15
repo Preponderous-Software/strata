@@ -151,7 +151,8 @@ built only with `-DSTRATA_WITH_USD=ON`, which is off by default. See
 Alongside the renderer, `modules/sim` (`strata::sim`, C++ only, built by
 default) holds deterministic simulation building blocks: a seeded RNG, an
 entity-component registry with a fixed iteration order, 2D fields with
-diffusion and decay, a fixed-step clock and a state fingerprint. See
+diffusion and decay, a fixed-step clock, a state fingerprint and seeded
+value noise with fbm. See
 [modules/sim/README.md](modules/sim/README.md).
 
 ## Building
