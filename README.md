@@ -307,6 +307,9 @@ archive for C and C++ hosts.
   linking `libstrata.a`, and what differs from the desktop.
 - [docs/DRIVE.md](docs/DRIVE.md): injected input, the frame clock and the
   drive channel (ABI 1.12), for tests, replays and playtesting harnesses.
+- [docs/LARGE_SCENES.md](docs/LARGE_SCENES.md): near and far planes, camera
+  height, height exaggeration, `shadow_distance` and marker size for
+  map-sized worlds.
 - [docs/SHOWCASE.md](docs/SHOWCASE.md): the public projects made with Strata.
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): dependency licences.
 

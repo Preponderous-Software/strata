@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `docs/LARGE_SCENES.md` (#102): a guide to map-sized scenes. It covers
+  choosing the near and far planes (depth precision, and fog, which runs from
+  0.35 × the far plane to the far plane), camera height compared with terrain
+  relief, exaggerating heights in the terrain tile rather than the camera,
+  `shadow_distance` and marker size. Docs only: no ABI change, and no golden
+  changes.
+
 - Value noise and fractal Brownian motion in `modules/sim`
   (`strata/sim/noise.hpp`). `valueNoise(x, y, seed)` is smoothstep-blended
   lattice value noise from an integer hash; `fbm(x, y, FbmParams)` sums
