@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- ARCHITECTURE.md, `STRATA_LIGHTING_SUN` (#99): why a sun a few degrees above
+  the horizon draws a dark frame with the default levels. A table gives the
+  key light, `n·l`, ambient and the fraction of a flat surface's colour
+  received at 2°, 5° and 30°, evaluated from `src/render/sun.cpp` and the sun
+  shader. The section also covers how to raise and then reset the ABI 1.16
+  light levels for low-sun stills. Docs only: no ABI change, and no golden
+  changes.
+
 - `docs/LARGE_SCENES.md` (#102): a guide to map-sized scenes. It covers
   choosing the near and far planes (depth precision, and fog, which runs from
   0.35 × the far plane to the far plane), camera height compared with terrain
