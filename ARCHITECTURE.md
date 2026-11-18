@@ -227,6 +227,32 @@ renderer. The C# harness reproduces the C++ golden with zero differing pixels.
   point lights stay as they were. Both settings stay across
   `strata_set_lighting`, and the defaults draw exactly what they drew without
   them. `STRATA_LIGHTING_LEGACY` ignores both.
+- **Low sun (golden hour).** With the default levels, a sun a few degrees
+  above the horizon draws a dark frame. The curve in `evaluateSkyForSun` and
+  the sun fragment shader (`colour · (ambient + light · n·l · shadow)`) give
+  these values for flat, unshadowed, upward-facing ground, before fog:
+
+  | Sun elevation | Key light (RGB) | n·l | Sky ambient (RGB) | Ground receives |
+  |---|---|---|---|---|
+  | 2° | 0.48, 0.24, 0.13 | 0.03 | 0.22, 0.21, 0.26 | about 0.23 × its colour |
+  | 5° | 1.06, 0.58, 0.33 | 0.09 | 0.25, 0.27, 0.33 | about 0.35 × its colour |
+  | 30° | 1.10, 1.06, 0.99 | 0.50 | 0.34, 0.40, 0.50 | about 0.9 × its colour |
+
+  The key light is near full strength by 5°, but it reaches flat ground at a
+  grazing angle, so `n·l` is only the sine of the elevation. The ambient is
+  still in its twilight blend. A camera looking toward the sun mostly sees
+  slopes that face away from it, which get the ambient alone. No pass encodes
+  its output (see Colour space; issue #48), so these low values are written
+  as they are and look darker still. To brighten low-sun stills, raise the
+  levels while the sun is low. Then put them back as it climbs
+  (`strata_set_sun_intensity(engine, 1, NULL)`,
+  `strata_set_ambient(engine, NULL, NULL)`), because both settings stay
+  across `strata_set_lighting`. Issue #99 reports these values, found by
+  trial in a map viewer for dawn and dusk: sun intensity 2.3 with tint
+  (1.0, 0.8, 0.6), and ambient tint (1.5, 1.3, 1.3) with lift
+  (0.035, 0.03, 0.045). They are a starting point, not values Strata has
+  tuned or tested. Issue #99 also tracks whether to change the defaults near
+  the horizon or add a helper that picks levels from the elevation.
 - **L1** is the same path with `cascade_count = 1`.
 
 ### `STRATA_LIGHTING_SPACE` (ABI 1.5)

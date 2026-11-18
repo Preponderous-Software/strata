@@ -103,6 +103,9 @@ next to 3-unit hills dominates the frame.
 
 - Fitting `shadow_distance` to the view automatically (issue #100).
 - Water planes and the horizon colour at grazing angles (issue #98).
-- Low-sun lighting, which is the same at every scale (issue #99).
+- Low-sun lighting, which is the same at every scale. Why a sun near the
+  horizon draws a dark frame, and the light levels that brighten it, are
+  under `STRATA_LIGHTING_SUN` in [ARCHITECTURE.md](../ARCHITECTURE.md)
+  (issue #99).
 - A map-scale example under `examples/`. Only `examples/village-day` exists so
   far.
