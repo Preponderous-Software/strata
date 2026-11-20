@@ -8,7 +8,9 @@ The grid relay: a ready-made web-kit scene (`web/kit/grid-relay`) that draws
 a grid scene described by page messages in a versioned binary wire format,
 so Python games running under pygbag can show the same 3D grid view they
 draw on the desktop. It ships in the release's `wasm32-emscripten` tarball
-under `kit/grid-relay`. The web kit moves to 1.3 (screen panels and text, a
+under `kit/grid-relay`, both as sources and prebuilt (`kit/grid-relay/dist/`:
+the scene's `.js` and `.wasm`, the kit scripts and the page), so a host needs
+no Emscripten of its own to serve it. The web kit moves to 1.3 (screen panels and text, a
 flat clear colour). The engine and its C ABI are unchanged from 0.8.0 (ABI
 1.17).
 
