@@ -201,6 +201,9 @@ void Engine::setRelativeMouseMode(bool enabled) {
     impl_->drive.setRelativeMouse(enabled);
 }
 
+void Engine::setFullscreen(bool enabled) { impl_->surface->setFullscreen(enabled); }
+bool Engine::isFullscreen() const { return impl_->surface->isFullscreen(); }
+
 void Engine::setPointLights(const StrataPointLight* lights, size_t count) {
     if (count > 0 && lights == nullptr) fail(STRATA_ERROR_INVALID_ARGUMENT, "lights is NULL with a non-zero count");
     impl_->renderer->setPointLights(lights, count);

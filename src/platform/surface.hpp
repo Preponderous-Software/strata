@@ -52,6 +52,12 @@ public:
     // STRATA_ERROR_UNSUPPORTED.
     virtual void setRelativeMouseMode(bool enabled);
 
+    // ABI 1.17. Borderless desktop fullscreen, or back to a window. Only a
+    // window surface can; the default throws STRATA_ERROR_UNSUPPORTED and
+    // reports false.
+    virtual void setFullscreen(bool enabled);
+    virtual bool isFullscreen() const { return false; }
+
     virtual void drawableSize(int& width, int& height) const = 0;
     virtual void resize(int width, int height) = 0;
     virtual void present() {}

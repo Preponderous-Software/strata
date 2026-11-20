@@ -114,6 +114,27 @@ public:
         relativeMouse_ = enabled;
     }
 
+    void setFullscreen(bool enabled) override {
+        if (!windowSurface_) {
+            fail(STRATA_ERROR_UNSUPPORTED, "fullscreen needs a window surface; this is a headless one (a hidden window)");
+        }
+        if (enabled == isFullscreen()) return;
+        // No mode is set first (SDL_SetWindowFullscreenMode), so SDL uses
+        // borderless fullscreen at the desktop's resolution: no video mode
+        // change, and the window comes back at its old size afterwards.
+        if (!SDL_SetWindowFullscreen(window_, enabled)) {
+            fail(STRATA_ERROR_PLATFORM, "SDL_SetWindowFullscreen failed: %s", SDL_GetError());
+        }
+        // SDL may apply the change asynchronously (X11, Wayland, browsers);
+        // wait for it so strata_drawable_size is right when this returns.
+        // The resize still reaches the host as STRATA_EVENT_RESIZED.
+        SDL_SyncWindow(window_);
+    }
+
+    bool isFullscreen() const override {
+        return windowSurface_ && (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0;
+    }
+
     void resize(int width, int height) override { SDL_SetWindowSize(window_, width, height); }
     void present() override { SDL_GL_SwapWindow(window_); }
     const char* kind() const override { return "window"; }

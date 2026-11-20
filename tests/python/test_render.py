@@ -285,6 +285,12 @@ class Render(unittest.TestCase):
             with self.assertRaises(strata.StrataError) as caught:
                 engine.set_relative_mouse_mode(True)  # headless: a window-only call
             self.assertEqual(caught.exception.status, strata.ERROR_UNSUPPORTED)
+            if self.lib.has("strata_set_fullscreen"):  # ABI 1.17
+                with self.assertRaises(strata.StrataError) as caught:
+                    engine.set_fullscreen(True)  # headless: a window-only call
+                self.assertEqual(caught.exception.status, strata.ERROR_UNSUPPORTED)
+                self.assertFalse(engine.fullscreen())
+                self.assertEqual(engine.drawable_size(), (32, 32))  # nothing changed
         with self.assertRaises(strata.StrataError):
             engine.end_frame()  # closed
 

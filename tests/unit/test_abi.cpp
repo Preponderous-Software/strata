@@ -110,7 +110,13 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 16u);
+    CHECK(strata_abi_minor() >= 17u);
+}
+
+TEST(abi_1_17_fullscreen_rejects_a_null_engine) {
+    CHECK(strata_set_fullscreen(nullptr, 1) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_set_fullscreen(nullptr, 0) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_is_fullscreen(nullptr) == 0);
 }
 
 TEST(light_levels_reject_a_null_engine) {

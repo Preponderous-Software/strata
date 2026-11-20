@@ -30,7 +30,7 @@ from ctypes import (
 #: The major version this binding was written against (STRATA_ABI_VERSION).
 ABI_VERSION = 1
 #: The newest minor whose additions this binding declares (STRATA_ABI_MINOR).
-ABI_MINOR = 16
+ABI_MINOR = 17
 
 # ---------------------------------------------------------------- status
 
@@ -441,6 +441,8 @@ FUNCTIONS = {
     "strata_set_mesh_transform": (7, _status, [_engine, c_uint32, _p(c_float)]),
     "strata_raycast_meshes": (8, _status, [_engine, _p(c_float), _p(c_float), c_float, _p(RayHit)]),
     "strata_set_relative_mouse_mode": (8, _status, [_engine, c_int32]),
+    "strata_set_fullscreen": (17, _status, [_engine, c_int32]),
+    "strata_is_fullscreen": (17, c_int32, [_engine]),
     "strata_begin_frame": (0, _status, [_engine, _p(FrameDesc)]),
     "strata_submit_primitives": (0, _status, [_engine, _p(RenderItem), c_int32]),
     "strata_submit_lines": (5, _status, [_engine, _p(LineVertex), c_int32]),

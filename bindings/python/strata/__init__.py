@@ -460,6 +460,15 @@ class Engine:
         """ABI 1.8. Window surface only."""
         self._call("strata_set_relative_mouse_mode", 1 if enabled else 0)
 
+    def set_fullscreen(self, enabled: bool) -> None:
+        """ABI 1.17. Borderless desktop fullscreen, or back to a window. Window
+        surface only; a STRATA_EVENT_RESIZED follows the switch."""
+        self._call("strata_set_fullscreen", 1 if enabled else 0)
+
+    def fullscreen(self) -> bool:
+        """ABI 1.17. True while the window is fullscreen."""
+        return bool(self.lib.require("strata_is_fullscreen")(self.handle))
+
     # -- frames
 
     def begin_frame(

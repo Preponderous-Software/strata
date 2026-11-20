@@ -129,6 +129,8 @@ namespace Strata.Interop.Tests {
             byte* texel = stackalloc byte[4];
             Assert.Equal(1, StrataNative.strata_update_texture_rgba8(IntPtr.Zero, 1, 0, 0, 1, 1, texel));
             Assert.Equal(1, StrataNative.strata_set_relative_mouse_mode(IntPtr.Zero, 1));
+            Assert.Equal(1, StrataNative.strata_set_fullscreen(IntPtr.Zero, 1));
+            Assert.Equal(0, StrataNative.strata_is_fullscreen(IntPtr.Zero));
         }
 
         [Fact]

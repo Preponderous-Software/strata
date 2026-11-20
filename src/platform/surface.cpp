@@ -33,6 +33,11 @@ void Surface::setRelativeMouseMode(bool enabled) {
     fail(STRATA_ERROR_UNSUPPORTED, "relative mouse mode needs a window surface; this one is %s", kind());
 }
 
+void Surface::setFullscreen(bool enabled) {
+    (void)enabled;
+    fail(STRATA_ERROR_UNSUPPORTED, "fullscreen needs a window surface; this one is %s", kind());
+}
+
 std::unique_ptr<Surface> createSurface(const StrataEngineDesc& desc, GlApi api) {
     (void)api;  // unused when the build has neither SDL3 nor EGL
     switch (desc.surface) {

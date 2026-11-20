@@ -113,6 +113,10 @@ public:
     // headless and host-context surfaces, unless the engine is driven
     // (ABI 1.12), when injected motion becomes relative instead.
     void setRelativeMouseMode(bool enabled);
+    // ABI 1.17. Borderless desktop fullscreen, or back to a window. Window
+    // surface only: throws UNSUPPORTED on headless and host-context surfaces.
+    void setFullscreen(bool enabled);
+    bool isFullscreen() const;
 
     void beginFrame(const StrataFrameDesc& desc);
     void submitPrimitives(const StrataRenderItem* items, size_t count);
