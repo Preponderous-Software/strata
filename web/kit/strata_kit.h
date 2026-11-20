@@ -3,8 +3,8 @@
 // Part of the Strata web kit (docs/WEB.md, "The web kit"). It covers the shell
 // around a scene and leaves the scene alone: the WebGL 2 context, the engine
 // in it, resizing, three quality tiers, an orbit camera, the sun, the per-frame
-// batching of primitives, points, lines, point lights and (kit 1.2) labels,
-// and a stats export.
+// batching of primitives, points, lines, point lights, (kit 1.2) labels and
+// (kit 1.3) screen panels and text, and a stats export.
 // The scene is the host's: it fills the batches in a hook, from whatever data
 // its own exported setters were handed.
 //
@@ -54,8 +54,8 @@
 // The kit's own version, separate from the engine's: a page and its wasm are
 // built from one kit, and strata-kit.js checks they agree (sk_kit_version).
 #define STRATA_KIT_VERSION_MAJOR 1
-#define STRATA_KIT_VERSION_MINOR 2
-#define STRATA_KIT_VERSION_STRING "1.2"
+#define STRATA_KIT_VERSION_MINOR 3
+#define STRATA_KIT_VERSION_STRING "1.3"
 
 namespace strata_kit {
 
@@ -118,6 +118,12 @@ struct Host {
     float sunIntensity = 1.0f;
     Rgb sunTint{1.0f, 1.0f, 1.0f};
 #endif
+    // Kit 1.3: how a frame is cleared (StrataFrameDesc). The defaults draw the
+    // sun's sky behind the scene, as kit 1.2 did; a host that matches a
+    // desktop view which clears to a flat colour sets clearFlags to
+    // STRATA_CLEAR_COLOR | STRATA_CLEAR_DEPTH and clearColor to that colour.
+    uint32_t clearFlags = STRATA_CLEAR_COLOR | STRATA_CLEAR_DEPTH | STRATA_CLEAR_SKY;
+    float clearColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
     // This frame's batches. The kit clears them before strata_kit_build.
     std::vector<StrataRenderItem> items;
     std::vector<StrataPoint> points;
@@ -131,6 +137,12 @@ struct Host {
     std::vector<StrataText> labels;
     std::vector<float> labelAnchors;
     std::vector<std::string> labelStrings;
+    // Kit 1.3: screen panels and screen text (see rect() and text()), in
+    // drawing-buffer pixels from the top-left, drawn over the scene: panels
+    // first, then text, as strata_submit_rects and strata_submit_text do.
+    std::vector<StrataRect> rects;
+    std::vector<StrataText> texts;
+    std::vector<std::string> textStrings;
     // Stats of the last frame (sk_stats).
     uint32_t pointSeq = 0;
     int32_t lightsDrawn = 0;
@@ -138,7 +150,7 @@ struct Host {
     int32_t meshes = 0;          // the host sets this when it adds or removes meshes
     int32_t frames = 0;
     int32_t pointsRejected = 0;
-    int32_t labelsRejected = 0;  // kit 1.2: calls to strata_submit_world_text that failed
+    int32_t labelsRejected = 0;  // kit 1.2: calls to strata_submit_world_text (1.3: and rects, text) that failed
     int32_t levelsRejected = 0;  // kit 1.2: bad ambient or sun levels, reported once
 #ifdef __EMSCRIPTEN__
     EMSCRIPTEN_WEBGL_CONTEXT_HANDLE context = 0;
@@ -239,6 +251,40 @@ struct Host {
         labelStrings.emplace_back(utf8);
     }
 #endif
+
+    // Kit 1.3. A filled rectangle on screen (a HUD panel), in drawing-buffer
+    // pixels from the top-left, alpha blended, under every text().
+    void rect(float x, float y, float w, float hgt, Rgb c, float a = 1.0f) {
+        StrataRect r{};
+        r.x = x;
+        r.y = y;
+        r.width = std::max(w, 0.0f);
+        r.height = std::max(hgt, 0.0f);
+        r.color[0] = c.r;
+        r.color[1] = c.g;
+        r.color[2] = c.b;
+        r.color[3] = std::clamp(a, 0.0f, 1.0f);
+        rects.push_back(r);
+    }
+
+    // Kit 1.3. Text on screen in Strata's 8 x 8 font, its first glyph's
+    // top-left at (x, y) in drawing-buffer pixels (strata_submit_text). The
+    // string is copied, so the host's can go away as soon as text() returns.
+    void text(float x, float y, const char* utf8, float pixelSize = 16.0f, Rgb c = {1.0f, 1.0f, 1.0f},
+              float a = 1.0f, uint32_t flags = STRATA_TEXT_SHADOW) {
+        if (!utf8) return;
+        StrataText t{};
+        t.x = x;
+        t.y = y;
+        t.pixel_size = std::clamp(pixelSize, 1.0f, 512.0f);
+        t.flags = flags & STRATA_TEXT_SHADOW;
+        t.color[0] = c.r;
+        t.color[1] = c.g;
+        t.color[2] = c.b;
+        t.color[3] = std::clamp(a, 0.0f, 1.0f);
+        texts.push_back(t);
+        textStrings.emplace_back(utf8);
+    }
 
     // A point light. All of a frame's lights are sorted by priority (stably,
     // so equal priorities keep their order) and cut to the tier's budget.
@@ -547,6 +593,9 @@ STRATA_KIT_EXPORT int sk_frame(double seconds) {
     h.labels.clear();
     h.labelAnchors.clear();
     h.labelStrings.clear();
+    h.rects.clear();
+    h.texts.clear();
+    h.textStrings.clear();
     h.pointSeq = 0;
     strata_kit_build(h, seconds);
 
@@ -572,8 +621,8 @@ STRATA_KIT_EXPORT int sk_frame(double seconds) {
 #endif
 
     StrataFrameDesc desc{};
-    desc.clear_flags = STRATA_CLEAR_COLOR | STRATA_CLEAR_DEPTH | STRATA_CLEAR_SKY;
-    desc.clear_color[3] = 1.0f;
+    desc.clear_flags = h.clearFlags;
+    std::copy(h.clearColor, h.clearColor + 4, desc.clear_color);
     if (strata_begin_frame(h.engine, &desc) != STRATA_OK) {
         std::fprintf(stderr, "%s: strata_begin_frame: %s\n", o.name, strata_last_error());
         return 0;
@@ -601,6 +650,18 @@ STRATA_KIT_EXPORT int sk_frame(double seconds) {
         }
     }
 #endif
+    if (!h.rects.empty() &&
+        strata_submit_rects(h.engine, h.rects.data(), static_cast<int32_t>(h.rects.size())) != STRATA_OK &&
+        h.labelsRejected++ == 0) {
+        std::fprintf(stderr, "%s: strata_submit_rects: %s\n", o.name, strata_last_error());
+    }
+    if (!h.texts.empty()) {
+        for (size_t i = 0; i < h.texts.size(); ++i) h.texts[i].utf8 = h.textStrings[i].c_str();
+        if (strata_submit_text(h.engine, h.texts.data(), static_cast<int32_t>(h.texts.size())) != STRATA_OK &&
+            h.labelsRejected++ == 0) {
+            std::fprintf(stderr, "%s: strata_submit_text: %s\n", o.name, strata_last_error());
+        }
+    }
     if (strata_end_frame(h.engine) != STRATA_OK) {
         std::fprintf(stderr, "%s: strata_end_frame: %s\n", o.name, strata_last_error());
         return 0;

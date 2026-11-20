@@ -19,14 +19,17 @@ add_executable(strata-unit-tests
     test_glsl_es.cpp
     test_headless_driver.cpp
     test_kit_lights.cpp
+    test_grid_relay.cpp
     test_scene_file.cpp
     # Compiled in rather than linked: the strata_scene library exists only with
     # STRATA_BUILD_TOOLS, and it links the shared strata, not strata_static.
     ${PROJECT_SOURCE_DIR}/tools/common/scene_file.cpp)
 target_link_libraries(strata-unit-tests PRIVATE strata_static)
-# test_kit_lights.cpp includes the web kit's header (without STRATA_KIT_MAIN);
-# test_scene_file.cpp includes the scene format's.
+# test_kit_lights.cpp includes the web kit's header (without STRATA_KIT_MAIN),
+# test_grid_relay.cpp the grid relay's; test_scene_file.cpp includes the scene
+# format's.
 target_include_directories(strata-unit-tests PRIVATE ${PROJECT_SOURCE_DIR}/web/kit
+                                                     ${PROJECT_SOURCE_DIR}/web/kit/grid-relay
                                                      ${PROJECT_SOURCE_DIR}/tools/common)
 strata_set_warnings(strata-unit-tests)
 add_test(NAME strata-unit-tests COMMAND strata-unit-tests)
@@ -36,7 +39,8 @@ add_test(NAME strata-unit-tests COMMAND strata-unit-tests)
 # that needs a newer ABI without an STRATA_ABI_MINOR guard fails the build.
 # See kit_abi_floor.h. `#pragma GCC poison` is GCC and Clang only.
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_library(strata-kit-abi-floor OBJECT ${PROJECT_SOURCE_DIR}/web/kit/example/main.cpp)
+    add_library(strata-kit-abi-floor OBJECT ${PROJECT_SOURCE_DIR}/web/kit/example/main.cpp
+                                            ${PROJECT_SOURCE_DIR}/web/kit/grid-relay/main.cpp)
     target_include_directories(strata-kit-abi-floor PRIVATE ${PROJECT_SOURCE_DIR}/include
                                                             ${PROJECT_SOURCE_DIR}/web/kit)
     target_compile_options(strata-kit-abi-floor PRIVATE -include ${CMAKE_CURRENT_SOURCE_DIR}/kit_abi_floor.h)

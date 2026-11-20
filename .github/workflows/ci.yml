@@ -243,6 +243,12 @@ jobs:
           KIT_OUT=build-web/kit-example STRATA_LIB=build-web/libstrata.a STRATA_INCLUDE=include \
             web/kit/build-kit.sh web/kit/example/kit.conf
 
+      - name: Build the web kit's grid relay
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          KIT_OUT=build-web/grid-relay STRATA_LIB=build-web/libstrata.a STRATA_INCLUDE=include \
+            web/kit/build-kit.sh web/kit/grid-relay/kit.conf
+
       - name: Install Playwright and Chromium
         run: |
           npm install --no-save --prefix tests/web "playwright@$PLAYWRIGHT_VERSION"
@@ -269,15 +275,21 @@ jobs:
           # with the loader contained to that section.
           node web/kit/testing/smoke.cjs "http://127.0.0.1:8765/index.html?embed=1" golden-out/kit-smoke-embed --dpr 1,3
 
+      - name: Grid relay against desktop stills, versioning and input
+        run: node tests/web/run_grid_relay.cjs build-web/grid-relay tests/web/grid-relay golden-out/grid-relay
+
       - name: Stage web build
         if: always()
         run: |
-          mkdir -p dist-web/lib dist-web/include/strata dist-web/demo dist-web/kit/testing dist-web/kit/example
+          mkdir -p dist-web/lib dist-web/include/strata dist-web/demo dist-web/kit/testing dist-web/kit/example \
+            dist-web/kit/grid-relay
           # The web kit (docs/WEB.md, "The web kit"): its sources, not a build.
           cp web/kit/strata_kit.h web/kit/strata-kit.js web/kit/strata-loader.js web/kit/build-kit.sh \
             web/kit/ci-snippet.yml dist-web/kit/
           cp web/kit/testing/*.cjs dist-web/kit/testing/
           cp web/kit/example/main.cpp web/kit/example/index.html web/kit/example/kit.conf dist-web/kit/example/
+          cp web/kit/grid-relay/main.cpp web/kit/grid-relay/relay.h web/kit/grid-relay/grid-relay.js \
+            web/kit/grid-relay/index.html web/kit/grid-relay/kit.conf web/kit/grid-relay/WIRE.md dist-web/kit/grid-relay/
           cp build-web/libstrata.a dist-web/lib/ || true
           cp include/strata/strata.h dist-web/include/strata/
           cp build-web/strata-village-day.html build-web/strata-village-day.js build-web/strata-village-day.wasm \

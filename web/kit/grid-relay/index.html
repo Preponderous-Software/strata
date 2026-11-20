@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Strata grid relay</title>
+<style>
+  /* The relay's test page: a recorded game's wire messages (?wire=<url> of a
+     JSON array of base64 messages, as a game's web backend sends them) played
+     into the relay. ?events=1 lists forwarded input; ?drive=1 lets tools draw
+     scene time t with __strataKit.drive(t). */
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1f29; color: #eee;
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #stage { position: fixed; inset: 0; }
+  #relay { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+  #events { position: fixed; right: 8px; bottom: 8px; max-height: 40vh; overflow: auto; margin: 0;
+    font: 11px monospace; background: #000a; padding: 4px 8px; border-radius: 4px; pointer-events: none; }
+</style>
+</head>
+<body>
+<section id="stage"><canvas id="relay" tabindex="0" role="img" aria-label="A grid game's board in 3D"></canvas></section>
+<pre id="events" hidden></pre>
+<script src="strata-loader.js"></script>
+<script src="strata-kit.js"></script>
+<script src="grid-relay.js"></script>
+<script>
+"use strict";
+(async () => {
+  const q = new URLSearchParams(location.search);
+  const relay = window.StrataGridRelay;
+  relay.request(JSON.stringify({canvas: "relay", maxBytes: parseInt(q.get("maxBytes") || "", 10) || undefined}));
+  const wire = q.get("wire");
+  if (wire) {
+    const messages = await (await fetch(wire)).json();
+    for (const m of messages) relay.send(m);
+  }
+  if (q.get("events") === "1") {
+    const pre = document.getElementById("events");
+    pre.hidden = false;
+    const log = [];
+    setInterval(() => {
+      for (const e of JSON.parse(relay.poll())) log.push(JSON.stringify(e));
+      pre.textContent = log.slice(-20).join("\n");
+    }, 100);
+  }
+})();
+</script>
+</body>
+</html>

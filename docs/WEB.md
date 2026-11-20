@@ -153,7 +153,7 @@ from `v0.7.0` on (older tarballs have no `kit/`):
 
 | File | What it is |
 |---|---|
-| `strata_kit.h` | Header-only C++ host shell. Creates the WebGL 2 context (`preserveDrawingBuffer` on, so frames can be read back) and the engine; resizing; three quality tiers (sun cascades, shadow map size, point-light budget, point thinning); an orbit camera and its view-projection matrix; the sun from latitude, longitude and time; per-frame batches of primitives, points (alpha clamped), lines, prioritised point lights and, from kit 1.2, engine-drawn world labels (`Host::label`, Strata ABI 1.14); frame stats (`sk_stats`: primitives, points, lines, lights, terrain samples and, from kit 1.1, the meshes the host counts in `Host::meshes`). Exports `sk_init`, `sk_restore`, `sk_resize`, `sk_set_quality`, `sk_set_camera`, `sk_set_sun`, `sk_view_proj`, `sk_stats`, `sk_frame` and `sk_kit_version`. Natively (no Emscripten) the same file opens a headless engine: `sk_init_headless`, `sk_save_png` and `sk_shutdown`, so a scene also renders stills |
+| `strata_kit.h` | Header-only C++ host shell. Creates the WebGL 2 context (`preserveDrawingBuffer` on, so frames can be read back) and the engine; resizing; three quality tiers (sun cascades, shadow map size, point-light budget, point thinning); an orbit camera and its view-projection matrix; the sun from latitude, longitude and time; per-frame batches of primitives, points (alpha clamped), lines, prioritised point lights and, from kit 1.2, engine-drawn world labels (`Host::label`, Strata ABI 1.14) and, from kit 1.3, screen panels and screen text (`Host::rect`, `Host::text`) and the frame's clear (`Host::clearFlags`, `Host::clearColor`; the sky by default, as before); frame stats (`sk_stats`: primitives, points, lines, lights, terrain samples and, from kit 1.1, the meshes the host counts in `Host::meshes`). Exports `sk_init`, `sk_restore`, `sk_resize`, `sk_set_quality`, `sk_set_camera`, `sk_set_sun`, `sk_view_proj`, `sk_stats`, `sk_frame` and `sk_kit_version`. Natively (no Emscripten) the same file opens a headless engine: `sk_init_headless`, `sk_save_png` and `sk_shutdown`, so a scene also renders stills |
 | `strata-kit.js` | Dependency-free page shell (`window.StrataKit`): canvas sizing with a capped device pixel ratio; adaptive quality (pixel density first, then the tier, with settle windows, reset when the tab is hidden); orbit, pan, pinch, wheel and keyboard camera; `project()` and `pick()` in CSS pixels; `webglcontextlost`/`webglcontextrestored`; `?quality=`, `?fps=1` and `?drive=1`; label placement with collision and hysteresis (`StrataKit.placeLabels`); `window.__strataKit` for tools |
 | `strata-loader.js` | The loading shell (`window.StrataLoader`): the poster as a blurred backdrop, byte-accurate download progress with the size (or, for a host that boots its own way, `StrataLoader.show()` and `StrataLoader.progress(fraction, label)`: see below), and a fallback to the trailer clip or the poster, with the reason in words, when WebGL 2 is missing, the engine fails, a lost context does not come back, or the device is too slow at the lowest tier |
 | `build-kit.sh` | One parameterised build: emsdk version check, the Strata tarball's SHA-256 (or a source build's `libstrata.a`), fixed flags (`-O2 -fwasm-exceptions`, WebGL 2 only, `MODULARIZE`, and `INCOMING_MODULE_JS_API` with `wasmBinary`, so the glue takes the bytes `strata-loader.js` already fetched instead of downloading the `.wasm` again) and the export list. Copies the page scripts beside the `.wasm`. A host that links its own glue with `strata-loader.js` needs `wasmBinary` in `-sINCOMING_MODULE_JS_API` too: emsdk 6.0.11's default list leaves it out |
@@ -161,6 +161,7 @@ from `v0.7.0` on (older tarballs have no `kit/`):
 | `testing/smoke.cjs` | Playwright smoke test: at DPR 1, 2 and 3 (desktop mouse, tablet and phone touch) the frame is not one flat colour, the drawing buffer matches the capped DPR, and a real tap at each of the page's targets selects exactly what a direct pick there returns. `--context-loss` also loses and restores the context. Every `.wasm` the page loads must be requested once (cache hits count). First, on a blank page, the loading shell: `progress()` clamps, stays monotonic and shows its label, `slow()` twice shows one bar, and at 390 px the slow bar's text and buttons keep one line each |
 | `testing/capture.cjs` | Steps scene time with `drive(t)` and saves frames (PNG, and GIF or MP4 through ffmpeg) |
 | `example/` | The smallest host: six pickable pillars. CI builds it with `build-kit.sh` against its own `libstrata.a` and runs the smoke test on it |
+| `grid-relay/` | A ready-made scene for games whose code cannot call Strata (Python under pygbag): the page hands it a grid scene (board, pieces per tick, HUD, view) as versioned binary messages, it draws what desktop Strata draws for the same scene and hands keys, mouse, touch and resizes back. Format, page API and input in its [WIRE.md](../web/kit/grid-relay/WIRE.md). CI builds it and checks it against desktop stills of the same scene |
 
 ### A host in three parts
 
@@ -287,7 +288,7 @@ Rules the kit keeps, which a hand-written shell tends to lose:
   a minute, or no restore within 5 s, falls back.
 
 The kit has its own version (`STRATA_KIT_VERSION_STRING`, `StrataKit.version`;
-1.2 now), and `strata-kit.js` warns when the page's and the wasm's major
+1.3 now), and `strata-kit.js` warns when the page's and the wasm's major
 versions differ. A host that pins a release takes the kit from that release's tarball
 (`kit/build-kit.sh`, with `STRATA_VERSION` and `STRATA_SHA256` set to the
 same release) and needs no vendored copy. A host that needs a kit fix before
@@ -357,6 +358,7 @@ attempt.
 | The browser without `EXT_depth_clamp` | `STRATA_WEB_ENV=STRATA_GLES_NO_DEPTH_CLAMP=1 node tests/web/run_goldens.cjs ...` | `web-swiftshader.png` |
 | The browser against the desktop | `node tests/web/run_goldens.cjs build-web out --platform linux-llvmpipe` | the desktop goldens, default tolerance |
 | The web kit | `web/kit/build-kit.sh web/kit/example/kit.conf` (with `KIT_OUT`, `STRATA_LIB`, `STRATA_INCLUDE`), then `node web/kit/testing/smoke.cjs <url> out --context-loss` | none: the checks are behavioural |
+| The grid relay | `web/kit/build-kit.sh web/kit/grid-relay/kit.conf` (as above), then `node tests/web/run_grid_relay.cjs <kit-out> tests/web/grid-relay out` | `tests/web/grid-relay/*.desktop.png`: desktop stills of the recorded scenes |
 
 `run_goldens.cjs` needs Playwright (`npm install --prefix tests/web
 playwright@1.61.1 && npx --prefix tests/web playwright install chromium`); the
