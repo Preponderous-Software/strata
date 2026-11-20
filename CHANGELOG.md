@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- README.md and ARCHITECTURE.md catch up with ABI 1.17: the README's status
+  text names the C ABI as 1.17 (it still said 1.16) and its status table gains
+  a window-fullscreen row, and ARCHITECTURE.md's list of minors gains
+  "1.17: window fullscreen". Docs only: no ABI change, and no golden changes.
+
 ## 0.9.0
 
 The grid relay: a ready-made web-kit scene (`web/kit/grid-relay`) that draws
