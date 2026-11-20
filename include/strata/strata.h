@@ -94,9 +94,10 @@
  *        (strata_project_point, strata_submit_world_text)
  *   1.15 per-vertex RGBA mesh colours (STRATA_MESH_COLORS_RGBA)
  *   1.16 ambient and sun levels (strata_set_ambient,
- *        strata_set_sun_intensity) */
+ *        strata_set_sun_intensity)
+ *   1.17 window fullscreen (strata_set_fullscreen, strata_is_fullscreen) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 16u
+#define STRATA_ABI_MINOR 17u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -784,6 +785,24 @@ STRATA_API StrataStatus strata_raycast_meshes(StrataEngine* engine, const float 
  * a browser this is pointer lock, which the browser grants only from a user
  * gesture such as a click; SDL requests it on the next one. */
 STRATA_API StrataStatus strata_set_relative_mouse_mode(StrataEngine* engine, int32_t enabled);
+
+/* ABI 1.17. Window fullscreen. Non-zero enabled makes the window cover the
+ * whole display it is on, borderless, at the desktop's resolution (no video
+ * mode change); zero puts it back as a window at the size it had before.
+ * Asking for the state it is already in is STRATA_OK and changes nothing.
+ * The drawable size changes with it: strata_drawable_size reports the new
+ * size once the switch has happened, and a STRATA_EVENT_RESIZED follows
+ * through strata_poll_event, as for any resize. Window surface only:
+ * headless and host-context engines return STRATA_ERROR_UNSUPPORTED and
+ * change nothing (a host that owns the window makes it fullscreen itself).
+ * In a browser this is the Fullscreen API, which the browser grants only
+ * from a user gesture such as a key press or a click. */
+STRATA_API StrataStatus strata_set_fullscreen(StrataEngine* engine, int32_t enabled);
+
+/* ABI 1.17. 1 while the window is fullscreen (see strata_set_fullscreen),
+ * 0 otherwise, including on headless and host-context surfaces and for a
+ * NULL engine. */
+STRATA_API int32_t strata_is_fullscreen(const StrataEngine* engine);
 
 /* A frame is begin_frame, any number of submits, end_frame, then present.
  * Submitted arrays are read during the call and never retained. */

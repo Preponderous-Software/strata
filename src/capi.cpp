@@ -372,6 +372,18 @@ StrataStatus strata_set_relative_mouse_mode(StrataEngine* engine, int32_t enable
     return guard([&] { engine->engine->setRelativeMouseMode(enabled != 0); });
 }
 
+StrataStatus strata_set_fullscreen(StrataEngine* engine, int32_t enabled) {
+    if (!engine) return invalid("engine must not be NULL");
+    return guard([&] { engine->engine->setFullscreen(enabled != 0); });
+}
+
+int32_t strata_is_fullscreen(const StrataEngine* engine) {
+    if (!engine) return 0;
+    int32_t result = 0;
+    guard([&] { result = engine->engine->isFullscreen() ? 1 : 0; });
+    return result;
+}
+
 StrataStatus strata_destroy_texture(StrataEngine* engine, uint32_t id) {
     if (!engine) return invalid("engine must not be NULL");
     return guard([&] { engine->engine->destroyTexture(id); });

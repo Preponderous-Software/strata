@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- ABI 1.17: window fullscreen. `strata_set_fullscreen(engine, enabled)` makes
+  the window cover its display, borderless at the desktop's resolution (no
+  video mode change), or puts it back as a window at its earlier size;
+  `strata_is_fullscreen(engine)` reports the state. The switch is synced
+  before the call returns, so `strata_get_drawable_size` is already right,
+  and a `STRATA_EVENT_RESIZED` follows as for any resize. Window surface
+  only: headless and host-context engines return `STRATA_ERROR_UNSUPPORTED`
+  and change nothing. In a browser it's the Fullscreen API, granted only from
+  a user gesture. Python: `Engine.set_fullscreen()`, `Engine.fullscreen()`;
+  C#: `StrataNative.strata_set_fullscreen`, `strata_is_fullscreen`. No
+  golden changes.
+
 - ARCHITECTURE.md, `STRATA_LIGHTING_SUN` (#99): why a sun a few degrees above
   the horizon draws a dark frame with the default levels. A table gives the
   key light, `n·l`, ambient and the fraction of a flat surface's colour

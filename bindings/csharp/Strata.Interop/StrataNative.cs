@@ -10,7 +10,7 @@ namespace Strata.Interop {
     public static class StrataAbi {
         public const uint Version = 1;
         /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles, 1.12 injected events, a shared frame clock and the drive channel, 1.13 wide lines, 1.14 world-to-screen projection and world-anchored text, 1.15 per-vertex RGBA mesh colours, 1.16 ambient and sun levels.</summary>
-        public const uint Minor = 16;
+        public const uint Minor = 17;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
@@ -342,6 +342,10 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_raycast_meshes(IntPtr engine, float* origin, float* direction, float maxDistance, StrataRayHit* hit);
         /// <summary>ABI 1.8. Window surface only; headless and host-context engines return STRATA_ERROR_UNSUPPORTED (7).</summary>
         [DllImport(Library)] public static extern int strata_set_relative_mouse_mode(IntPtr engine, int enabled);
+        /// <summary>ABI 1.17. Borderless desktop fullscreen (non-zero) or back to a window (0). Window surface only; headless and host-context engines return STRATA_ERROR_UNSUPPORTED (7).</summary>
+        [DllImport(Library)] public static extern int strata_set_fullscreen(IntPtr engine, int enabled);
+        /// <summary>ABI 1.17. 1 while the window is fullscreen, otherwise 0 (also for a null engine).</summary>
+        [DllImport(Library)] public static extern int strata_is_fullscreen(IntPtr engine);
         [DllImport(Library)] public static extern int strata_begin_frame(IntPtr engine, StrataFrameDesc* desc);
         /// <summary>items points at count 44-byte records with the StrataRenderItem layout.</summary>
         [DllImport(Library)] public static extern int strata_submit_primitives(IntPtr engine, void* items, int count);
