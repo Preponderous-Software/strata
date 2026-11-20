@@ -290,6 +290,10 @@ jobs:
           cp web/kit/example/main.cpp web/kit/example/index.html web/kit/example/kit.conf dist-web/kit/example/
           cp web/kit/grid-relay/main.cpp web/kit/grid-relay/relay.h web/kit/grid-relay/grid-relay.js \
             web/kit/grid-relay/index.html web/kit/grid-relay/kit.conf web/kit/grid-relay/WIRE.md dist-web/kit/grid-relay/
+          # The relay is game-agnostic, so it also ships built: a host serves
+          # kit/grid-relay/dist/ as is, with no Emscripten of its own.
+          mkdir -p dist-web/kit/grid-relay/dist
+          cp -r build-web/grid-relay/. dist-web/kit/grid-relay/dist/ || true
           cp build-web/libstrata.a dist-web/lib/ || true
           cp include/strata/strata.h dist-web/include/strata/
           cp build-web/strata-village-day.html build-web/strata-village-day.js build-web/strata-village-day.wasm \
