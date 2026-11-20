@@ -100,7 +100,9 @@ taken from the project itself.
 
 ## Status
 
-`v0.7.0` adds the web kit: the shell around a Strata scene embedded in a web
+`v0.8.0` adds wide lines, world-anchored labels, RGBA mesh colours, ambient
+and sun levels and window fullscreen (ABI 1.13 to 1.17, all compatible) and
+web kit 1.2. `v0.7.0` added the web kit: the shell around a Strata scene embedded in a web
 page (a header-only C++ host, a page shell, a loading shell, a reproducible
 build script and browser smoke tests), shipped in the release's
 `wasm32-emscripten` tarball as `kit/` (see
