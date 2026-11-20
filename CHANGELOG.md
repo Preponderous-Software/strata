@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- The grid relay (`web/kit/grid-relay`, kit 1.3): a ready-made web-kit
+  scene for games whose code runs in the page but cannot call Strata, such
+  as Python under pygbag. The page hands it a grid scene as versioned binary
+  messages (wire format 1.0, documented in its `WIRE.md`): the board once,
+  pieces once per game tick as anchors plus shapes measured from them, the
+  HUD's screen panels and labels when they change, and the view (camera,
+  clear colour, sun). The relay slides pieces between ticks (not under
+  reduced motion), refuses another major version of the format with a
+  console error, and draws what desktop Strata draws for the same scene:
+  four 2048 cascades, shadows to 40 units, no fog, no MSAA, a flat clear
+  colour. `grid-relay.js` loads it only on request and under a size gate,
+  and forwards keys (desktop Strata's scancodes and SDL3 modifier bits),
+  text, mouse buttons, motion, the wheel, touch and pen (as mouse events and
+  `FINGER_*` events) and resizes as `StrataEvent`-shaped records. The kit
+  gains screen panels and text (`Host::rect`, `Host::text`) and a
+  configurable clear (`Host::clearFlags`, `Host::clearColor`; the sky stays
+  the default). `tests/unit` checks the reader natively, the ABI-floor target
+  compiles the relay against the 0.7.0 `strata.h`, and CI draws two recorded
+  scenes in Chromium and compares them with desktop stills of the same scene
+  (`tests/web/run_grid_relay.cjs`). No ABI change, and no golden changes.
+
 ## 0.8.0
 
 Wide lines, world-anchored labels, RGBA mesh colours, ambient and sun
