@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.8.0
+
+Wide lines, world-anchored labels, RGBA mesh colours, ambient and sun
+levels, and window fullscreen: `STRATA_ABI_MINOR` moves from 12 to 17, and
+every addition is compatible (`STRATA_ABI_VERSION` stays 1). The web kit
+moves to 1.2 (`Host::wideLine`, `Host::label`, the light levels, a loader
+that can cover one section of a page). The Python binding knows the v0.7.0
+and v0.8.0 libraries' SHA-256s and gains `Engine.set_fullscreen()` and
+`Engine.fullscreen()`.
+
 - ABI 1.17: window fullscreen. `strata_set_fullscreen(engine, enabled)` makes
   the window cover its display, borderless at the desktop's resolution (no
   video mode change), or puts it back as a window at its earlier size;
