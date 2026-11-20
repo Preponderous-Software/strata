@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(strata
-    VERSION 0.8.0
+    VERSION 0.9.0
     DESCRIPTION "A small C++17 engine for two simulation games"
     LANGUAGES C CXX)
 

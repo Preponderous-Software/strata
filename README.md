@@ -100,7 +100,8 @@ taken from the project itself.
 
 ## Status
 
-`v0.8.0` adds wide lines, world-anchored labels, RGBA mesh colours, ambient
+`v0.9.0` adds the grid relay, a web-kit scene that draws a grid scene sent
+as page messages (web kit 1.3). `v0.8.0` added wide lines, world-anchored labels, RGBA mesh colours, ambient
 and sun levels and window fullscreen (ABI 1.13 to 1.17, all compatible) and
 web kit 1.2. `v0.7.0` added the web kit: the shell around a Strata scene embedded in a web
 page (a header-only C++ host, a page shell, a loading shell, a reproducible
