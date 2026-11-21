@@ -81,6 +81,13 @@ moving their pin to 0.9.1.
     two levels. Before, any stall (a game booting in the page, a tab coming
     back) cost the view its pixel density and shadows for the rest of the
     visit;
+  - `strata-loader.js` compiles the `.wasm` while it downloads
+    (`WebAssembly.compileStreaming` on a copy of the same response, so the
+    browser may also cache the compiled code) when it is served as
+    `application/wasm`, and starts the download before its WebGL 2 probe,
+    whose first context can take a phone a while, so the two overlap. With
+    no WebGL 2 the download is cancelled; behind `gate` it still waits for
+    the tap. Otherwise the bytes are handed over as before;
 
 - The grid relay and the web kit take `keys: false`, for a page with its own
   keyboard UI (a React or DOM board whose buttons are used with Tab, Space
