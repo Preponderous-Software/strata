@@ -8,7 +8,10 @@
 //     the first message the module accepts, not before;
 //   - messages sent before the module are kept as the latest of each kind
 //     (a bounded queue), then submitted in order once it is in;
-//   - a short or foreign message is refused before the module, as after.
+//   - a short or foreign message is refused before the module, as after;
+//   - keys: by default a key is forwarded to poll() and Tab or Space has its
+//     browser default prevented; with {"keys": false} no key listener is
+//     added, nothing is forwarded or prevented, and the kit is told the same.
 //
 //   node tests/web/grid_relay_js.cjs
 //
@@ -40,8 +43,10 @@ function page() {
   };
   const kit = { running: false, starts: 0, cam: {}, start() { this.starts++; this.running = true; return this; },
     stats: () => ({}) };
+  let kitOpts = null;
+  const listeners = {};
   const window = {
-    addEventListener() {},
+    addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
   };
   const context = {
     window, console: { error() {}, log() {} }, Uint8Array, Float32Array, Map, Set, JSON, Math, Object, String,
@@ -51,12 +56,13 @@ function page() {
     fetch: async () => ({ ok: true, headers: { get: () => '1000' } }),
     matchMedia: () => ({ matches: false }),
     StrataLoader: { load: () => new Promise((r) => { release = () => r(mod); }), done() {}, slow() {}, fallback() {} },
-    StrataKit: { create: () => kit },
+    StrataKit: { create: (o) => { kitOpts = o; return kit; } },
   };
   context.globalThis = context;
   const source = fs.readFileSync(path.join(__dirname, '..', '..', 'web', 'kit', 'grid-relay', 'grid-relay.js'), 'utf8');
   vm.runInNewContext(source, context);
-  return { relay: window.StrataGridRelay, canvas, kit, submitted, release: () => release() };
+  return { relay: window.StrataGridRelay, canvas, kit, submitted, release: () => release(), listeners,
+    kitOpts: () => kitOpts };
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
@@ -129,6 +135,47 @@ const msg = (kind, tag) => Buffer.from([0x47, 0x33, 1, 0, kind, 0, 0, 0, tag]).t
     check(JSON.stringify(kinds) === JSON.stringify([[1, 7], [2, 200]]),
       `the queue kept the latest of each kind, in order (${JSON.stringify(kinds)})`);
     check(p.relay.state() === 'ready' && p.kit.running && !p.canvas.hidden, 'and the relay draws');
+  }
+  {
+    // keys: the default forwards them and keeps the browser's Tab and Space away
+    const key = (code, key) => {
+      const e = { type: 'keydown', code, key, repeat: false, prevented: false, preventDefault() { this.prevented = true; } };
+      return e;
+    };
+    const p = page();
+    p.relay.request('{}');
+    await settle();
+    p.release();
+    await settle();
+    await settle();
+    const down = p.listeners.keydown || [];
+    const tab = key('Tab', 'Tab'), space = key('Space', ' ');
+    for (const f of down) { f(tab); f(space); }
+    const got = JSON.parse(p.relay.poll()).filter((e) => e.type === 2).map((e) => e.scancode);
+    check(down.length === 1 && tab.prevented && space.prevented && JSON.stringify(got) === '[43,44]',
+      `keys by default: forwarded (${JSON.stringify(got)}), Tab and Space prevented`);
+    check(p.kitOpts().keys === true, 'keys by default: the kit keeps its key handler');
+
+    const q = page();
+    q.relay.request('{"keys": false}');
+    await settle();
+    q.release();
+    await settle();
+    await settle();
+    check(q.relay.state() === 'ready' && !q.listeners.keydown && !q.listeners.keyup,
+      '{"keys": false}: no key listener on the window');
+    check(q.kitOpts().keys === false, '{"keys": false}: the kit is told to leave keys alone');
+    check(JSON.parse(q.relay.poll()).every((e) => e.type !== 2 && e.type !== 3 && e.type !== 9),
+      '{"keys": false}: poll() has no key or text events');
+
+    const r = page();
+    r.relay.open({ keys: false });
+    await settle();
+    r.release();
+    await settle();
+    await settle();
+    check(r.relay.state() === 'ready' && !r.listeners.keydown && r.kitOpts().keys === false,
+      'open({keys: false}) from JavaScript: the same');
   }
   console.log(failures ? `${failures} check(s) failed` : 'all checks passed');
   process.exit(failures ? 1 : 0);

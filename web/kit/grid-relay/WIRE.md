@@ -41,7 +41,7 @@ nothing richer (pygbag's `platform.window`) can drive it.
 
 | Call | What it does |
 |---|---|
-| `StrataGridRelay.request(json)` | Starts loading the 3D view and returns at once. Options: `canvas` (id, default `relay`), `maxBytes` (the size gate, default 4 MiB: the `.wasm` and glue, measured with `HEAD` before any download), `base`, `title`, `quality`, `reducedMotion`, `slowMs` (the frame time over which the kit lowers its quality, default 40: 25 frames a second, so a page held to 30 by a battery saver keeps its quality), `gate` (`StrataLoader`'s data-saver prompt). Nothing is downloaded before it is called |
+| `StrataGridRelay.request(json)` | Starts loading the 3D view and returns at once. Options: `canvas` (id, default `relay`), `maxBytes` (the size gate, default 4 MiB: the `.wasm` and glue, measured with `HEAD` before any download), `base`, `title`, `quality`, `reducedMotion`, `slowMs` (the frame time over which the kit lowers its quality, default 40: 25 frames a second, so a page held to 30 by a battery saver keeps its quality), `gate` (`StrataLoader`'s data-saver prompt), `keys` (default `true`; `false` for a page with its own keyboard UI: see "Input"). Nothing is downloaded before it is called. `StrataGridRelay.open(options)` takes the same options as an object, for a page in JavaScript |
 | `StrataGridRelay.state()` | `idle`, `loading`, `ready` or `failed:<reason>` (over the size gate, no WebGL 2, the engine failed, a lost context that did not come back). A game keeps its 2D view on `failed:`. The frame loop starts with the first message the module accepts, not at `ready`: until then there is nothing to draw, and the game in the page is usually still starting on the same thread |
 | `StrataGridRelay.send(base64)` | One message. Returns 0, 1 when queued (the module is still loading; the latest message of each kind is kept, as each replaces the last of its kind) or a negative status (below) |
 | `StrataGridRelay.sendBytes(u8)` | The same, from a `Uint8Array` |
@@ -203,6 +203,19 @@ also produces `FINGER_*` events for swipes and pinches. The relay prevents
 the browser's own use of arrows, space, tab and the page-scrolling keys
 while it is showing.
 
+**A page with its own keyboard UI** (a page in React or plain DOM whose
+buttons and focus order the player uses with Tab, Space and Enter, and which
+sends the relay its messages itself) opts out with `keys: false`:
+
+```js
+StrataGridRelay.request('{"keys": false}');   // or StrataGridRelay.open({keys: false})
+```
+
+Then no key is forwarded (`poll()` has no key or text events), no key has
+its browser default prevented, on the canvas or anywhere else, and the
+kit's own camera keys are off too. The pointer, wheel, touch and resize
+events are forwarded as before. The default, `keys: true`, is unchanged.
+
 ## Checking it
 
 `tests/unit/test_grid_relay.cpp` checks the reader natively: version and
@@ -213,7 +226,7 @@ counts, noise), which the Sanitizers job runs under ASan and UBSan; and
 golden messages encoded by graphik's grid3d (`grid_relay_wire_1_0.inc`, the
 bytes graphik's own tests hold its encoder to), read back as their scene.
 `tests/web/grid_relay_js.cjs` checks `grid-relay.js`'s page logic in Node
-with the module stubbed (closing while loading, the queue). `tests/web/run_grid_relay.cjs` builds nothing: given the
+with the module stubbed (closing while loading, the queue, `keys: false`). `tests/web/run_grid_relay.cjs` builds nothing: given the
 relay's build and a directory of recorded games (`tests/web/grid-relay/`),
 it draws each recording in headless Chromium (WebGL 2 on SwiftShader) and
 compares it with the same scene drawn by desktop Strata (`<still>.desktop.png`,

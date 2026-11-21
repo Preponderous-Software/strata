@@ -29,7 +29,8 @@
 // contain: true the shell covers its mount (a section below the fold), not
 // the viewport, and without it, the viewport as before.
 // Then strata-kit.js (beside testing/) is checked on blank pages with a stub
-// module in place of the wasm: at DPR 2 an unstyled canvas (no CSS size)
+// module in place of the wasm (camera keys, and none with keys: false,
+// included): at DPR 2 an unstyled canvas (no CSS size)
 // keeps one size over 12 frames of the real loop, its CSS size pinned, and
 // canvases with a CSS width (and height) keep theirs, unpinned.
 // Gestures on the same stub (#90): two synthetic touch pointers (a two-finger
@@ -310,6 +311,7 @@ async function kitChecks(browser) {
     await canvasSizeChecks(context);
     await gestureChecks(context);
     await hiddenContextLossChecks(context);
+    await keyChecks(context);
   } catch (e) {
     check(false, `kit: ${String(e).split('\n')[0]}`);
   } finally {
@@ -422,6 +424,36 @@ async function gestureChecks(context) {
 // three losses in a minute while visible, or none restored in restoreMs once
 // visible, are still fatal. Synthetic context events and a stubbed
 // visibilityState, with restoreMs at 200 to keep it quick.
+// The camera keys on the focused canvas: by default an arrow turns the camera
+// and has its default prevented; with keys: false (a page with its own
+// keyboard UI) nothing is prevented, Tab included, and the camera stays.
+async function keyChecks(context) {
+  const { page, errors } = await kitStubPage(context,
+    '<canvas id="a" tabindex="0" style="display:block;width:400px;height:300px"></canvas>' +
+    '<canvas id="b" tabindex="0" style="display:block;width:400px;height:300px"></canvas>');
+  const r = await page.evaluate(() => {
+    const press = (canvas, code, key) => {
+      const e = new KeyboardEvent('keydown', { code, key, bubbles: true, cancelable: true });
+      canvas.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    const out = {};
+    for (const [id, keys] of [['a', undefined], ['b', false]]) {
+      const canvas = document.getElementById(id);
+      const k = StrataKit.create({ module: window.__stubModule(), canvas, idleOrbit: false, keys });
+      const yaw = k.cam.yaw;
+      out[id] = { arrow: press(canvas, 'ArrowLeft', 'ArrowLeft'), tab: press(canvas, 'Tab', 'Tab'), moved: k.cam.yaw !== yaw };
+    }
+    return out;
+  });
+  check(r.a.arrow && r.a.moved,
+    `kit: an arrow key turns the camera and is kept from the page (prevented ${r.a.arrow}, moved ${r.a.moved})`);
+  check(!r.b.arrow && !r.b.tab && !r.b.moved,
+    `kit: with keys: false no key is prevented or moves the camera (arrow ${r.b.arrow}, Tab ${r.b.tab}, moved ${r.b.moved})`);
+  check(errors.length === 0, `kit: keys: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
+  await page.close();
+}
+
 async function hiddenContextLossChecks(context) {
   const { page, errors } = await kitStubPage(context,
     '<canvas id="view" style="display:block;width:400px;height:300px"></canvas>');

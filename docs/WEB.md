@@ -281,6 +281,13 @@ Rules the kit keeps, which a hand-written shell tends to lose:
   steps back up, so a page whose own start-up stalls the thread (a game
   booting in the same page) should start the loop once that is done: the
   grid relay starts it with its first message.
+- **Keys are the page's when it says so.** On the focused canvas the arrow
+  keys and +/- move the camera, and `onKey` returning true keeps a key from
+  the page. A page with its own keyboard UI passes `keys: false`: the kit
+  then adds no key handler, so no key moves the camera and none has its
+  browser default (Tab's focus move, Space) prevented. The grid relay takes
+  the same option (`{"keys": false}`; see its WIRE.md, "Input"). The smoke
+  test checks both.
 - **Animation comes from scene time.** Under `?drive=1` the frame loop does
   not run and `__strataKit.drive(t)` draws time `t` synchronously, so captures
   and tests repeat.

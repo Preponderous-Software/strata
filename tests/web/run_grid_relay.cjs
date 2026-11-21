@@ -22,7 +22,9 @@
 //     mouse events and FINGER_* events) and a resize;
 //   - frame time over two seconds of the page's own frame loop;
 //   - no frames are drawn before the first message, and the first one
-//     starts the loop.
+//     starts the loop;
+//   - with ?keys=0 ({"keys": false}) no key is forwarded or has its browser
+//     default prevented, and Tab moves the focus off the canvas.
 //
 // Exit code 0 when every check passed. Needs Playwright (see run_goldens.cjs).
 const fs = require('fs');
@@ -206,6 +208,26 @@ const check = (ok, what) => {
     await idle.waitForFunction(() => window.__strataKit.stats().frames > 0, null, { timeout: 30000 });
     check(true, 'the first accepted message starts the frame loop');
     await idle.close();
+
+    // -- keys: false (?keys=0): a page with its own keyboard UI keeps Tab,
+    // Space and the arrows, and the relay forwards none of them
+    const own = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
+    await own.goto(`${base}/index.html?keys=0&wire=wire/${recordings[0]}`);
+    await ready(own);
+    await own.evaluate(() => {
+      window.__prevented = [];
+      window.addEventListener('keydown', (e) => window.__prevented.push(e.defaultPrevented), false);
+      window.StrataGridRelay.poll();
+      document.getElementById('relay').focus();
+    });
+    for (const k of ['Tab', 'Space', 'ArrowUp', 'KeyA']) await own.keyboard.press(k);
+    const kept = await own.evaluate(() => ({ prevented: window.__prevented,
+      keys: JSON.parse(window.StrataGridRelay.poll()).filter((e) => [2, 3, 9].includes(e.type)).length,
+      focus: document.activeElement && document.activeElement.id }));
+    check(kept.prevented.length === 4 && kept.prevented.every((p) => !p) && kept.keys === 0,
+      `keys: false: no key forwarded (${kept.keys}) or prevented (${JSON.stringify(kept.prevented)})`);
+    check(kept.focus !== 'relay', `keys: false: Tab moves the focus off the canvas (focus on ${kept.focus || 'the body'})`);
+    await own.close();
   } finally {
     await browser.close();
     server.close();

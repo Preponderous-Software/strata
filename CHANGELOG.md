@@ -50,6 +50,15 @@
   - the grid relay asks for its two files' sizes at once (the size gate),
     saving a round trip before the download starts.
 
+- The grid relay and the web kit take `keys: false`, for a page with its own
+  keyboard UI (a React or DOM board whose buttons are used with Tab, Space
+  and Enter): `StrataGridRelay.request('{"keys": false}')` (or
+  `StrataGridRelay.open({keys: false})`) forwards no key and prevents no
+  key's browser default, and `StrataKit.create({keys: false})` adds no
+  camera keys. Before, the relay kept Tab, Space, the arrows and the
+  page-scrolling keys from the whole page while it showed, so such a page
+  needed a workaround. The default is unchanged. The relay's demo page takes
+  `?keys=0`.
 - README.md and ARCHITECTURE.md catch up with ABI 1.17: the README's status
   text names the C ABI as 1.17 (it still said 1.16) and its status table gains
   a window-fullscreen row, and ARCHITECTURE.md's list of minors gains

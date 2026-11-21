@@ -29,7 +29,9 @@
      pins a tier; ?fps=1 shows what it settled on and the frame's stats.
    - One orbit/pan/zoom controller: pointer capture, drag to orbit,
      right-drag or shift-drag or two fingers to pan, pinch and wheel to zoom,
-     arrow keys and +/-, and a slow idle orbit (none under reduced motion).
+     arrow keys and +/- on the focused canvas (none with keys: false, for a
+     page with its own keyboard UI), and a slow idle orbit (none under
+     reduced motion).
      A tap is a gesture of exactly one pointer (the primary mouse button, a
      pen or one finger) that moved under 6 CSS pixels: one onTap on its
      pointer-up. Two fingers, or a right or middle click, never tap.
@@ -265,7 +267,9 @@
       kit.clampCam();
       touch();
     }, {passive: false});
-    canvas.addEventListener("keydown", (e) => {
+    // keys: false leaves the keyboard to the page: no camera keys, and no
+    // key's browser default (Tab's focus move, Space) is prevented.
+    if (opts.keys !== false) canvas.addEventListener("keydown", (e) => {
       if (opts.onKey && opts.onKey(e)) { e.preventDefault(); return; }
       const k = e.key;
       if (k === "ArrowLeft") cam.yaw -= 0.08;

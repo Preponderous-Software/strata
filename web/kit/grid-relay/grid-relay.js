@@ -22,7 +22,9 @@
    Input is forwarded, not interpreted: keys (with desktop Strata's
    scancodes, USB HID usage ids, and SDL3 modifier bits), the mouse, the
    wheel, touch and pen, and resizes, as STRATA_EVENT_* records (see WIRE.md,
-   "Input"), so every control a game has in 2D works the same in 3D.
+   "Input"), so every control a game has in 2D works the same in 3D. A page
+   with its own keyboard UI passes {"keys": false}: no key is forwarded and
+   none has its browser default (Tab, Space, the arrows) prevented.
 
    MIT licensed, as Strata. */
 (function () {
@@ -248,7 +250,9 @@
         // its pixel density and shadows on a phone with a GPU to spare.
         slowMs: opts.slowMs || 40,
         limits: {minPitch: -1.6, maxPitch: 1.6, minDist: 0, maxDist: 1e9},
-        // The game owns every key: none moves the kit's camera.
+        // The game owns every key: none moves the kit's camera. With keys:
+        // false the page owns them, and the kit leaves them alone too.
+        keys: opts.keys !== false,
         onKey: () => true,
         frame() {
           frameStart = performance.now();
@@ -271,9 +275,11 @@
     canvas.addEventListener("pointerup", onPointer);
     canvas.addEventListener("pointercancel", onPointer);
     canvas.addEventListener("wheel", onWheel, {passive: false});
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("keyup", onKey);
-    window.addEventListener("blur", () => held.clear());
+    if (opts.keys !== false) {
+      window.addEventListener("keydown", onKey);
+      window.addEventListener("keyup", onKey);
+      window.addEventListener("blur", () => held.clear());
+    }
     if (typeof ResizeObserver === "function") new ResizeObserver(resized).observe(canvas);
     state = "ready";
     resized();
