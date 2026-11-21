@@ -35,7 +35,7 @@ KINDS = {
 def load_primitives_scene(path):
     """The subset of the scene format bn_primitives_legacy uses."""
     scene = {"size": (640, 360), "items": []}
-    for raw in Path(path).read_text().splitlines():
+    for raw in Path(path).read_text(encoding="utf-8").splitlines():
         words = raw.split("#", 1)[0].split()
         if not words:
             continue

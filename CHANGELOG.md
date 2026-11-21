@@ -2,6 +2,63 @@
 
 ## Unreleased
 
+- The grid relay is hardened (wire format still 1.0; every message a 1.0
+  encoder that keeps to the engine's own rules wrote before is still taken).
+  It now refuses, with status -5 from `send`, the lights and HUD colours the
+  engine itself would refuse (a light radius of 0 or less, a negative
+  intensity or colour; a negative panel or label colour, alpha over 1), any
+  coordinate, size or radius beyond ±10⁶, and a view whose eye is on its
+  target; and, with -6, more than four shadow-casting lights in one message.
+  Before, such a message was taken and the engine then dropped every light,
+  panel or label of every frame, with one console line. A frame keeps to
+  four shadow casters across the board's and the pieces' lights together
+  (the rest shine without shadows), a HUD item scaled past a float's range
+  is left out, and a short header says how far it got (-3 after the magic,
+  -2 for another major) instead of -1.
+- `grid-relay.js`: a `close()` while the module loads is kept (it finishes
+  loading hidden and idle, and the next `request()` shows it); before, it
+  finished drawing on a hidden canvas that a later `request()` never showed.
+  A `close()` and then a `request()` while it loads shows it once loaded.
+  Messages sent before the module are kept as the latest of each kind, not
+  all of them.
+- Web kit: a `strata_set_point_lights` the engine refuses is reported once on
+  the console, as rejected points, panels and text already were.
+- Tests: the relay's reader is fuzzed (every truncation, byte flips, wild
+  counts, noise) under the Sanitizers job, every frame it builds is held to
+  the engine's own checks, and it reads golden messages encoded by graphik's
+  grid3d (`tests/unit/grid_relay_wire_1_0.inc`). `tests/web/grid_relay_js.cjs`
+  checks `grid-relay.js` in Node with the module stubbed. CI checks the wasm
+  tarball carries the prebuilt relay (`kit/grid-relay/dist/`).
+- The web kit holds up better on phones (page scripts only: the `.wasm` and
+  goldens are unchanged, and the kit stays 1.3):
+  - a WebGL context lost while the page is hidden (iOS Safari takes it when
+    the player switches apps or locks the screen) is no longer given up on:
+    such a loss is not counted as a repeat, and the 5 seconds the kit waits
+    for the restore (now `restoreMs`) start when the page is visible again.
+    Before, coming back to the tab could find the 3D view replaced by its
+    fallback;
+  - `kit.start()` begins a fresh settle window, so a page that starts the
+    loop later than it creates the kit measures frames from then;
+  - the grid relay starts its frame loop with the first message the module
+    accepts instead of at `ready`. Under pygbag the relay used to draw empty
+    frames while CPython was still booting on the same thread, and those
+    stalls (hundreds of ms to seconds a frame) lowered the pixel density to
+    1 and the shadows to tier 0 for good on every phone;
+  - the grid relay counts frames as slow over 40 ms (25 fps; `slowMs`), not
+    the kit's 28, so a page held to 30 fps by iOS Low Power Mode or a
+    battery saver keeps its quality;
+  - the grid relay asks for its two files' sizes at once (the size gate),
+    saving a round trip before the download starts.
+
+- The grid relay and the web kit take `keys: false`, for a page with its own
+  keyboard UI (a React or DOM board whose buttons are used with Tab, Space
+  and Enter): `StrataGridRelay.request('{"keys": false}')` (or
+  `StrataGridRelay.open({keys: false})`) forwards no key and prevents no
+  key's browser default, and `StrataKit.create({keys: false})` adds no
+  camera keys. Before, the relay kept Tab, Space, the arrows and the
+  page-scrolling keys from the whole page while it showed, so such a page
+  needed a workaround. The default is unchanged. The relay's demo page takes
+  `?keys=0`.
 - README.md and ARCHITECTURE.md catch up with ABI 1.17: the README's status
   text names the C ABI as 1.17 (it still said 1.16) and its status table gains
   a window-fullscreen row, and ARCHITECTURE.md's list of minors gains

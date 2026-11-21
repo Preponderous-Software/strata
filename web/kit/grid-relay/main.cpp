@@ -86,7 +86,7 @@ STRATA_KIT_EXPORT int gr_submit(const uint8_t* data, int size) {
 STRATA_KIT_EXPORT int gr_wire_version() { return grid_relay::kMajor * 256 + grid_relay::kMinor; }
 
 // CSS pixels to drawing-buffer pixels for the HUD (the page's device pixel ratio).
-STRATA_KIT_EXPORT void gr_set_ui_scale(float scale) { uiScale = scale > 0.0f ? scale : 1.0f; }
+STRATA_KIT_EXPORT void gr_set_ui_scale(float scale) { uiScale = scale > 0.0f && std::isfinite(scale) ? scale : 1.0f; }
 
 // The view's camera as the kit's orbit: yaw, pitch, dist, target x, y, z.
 STRATA_KIT_EXPORT const float* gr_orbit() { return orbit; }

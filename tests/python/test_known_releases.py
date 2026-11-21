@@ -74,7 +74,7 @@ class Tool(unittest.TestCase):
         self.assertEqual(known_releases.check("9.9.9", hashes, known, require=True), [])
 
     def test_pin_adds_and_replaces_entries_and_keeps_the_rest(self):
-        source = known_releases.LOADER.read_text()
+        source = known_releases.LOADER.read_text(encoding="utf-8")
         before = known_releases.read_known(source)
         hashes = {"linux-x64": LINUX, "win-x64": WINDOWS}
         once = known_releases.pin(source, "9.9.9", hashes)
@@ -93,7 +93,7 @@ class Tool(unittest.TestCase):
 
 class Table(unittest.TestCase):
     def test_the_tool_reads_the_table_the_binding_uses(self):
-        self.assertEqual(known_releases.read_known(known_releases.LOADER.read_text()), strata.KNOWN_RELEASES)
+        self.assertEqual(known_releases.read_known(known_releases.LOADER.read_text(encoding="utf-8")), strata.KNOWN_RELEASES)
 
     def test_the_binding_version_is_the_project_version(self):
         self.assertEqual(strata.__version__, known_releases.project_version())
@@ -101,7 +101,7 @@ class Table(unittest.TestCase):
     def test_every_earlier_release_is_pinned_for_both_platforms(self):
         # Bare library assets exist from v0.4.0 on. The current version is
         # pinned in the release prep and enforced by the release job.
-        changelog = (ROOT / "CHANGELOG.md").read_text()
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
         current = version_key(known_releases.project_version())
         released = [v for v in re.findall(r"^## ([0-9]+\.[0-9]+\.[0-9]+)\s*$", changelog, re.M)
                     if (0, 4, 0) <= version_key(v) < current]

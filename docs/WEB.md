@@ -276,8 +276,18 @@ Rules the kit keeps, which a hand-written shell tends to lose:
   checks these with two synthetic touch pointers.
 - **Pixel density is given up before shadows.** Frames over `slowMs`
   (default 28 ms) averaged over 1.5 s first lower the DPR cap by a quarter,
-  down to 1, then the tier; each step waits 2.5 s to settle. Only then does
-  `onSlow` fire, once.
+  down to 1, then the tier; each step waits 2.5 s to settle, as do the first
+  frames after `kit.start()`. Only then does `onSlow` fire, once. Nothing
+  steps back up, so a page whose own start-up stalls the thread (a game
+  booting in the same page) should start the loop once that is done: the
+  grid relay starts it with its first message.
+- **Keys are the page's when it says so.** On the focused canvas the arrow
+  keys and +/- move the camera, and `onKey` returning true keeps a key from
+  the page. A page with its own keyboard UI passes `keys: false`: the kit
+  then adds no key handler, so no key moves the camera and none has its
+  browser default (Tab's focus move, Space) prevented. The grid relay takes
+  the same option (`{"keys": false}`; see its WIRE.md, "Input"). The smoke
+  test checks both.
 - **Animation comes from scene time.** Under `?drive=1` the frame loop does
   not run and `__strataKit.drive(t)` draws time `t` synchronously, so captures
   and tests repeat.
@@ -285,7 +295,10 @@ Rules the kit keeps, which a hand-written shell tends to lose:
   kit calls `sk_restore`, which destroys the old engine (its GL objects died
   with the context), makes a new context handle on the same canvas and a new
   engine, and runs `strata_kit_engine_ready` again. Losing it a third time in
-  a minute, or no restore within 5 s, falls back.
+  a minute, or no restore within 5 s (`restoreMs`), falls back. A phone
+  takes a hidden page's context away (iOS Safari does on an app switch or
+  a locked screen) and gives it back on return, so losses while the page is
+  hidden are not counted, and the 5 s start when it is visible again.
 
 The kit has its own version (`STRATA_KIT_VERSION_STRING`, `StrataKit.version`;
 1.3 now), and `strata-kit.js` warns when the page's and the wasm's major

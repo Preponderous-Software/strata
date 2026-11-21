@@ -51,7 +51,7 @@ class FixedSizes(unittest.TestCase):
         self.assertEqual([cls.STRUCT_ID for cls in strata.STRUCTS], list(range(len(strata.STRUCTS))))
 
     def test_every_function_in_strata_h_is_declared(self):
-        header = (Path(__file__).resolve().parents[2] / "include" / "strata" / "strata.h").read_text()
+        header = (Path(__file__).resolve().parents[2] / "include" / "strata" / "strata.h").read_text(encoding="utf-8")
         in_header = set(re.findall(r"STRATA_API [^(]*?\b(strata_[a-z0-9_]+)\(", header))
         self.assertGreater(len(in_header), 40)
         self.assertEqual(set(strata.FUNCTIONS), in_header)

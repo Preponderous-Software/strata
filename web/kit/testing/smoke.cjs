@@ -29,7 +29,8 @@
 // contain: true the shell covers its mount (a section below the fold), not
 // the viewport, and without it, the viewport as before.
 // Then strata-kit.js (beside testing/) is checked on blank pages with a stub
-// module in place of the wasm: at DPR 2 an unstyled canvas (no CSS size)
+// module in place of the wasm (camera keys, and none with keys: false,
+// included): at DPR 2 an unstyled canvas (no CSS size)
 // keeps one size over 12 frames of the real loop, its CSS size pinned, and
 // canvases with a CSS width (and height) keep theirs, unpinned.
 // Gestures on the same stub (#90): two synthetic touch pointers (a two-finger
@@ -309,6 +310,8 @@ async function kitChecks(browser) {
   try {
     await canvasSizeChecks(context);
     await gestureChecks(context);
+    await hiddenContextLossChecks(context);
+    await keyChecks(context);
   } catch (e) {
     check(false, `kit: ${String(e).split('\n')[0]}`);
   } finally {
@@ -412,6 +415,90 @@ async function gestureChecks(context) {
   const left = await real('left', () => page.mouse.click(box.x + 210, box.y + 140));
   check(left.length === 1 && left[0] === '210,140', `kit: a left click taps once (${left.join(' ') || 'no tap'})`);
   check(errors.length === 0, `kit: gestures: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
+  await page.close();
+}
+
+// A phone takes a hidden page's WebGL context away (iOS Safari does when the
+// player switches apps) and gives it back on return. Losses while hidden are
+// not repeats, and the wait for the restore starts once the page is visible;
+// three losses in a minute while visible, or none restored in restoreMs once
+// visible, are still fatal. Synthetic context events and a stubbed
+// visibilityState, with restoreMs at 200 to keep it quick.
+// The camera keys on the focused canvas: by default an arrow turns the camera
+// and has its default prevented; with keys: false (a page with its own
+// keyboard UI) nothing is prevented, Tab included, and the camera stays.
+async function keyChecks(context) {
+  const { page, errors } = await kitStubPage(context,
+    '<canvas id="a" tabindex="0" style="display:block;width:400px;height:300px"></canvas>' +
+    '<canvas id="b" tabindex="0" style="display:block;width:400px;height:300px"></canvas>');
+  const r = await page.evaluate(() => {
+    const press = (canvas, code, key) => {
+      const e = new KeyboardEvent('keydown', { code, key, bubbles: true, cancelable: true });
+      canvas.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    const out = {};
+    for (const [id, keys] of [['a', undefined], ['b', false]]) {
+      const canvas = document.getElementById(id);
+      const k = StrataKit.create({ module: window.__stubModule(), canvas, idleOrbit: false, keys });
+      const yaw = k.cam.yaw;
+      out[id] = { arrow: press(canvas, 'ArrowLeft', 'ArrowLeft'), tab: press(canvas, 'Tab', 'Tab'), moved: k.cam.yaw !== yaw };
+    }
+    return out;
+  });
+  check(r.a.arrow && r.a.moved,
+    `kit: an arrow key turns the camera and is kept from the page (prevented ${r.a.arrow}, moved ${r.a.moved})`);
+  check(!r.b.arrow && !r.b.tab && !r.b.moved,
+    `kit: with keys: false no key is prevented or moves the camera (arrow ${r.b.arrow}, Tab ${r.b.tab}, moved ${r.b.moved})`);
+  check(errors.length === 0, `kit: keys: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
+  await page.close();
+}
+
+async function hiddenContextLossChecks(context) {
+  const { page, errors } = await kitStubPage(context,
+    '<canvas id="view" style="display:block;width:400px;height:300px"></canvas>');
+  const r = await page.evaluate(async () => {
+    let vis = 'visible';
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => vis });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => vis === 'hidden' });
+    const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+    const show = (v) => { vis = v; document.dispatchEvent(new Event('visibilitychange')); };
+    const make = () => {
+      const old = document.getElementById('view');
+      const canvas = old.cloneNode(false);
+      old.replaceWith(canvas);
+      const fatal = [];
+      const kit = StrataKit.create({ module: window.__stubModule(), canvas, driven: true, idleOrbit: false,
+        restoreMs: 200, onFatal: (code) => fatal.push(code) });
+      return { kit, fatal,
+        lose: () => canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true })),
+        restore: () => canvas.dispatchEvent(new Event('webglcontextrestored')) };
+    };
+    const out = {};
+    let k = make();
+    show('hidden'); k.lose(); await wait(400);
+    out.hiddenLong = k.fatal.length;
+    show('visible'); await wait(50); k.restore();
+    out.returned = { fatal: k.fatal.length, lost: k.kit.lost };
+    for (let i = 0; i < 4; i++) { show('hidden'); k.lose(); await wait(10); show('visible'); await wait(10); k.restore(); }
+    out.switches = { fatal: k.fatal.length, lost: k.kit.lost };
+    show('hidden'); k.lose(); await wait(300);
+    out.beforeVisible = k.fatal.length;
+    show('visible'); await wait(400);
+    out.neverBack = k.fatal.slice();
+    k = make();
+    for (let i = 0; i < 3; i++) { k.lose(); await wait(10); if (i < 2) k.restore(); }
+    out.visibleRepeats = k.fatal.slice();
+    return out;
+  });
+  check(r.hiddenLong === 0, `kit: a context lost while hidden is not given up on while the page stays hidden (${r.hiddenLong} fatal)`);
+  check(r.returned.fatal === 0 && !r.returned.lost, 'kit: restored after the page is visible again, the view draws on');
+  check(r.switches.fatal === 0 && !r.switches.lost, 'kit: four app switches in a minute, each losing the context while hidden, are not fatal');
+  check(r.beforeVisible === 0 && r.neverBack.length === 1 && r.neverBack[0] === 'context-lost',
+    `kit: a context still not back restoreMs after the page is visible is fatal (${r.neverBack.join(' ') || 'not fatal'})`);
+  check(r.visibleRepeats.length === 1 && r.visibleRepeats[0] === 'context-lost',
+    `kit: three losses in a minute while visible are fatal (${r.visibleRepeats.join(' ') || 'not fatal'})`);
+  check(errors.length === 0, `kit: hidden context loss: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
   await page.close();
 }
 

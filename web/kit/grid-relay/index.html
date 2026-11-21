@@ -29,7 +29,9 @@
 (async () => {
   const q = new URLSearchParams(location.search);
   const relay = window.StrataGridRelay;
-  relay.request(JSON.stringify({canvas: "relay", maxBytes: parseInt(q.get("maxBytes") || "", 10) || undefined}));
+  // ?keys=0: the page keeps the keyboard (WIRE.md, "Input")
+  relay.request(JSON.stringify({canvas: "relay", maxBytes: parseInt(q.get("maxBytes") || "", 10) || undefined,
+    keys: q.get("keys") !== "0"}));
   const wire = q.get("wire");
   if (wire) {
     const messages = await (await fetch(wire)).json();
