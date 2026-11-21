@@ -1,12 +1,13 @@
 # Made with Strata
 
-<img src="media/family-orbit.gif" width="720" alt="Strata as a glowing core with a light in it, and the twenty-two projects below as spheres on three rings around it, joined to the core by thin lines; the camera goes once round">
+<img src="media/family-orbit.gif" width="720" alt="Strata as a glowing core with a light in it, and the twenty-four projects below as spheres on three rings around it, joined to the core by thin lines; the camera goes once round">
 
 <sub>The family, drawn by Strata v0.7.0 itself through the Python binding
 (`tools/make_family_media.py`). Inner ring, violet: renders and previews.
 Middle ring, teal: simulations and views. Outer ring, orange: games. Each
 sphere's size is its GitHub repository size on a log scale (read on
-2026-10-29; Ophidian, Tic Tak Toe, Apex and graphik on 2026-11-20), from
+2026-10-29; Ophidian, the three tic-tac-toes, Apex and graphik on
+2026-11-20), from
 Familiar at 125 KB to Beyond Nations at about 74 MB. The core's
 point light gives each one its lit side. A still is in
 [`media/showcase/family.jpg`](media/showcase/family.jpg).</sub>
@@ -144,6 +145,34 @@ in 3D.
 <sub>Rendered fresh by `tools/strata_snapshot.py` (the board mid-game) at
 `Stephenson-Software/Tic-Tak-Toe@7ea2cc2`.</sub>
 
+### Tic Tac Toe (SDL)
+
+Tic Tac Toe against the computer in C++ and SDL2. On the desktop it loads
+Strata's library and draws the board in a Strata window; its browser build
+sends the board to the [grid relay](#graphik-grid3d-and-the-grid-relay) and
+starts in 3D (`?view=2d` picks 2D).
+[Repository](https://github.com/Stephenson-Software/Tic-Tac-Toe-Using-SDL) ·
+[play in the browser](https://tic-tac-toe-sdl.play.danielstephenson.dev)
+
+<img src="media/showcase/tic-tac-toe-sdl.jpg" width="480" alt="The SDL game's 3D board in the browser mid-game: red X pieces and blue O rings on white tiles in a dark frame">
+
+<sub>A frame of `docs/images/3d-hero.png` in `Stephenson-Software/Tic-Tac-Toe-Using-SDL`
+(a local build of its browser page in headless Chromium).</sub>
+
+### Tic Tac Toe (Web)
+
+A two-player Tic Tac Toe in React, with a move list to step back through.
+Its board can be drawn in 3D by the
+[grid relay](#graphik-grid3d-and-the-grid-relay), the default where WebGL 2
+runs; `?view=2d` picks the 2D board.
+[Repository](https://github.com/dmccoystephenson/Tic-Tac-Toe-Web-App) ·
+[play in the browser](https://tic-tac-toe-web.play.danielstephenson.dev)
+
+<img src="media/showcase/tic-tac-toe-web.jpg" width="480" alt="The React game in the browser after X wins down the middle column: the 3D board on the left, the move list on the right">
+
+<sub>`docs/images/3d-hero.png` in `dmccoystephenson/Tic-Tac-Toe-Web-App`
+(a local build of its page in headless Chromium).</sub>
+
 ## Simulations and views
 
 ### Apex
@@ -170,7 +199,7 @@ browser it sends small binary messages (board, pieces, HUD, camera) to
 Strata's **grid relay** (`web/kit/grid-relay`, wire format in its `WIRE.md`),
 a web-kit scene that slides the pieces between ticks itself; the relay ships
 prebuilt in Strata's wasm release from 0.9.0. Ophidian, Tic Tak Toe and Apex
-use both.
+use both; the SDL and React tic-tac-toes talk to the relay directly.
 [graphik](https://github.com/Stephenson-Software/graphik) ·
 [grid relay](../web/kit/grid-relay/)
 

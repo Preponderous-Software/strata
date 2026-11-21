@@ -39,7 +39,7 @@ RELEASE = "0.7.0"
 
 # The projects in docs/SHOWCASE.md, by section and in its order, with their
 # repository size in KB.
-SIZES_READ = "2026-10-29"  # ophidian, Tic-Tak-Toe, apex and graphik: 2026-11-20
+SIZES_READ = "2026-10-29"  # the grid games (ophidian, the tic-tac-toes, apex) and graphik: 2026-11-20
 RINGS = [
     # (section, ring radius, colour)
     ("Renders and previews", 3.4, (0.60, 0.42, 1.00)),
@@ -58,6 +58,8 @@ PROJECTS = {
         ("Stephenson-Software/FishE", 2723),
         ("Preponderous-Software/ophidian", 3180),
         ("Stephenson-Software/Tic-Tak-Toe", 148),
+        ("Stephenson-Software/Tic-Tac-Toe-Using-SDL", 204),
+        ("dmccoystephenson/Tic-Tac-Toe-Web-App", 240),
     ],
     "Simulations and views": [
         ("Preponderous-Software/apex", 3947),
