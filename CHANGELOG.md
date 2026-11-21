@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.9.1
+
+The grid relay is hardened and holds up better on phones, with no change to
+the C ABI (1.17), the web kit's version (1.3) or the wire format (1.0): a
+game built against 0.9.0 keeps working. The relay now refuses at `send` what
+the engine would refuse every frame, keeps a `close()` that arrives while it
+loads, keeps at most one queued message of each kind, starts drawing with the
+first message instead of at `ready` (so a game booting in the same page no
+longer costs the view its pixel density and shadows), keeps its WebGL context
+across app switches on iOS, and takes `keys: false` for a page with its own
+keyboard UI. Games that take the relay from a release tarball pick these up by
+moving their pin to 0.9.1.
+
 - The grid relay is hardened (wire format still 1.0; every message a 1.0
   encoder that keeps to the engine's own rules wrote before is still taken).
   It now refuses, with status -5 from `send`, the lights and HUD colours the

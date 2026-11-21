@@ -100,7 +100,9 @@ taken from the project itself.
 
 ## Status
 
-`v0.9.0` adds the grid relay, a web-kit scene that draws a grid scene sent
+`v0.9.1` hardens the grid relay (it refuses what the engine would refuse),
+keeps its quality and WebGL context on phones, and adds `keys: false` for
+pages with their own keyboard UI. `v0.9.0` added the grid relay, a web-kit scene that draws a grid scene sent
 as page messages (web kit 1.3). `v0.8.0` added wide lines, world-anchored labels, RGBA mesh colours, ambient
 and sun levels and window fullscreen (ABI 1.13 to 1.17, all compatible) and
 web kit 1.2. `v0.7.0` added the web kit: the shell around a Strata scene embedded in a web
