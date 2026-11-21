@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+- The web kit is lighter on phones:
+  - `STRATA_FLAG_NO_HOST_STATE` (ABI 1.18; C#, Python): a host-context
+    engine whose host keeps no GL state of its own skips saving and
+    restoring that state around each call. That was some sixty
+    `getParameter`/`isEnabled` queries a frame, and in a browser each one is
+    a synchronous round trip to the GPU process; `strata_kit.h` passes the
+    flag (under `#if STRATA_ABI_MINOR >= 18`). In headless Chromium the grid
+    relay's main-thread time per frame went from about 290 ms to under 1 ms
+    (SwiftShader, where those round trips wait for the drawing), which under
+    pygbag is time CPython gets back. Other hosts are unchanged;
+  - `strata-kit.js` takes quality back: after 8 s (`upMs`) of frames at or
+    under 0.6 × `slowMs` (`fastMs`) it undoes the last step down (the tier,
+    then the pixel density), with the same settle window. A step back up
+    that is lowered again soon doubles the wait, and after three tries
+    (`maxUpFailures`) that step stays down, so the view never flips between
+    two levels. Before, any stall (a game booting in the page, a tab coming
+    back) cost the view its pixel density and shadows for the rest of the
+    visit;
+  - `strata-loader.js` compiles the `.wasm` while it downloads
+    (`WebAssembly.compileStreaming` on a copy of the same response, so the
+    browser may also cache the compiled code) when it is served as
+    `application/wasm`, and starts the download before its WebGL 2 probe,
+    whose first context can take a phone a while, so the two overlap. With
+    no WebGL 2 the download is cancelled; behind `gate` it still waits for
+    the tap. Otherwise the bytes are handed over as before;
+  - `build-kit.sh` minifies the glue with the Closure Compiler
+    (`KIT_CLOSURE=0` turns it off): the grid relay's `.js` goes from 206 KB
+    to 82 KB (46 KB to 27 KB gzipped). The `.wasm` is unchanged;
+  - the grid relay's context drops `preserveDrawingBuffer` (nothing reads
+    its frames back; tools capture the screen), which spares a phone's tiled
+    GPU a copy or a tile load each frame. The kit's default is unchanged.
+
 ## 0.9.1
 
 The grid relay is hardened and holds up better on phones, with no change to
@@ -62,38 +94,6 @@ moving their pin to 0.9.1.
     battery saver keeps its quality;
   - the grid relay asks for its two files' sizes at once (the size gate),
     saving a round trip before the download starts.
-
-- The web kit is lighter on phones:
-  - `STRATA_FLAG_NO_HOST_STATE` (ABI 1.18; C#, Python): a host-context
-    engine whose host keeps no GL state of its own skips saving and
-    restoring that state around each call. That was some sixty
-    `getParameter`/`isEnabled` queries a frame, and in a browser each one is
-    a synchronous round trip to the GPU process; `strata_kit.h` passes the
-    flag (under `#if STRATA_ABI_MINOR >= 18`). In headless Chromium the grid
-    relay's main-thread time per frame went from about 290 ms to under 1 ms
-    (SwiftShader, where those round trips wait for the drawing), which under
-    pygbag is time CPython gets back. Other hosts are unchanged;
-  - `strata-kit.js` takes quality back: after 8 s (`upMs`) of frames at or
-    under 0.6 × `slowMs` (`fastMs`) it undoes the last step down (the tier,
-    then the pixel density), with the same settle window. A step back up
-    that is lowered again soon doubles the wait, and after three tries
-    (`maxUpFailures`) that step stays down, so the view never flips between
-    two levels. Before, any stall (a game booting in the page, a tab coming
-    back) cost the view its pixel density and shadows for the rest of the
-    visit;
-  - `strata-loader.js` compiles the `.wasm` while it downloads
-    (`WebAssembly.compileStreaming` on a copy of the same response, so the
-    browser may also cache the compiled code) when it is served as
-    `application/wasm`, and starts the download before its WebGL 2 probe,
-    whose first context can take a phone a while, so the two overlap. With
-    no WebGL 2 the download is cancelled; behind `gate` it still waits for
-    the tap. Otherwise the bytes are handed over as before;
-  - `build-kit.sh` minifies the glue with the Closure Compiler
-    (`KIT_CLOSURE=0` turns it off): the grid relay's `.js` goes from 206 KB
-    to 82 KB (46 KB to 27 KB gzipped). The `.wasm` is unchanged;
-  - the grid relay's context drops `preserveDrawingBuffer` (nothing reads
-    its frames back; tools capture the screen), which spares a phone's tiled
-    GPU a copy or a tile load each frame. The kit's default is unchanged.
 
 - The grid relay and the web kit take `keys: false`, for a page with its own
   keyboard UI (a React or DOM board whose buttons are used with Tab, Space
