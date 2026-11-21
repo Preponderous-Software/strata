@@ -1,22 +1,12 @@
-#include "core/drive.hpp"
+#include "core/drive/drive.hpp"
 
-#include <cerrno>
 #include <cmath>
-#include <cstdlib>
 #include <cstring>
 
+#include "core/drive/settings.hpp"
 #include "core/error.hpp"
 #include "core/json_line.hpp"
 #include "core/log.hpp"
-
-#if !defined(_WIN32) && !defined(__EMSCRIPTEN__)
-#define STRATA_DRIVE_POSIX 1
-#include <fcntl.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <unistd.h>
-#endif
 
 #ifndef STRATA_VERSION_STRING
 #define STRATA_VERSION_STRING "0.0.0"
@@ -24,11 +14,6 @@
 
 namespace strata::drive {
 namespace {
-
-#if defined(STRATA_DRIVE_POSIX)
-constexpr size_t kMaxLineBytes = 1u << 20;
-#endif
-constexpr long long kMaxStepFrames = 1000000;
 
 struct TypeName {
     int32_t type;
@@ -48,8 +33,6 @@ constexpr TypeName kTypeNames[] = {
 };
 
 const char* modeName(ClockMode mode) { return mode == ClockMode::Stepped ? "stepped" : "free"; }
-
-bool validStep(double seconds) { return std::isfinite(seconds) && seconds > 0.0 && seconds <= 1.0; }
 
 const json::Value* find(const json::Object& o, const char* key) {
     const auto it = o.find(key);
@@ -88,7 +71,7 @@ const char* eventTypeName(int32_t type) {
     return "none";
 }
 
-Drive::Drive() = default;
+Drive::Drive(std::unique_ptr<MonotonicClock> clock) : clock_(std::move(clock)) {}
 
 Drive::~Drive() {
     if (stepPending_ && connected()) {
@@ -101,73 +84,13 @@ Drive::~Drive() {
                  .field("ended", true)
                  .str());
     }
-#if defined(STRATA_DRIVE_POSIX)
-    if (fd_ >= 0) ::close(fd_);
-#endif
 }
 
-void Drive::connectFromEnvironment() {
-    const char* path = std::getenv("STRATA_DRIVE");
-    if (!path || !*path) return;
-    ClockMode mode = ClockMode::Free;
-    if (const char* clock = std::getenv("STRATA_DRIVE_CLOCK")) {
-        if (std::strcmp(clock, "stepped") == 0) {
-            mode = ClockMode::Stepped;
-        } else if (*clock && std::strcmp(clock, "free") != 0) {
-            logf(LogLevel::Warning, "STRATA_DRIVE_CLOCK must be free or stepped (got '%s'); using free", clock);
-        }
-    }
-    double step = 1.0 / 60.0;
-    if (const char* s = std::getenv("STRATA_DRIVE_STEP")) {
-        const double parsed = std::strtod(s, nullptr);
-        if (validStep(parsed)) {
-            step = parsed;
-        } else if (*s) {
-            logf(LogLevel::Warning, "STRATA_DRIVE_STEP must be in (0, 1] seconds (got '%s'); using 1/60", s);
-        }
-    }
-#if defined(STRATA_DRIVE_POSIX)
-    sockaddr_un addr{};
-    addr.sun_family = AF_UNIX;
-    if (std::strlen(path) >= sizeof addr.sun_path) {
-        logf(LogLevel::Warning, "STRATA_DRIVE path is too long for a Unix socket (%zu bytes); running undriven",
-             std::strlen(path));
-        return;
-    }
-    std::strcpy(addr.sun_path, path);
-    const int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) {
-        logf(LogLevel::Warning, "STRATA_DRIVE: socket() failed (%s); running undriven", std::strerror(errno));
-        return;
-    }
-    ::fcntl(fd, F_SETFD, FD_CLOEXEC);
-    if (::connect(fd, reinterpret_cast<const sockaddr*>(&addr), sizeof addr) != 0) {
-        logf(LogLevel::Warning, "STRATA_DRIVE: could not connect to %s (%s); running undriven", path,
-             std::strerror(errno));
-        ::close(fd);
-        return;
-    }
-    adopt(fd, mode, step);
-    logf(LogLevel::Info, "driven through %s (%s clock, step %g s)", path, modeName(mode_), step_);
-#else
-    (void)mode;
-    (void)step;
-    logf(LogLevel::Warning, "STRATA_DRIVE is set, but the drive channel needs Linux; running undriven");
-#endif
-}
-
-void Drive::adopt(int fd, ClockMode mode, double step) {
-#if defined(STRATA_DRIVE_POSIX)
-    fd_ = fd;
+void Drive::attach(std::unique_ptr<HarnessLink> link, ClockMode mode, double step) {
+    link_ = std::move(link);
     wasDriven_ = true;
     mode_ = mode;
     step_ = validStep(step) ? step : 1.0 / 60.0;
-#else
-    (void)fd;
-    (void)mode;
-    (void)step;
-    fail(STRATA_ERROR_UNSUPPORTED, "the drive channel needs a POSIX platform");
-#endif
 }
 
 void Drive::push(const StrataEvent& event) {
@@ -209,14 +132,14 @@ void Drive::startFrame() {
 
 double Drive::frameSeconds() {
     startFrame();
-    const auto now = std::chrono::steady_clock::now();
+    const double now = clock_->now();
     if (connected() && mode_ == ClockMode::Stepped) {
         // Measured time restarts from here if the clock goes back to free.
         haveLast_ = false;
         return step_;
     }
     double seconds = 0.0;
-    if (haveLast_) seconds = std::chrono::duration<double>(now - last_).count();
+    if (haveLast_) seconds = now - last_;
     last_ = now;
     haveLast_ = true;
     return seconds;
@@ -267,79 +190,38 @@ void Drive::pump(bool block) {
 }
 
 bool Drive::readSome(bool block) {
-#if defined(STRATA_DRIVE_POSIX)
-    if (fd_ < 0) return false;
-    for (;;) {
-        pollfd p{};
-        p.fd = fd_;
-        p.events = POLLIN;
-        const int ready = ::poll(&p, 1, block ? -1 : 0);
-        if (ready < 0) {
-            if (errno == EINTR) continue;
-            disconnect(std::strerror(errno));
-            return false;
-        }
-        if (ready == 0) return false;
-        char buffer[4096];
-        const ssize_t n = ::recv(fd_, buffer, sizeof buffer, 0);
-        if (n < 0) {
-            if (errno == EINTR) continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK) return false;
-            disconnect(std::strerror(errno));
-            return false;
-        }
-        if (n == 0) {
-            disconnect("the harness closed the connection");
-            return false;
-        }
-        inbox_.append(buffer, static_cast<size_t>(n));
-        if (inbox_.size() > kMaxLineBytes && inbox_.find('\n') == std::string::npos) {
-            disconnect("a line longer than 1 MiB");
-            return false;
-        }
-        return true;
+    if (!link_) return false;
+    Received got = link_->receive(block);
+    if (got.kind == Received::Kind::Closed) {
+        disconnect(got.reason.c_str());
+        return false;
     }
-#else
-    (void)block;
-    return false;
-#endif
+    if (got.kind == Received::Kind::Nothing) return false;
+    inbox_.append(got.bytes);
+    if (inbox_.size() > kMaxLineBytes && inbox_.find('\n') == std::string::npos) {
+        disconnect("a line longer than 1 MiB");
+        return false;
+    }
+    return true;
 }
 
 void Drive::send(const std::string& line) {
-#if defined(STRATA_DRIVE_POSIX)
-    if (fd_ < 0) return;
-    const std::string data = line + "\n";
-    size_t sent = 0;
-    while (sent < data.size()) {
-#if defined(MSG_NOSIGNAL)
-        const ssize_t n = ::send(fd_, data.data() + sent, data.size() - sent, MSG_NOSIGNAL);
-#else
-        const ssize_t n = ::send(fd_, data.data() + sent, data.size() - sent, 0);
-#endif
-        if (n < 0) {
-            if (errno == EINTR) continue;
-            disconnect(std::strerror(errno));
-            return;
-        }
-        sent += static_cast<size_t>(n);
-    }
-#else
-    (void)line;
-#endif
+    if (!link_) return;
+    const Sent sent = link_->send(line + "\n");
+    if (!sent.ok) disconnect(sent.reason.c_str());
 }
 
 void Drive::disconnect(const char* why) {
-#if defined(STRATA_DRIVE_POSIX)
-    if (fd_ < 0) return;
-    ::close(fd_);
-    fd_ = -1;
-#endif
+    if (!link_) return;
+    // Copied before anything is reset, so `why` may point anywhere.
+    const std::string reason = why;
+    link_.reset();
     // A stepped game must never hang for a harness that has gone.
     mode_ = ClockMode::Free;
     grantedFrames_ = 0;
     stepPending_ = false;
     inbox_.clear();
-    logf(LogLevel::Info, "drive channel closed (%s); running undriven", why);
+    logf(LogLevel::Info, "drive channel closed (%s); running undriven", reason.c_str());
 }
 
 void Drive::handleLine(const std::string& raw) {

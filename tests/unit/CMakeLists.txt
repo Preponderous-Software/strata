@@ -2,6 +2,8 @@ add_executable(strata-unit-tests
     main.cpp
     test_abi.cpp
     test_drive.cpp
+    test_drive_characterization.cpp
+    test_drive_ports.cpp
     test_log.cpp
     test_primitive_mesh.cpp
     test_cascades.cpp
@@ -24,7 +26,8 @@ add_executable(strata-unit-tests
     # Compiled in rather than linked: the strata_scene library exists only with
     # STRATA_BUILD_TOOLS, and it links the shared strata, not strata_static.
     ${PROJECT_SOURCE_DIR}/tools/common/scene_file.cpp)
-target_link_libraries(strata-unit-tests PRIVATE strata_static)
+find_package(Threads REQUIRED)
+target_link_libraries(strata-unit-tests PRIVATE strata_static Threads::Threads)
 # test_kit_lights.cpp includes the web kit's header (without STRATA_KIT_MAIN),
 # test_grid_relay.cpp the grid relay's; test_scene_file.cpp includes the scene
 # format's.

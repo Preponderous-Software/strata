@@ -10,7 +10,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "core/drive.hpp"
+#include "core/drive/service.hpp"
 #include "core/error.hpp"
 #include "core/log.hpp"
 #include "image/image.hpp"
@@ -35,7 +35,7 @@ struct Engine::Impl {
     EngineDesc desc;
     // Declared first so it is destroyed last: it may answer the harness while
     // the engine goes away.
-    drive::Drive drive;
+    std::unique_ptr<drive::Drive> drive = drive::createDrive();
     std::unique_ptr<platform::Surface> surface;
     std::unique_ptr<rhi::GpuDevice> device;
     std::unique_ptr<render::Renderer> renderer;
@@ -57,7 +57,7 @@ std::unique_ptr<Engine> Engine::create(const EngineDesc& desc) {
     }
     auto impl = std::make_unique<Impl>();
     impl->desc = desc;
-    impl->drive.connectFromEnvironment();
+    drive::connectFromEnvironment(*impl->drive);
 
     StrataEngineDesc raw{};
     raw.struct_size = sizeof raw;
@@ -66,7 +66,7 @@ std::unique_ptr<Engine> Engine::create(const EngineDesc& desc) {
     raw.width = desc.width;
     raw.height = desc.height;
     raw.flags = desc.flags;
-    if (impl->drive.wasDriven() && raw.surface == STRATA_SURFACE_WINDOW) {
+    if (impl->drive->wasDriven() && raw.surface == STRATA_SURFACE_WINDOW) {
         // S5: a driven game asked for a window can be played with none.
         const char* override = std::getenv("STRATA_DRIVE_SURFACE");
         if (override && std::strcmp(override, "headless") == 0) {
@@ -127,7 +127,7 @@ std::unique_ptr<Engine> Engine::create(const EngineDesc& desc) {
     hooks.screenshot = [self](const std::string& path) { self->saveScreenshotPng(path); };
     hooks.frameStats = [self] { return self->frameStats(); };
     hooks.surfaceKind = self->impl_->surface->kind();
-    self->impl_->drive.setHooks(std::move(hooks));
+    self->impl_->drive->setHooks(std::move(hooks));
     return engine;
 }
 
@@ -139,16 +139,16 @@ const std::string& Engine::gpuDescription() const { return impl_->gpuDescription
 bool Engine::pollEvent(StrataEvent& out) {
     // A stepped, driven engine waits here for its next frame; then platform
     // events come first and injected ones after them.
-    impl_->drive.beginPoll();
+    impl_->drive->beginPoll();
     if (impl_->surface->pollEvent(out)) return true;
-    return impl_->drive.pop(out);
+    return impl_->drive->pop(out);
 }
 
-void Engine::pushEvent(const StrataEvent& event) { impl_->drive.push(event); }
+void Engine::pushEvent(const StrataEvent& event) { impl_->drive->push(event); }
 
-double Engine::frameSeconds() { return impl_->drive.frameSeconds(); }
+double Engine::frameSeconds() { return impl_->drive->frameSeconds(); }
 
-bool Engine::driven() const { return impl_->drive.wasDriven(); }
+bool Engine::driven() const { return impl_->drive->wasDriven(); }
 
 void Engine::drawableSize(int32_t& width, int32_t& height) const {
     int w = 0, h = 0;
@@ -196,9 +196,9 @@ void Engine::setRelativeMouseMode(bool enabled) {
     } catch (const Error& e) {
         // S3: a driven engine has no cursor to capture, but its injected
         // motion can still be relative.
-        if (e.status() != STRATA_ERROR_UNSUPPORTED || !impl_->drive.wasDriven()) throw;
+        if (e.status() != STRATA_ERROR_UNSUPPORTED || !impl_->drive->wasDriven()) throw;
     }
-    impl_->drive.setRelativeMouse(enabled);
+    impl_->drive->setRelativeMouse(enabled);
 }
 
 void Engine::setFullscreen(bool enabled) { impl_->surface->setFullscreen(enabled); }
@@ -272,7 +272,7 @@ void Engine::endFrame() {
 
 void Engine::present() {
     impl_->surface->present();
-    impl_->drive.presented();
+    impl_->drive->presented();
 }
 
 const StrataFrameStats& Engine::frameStats() const { return impl_->stats; }

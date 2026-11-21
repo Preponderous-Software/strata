@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The drive channel is split into a core and two ports, `HarnessLink` and
+  `MonotonicClock`, under `src/core/drive/` (see its README). Nothing a host
+  or harness sees changes: the same replies, log lines and C ABI. The protocol
+  is now unit-tested on every platform through fakes.
+
 ## 0.10.0
 
 The browser grid view is much lighter on a phone's main thread. ABI 1.18 adds
