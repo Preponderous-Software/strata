@@ -30,7 +30,7 @@ from ctypes import (
 #: The major version this binding was written against (STRATA_ABI_VERSION).
 ABI_VERSION = 1
 #: The newest minor whose additions this binding declares (STRATA_ABI_MINOR).
-ABI_MINOR = 17
+ABI_MINOR = 18
 
 # ---------------------------------------------------------------- status
 
@@ -60,6 +60,7 @@ FLAG_VSYNC = 1 << 0
 FLAG_DEBUG_CONTEXT = 1 << 1
 FLAG_HIDDEN_WINDOW = 1 << 2
 FLAG_GPU_TIMING = 1 << 3
+FLAG_NO_HOST_STATE = 1 << 4  # ABI 1.18
 
 LIGHTING_LEGACY = 0
 LIGHTING_SUN = 1

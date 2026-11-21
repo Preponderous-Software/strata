@@ -20,7 +20,9 @@
 //   - input is forwarded: keys (desktop Strata's scancodes and modifier
 //     bits, text input), mouse buttons, motion and the wheel, a touch (as
 //     mouse events and FINGER_* events) and a resize;
-//   - frame time over two seconds of the page's own frame loop;
+//   - frame time over two seconds of the page's own frame loop, in which
+//     no GL state is queried (getParameter, isEnabled: each a synchronous
+//     round trip to the GPU process that holds up the page's main thread);
 //   - no frames are drawn before the first message, and the first one
 //     starts the loop;
 //   - with ?keys=0 ({"keys": false}) no key is forwarded or has its browser
@@ -131,6 +133,15 @@ const check = (ok, what) => {
 
     // -- versioning, input and frame time on one live page
     const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1, hasTouch: true });
+    await page.addInitScript(() => {
+      window.__glQueries = 0;
+      const proto = window.WebGL2RenderingContext && WebGL2RenderingContext.prototype;
+      if (!proto) return;
+      for (const name of ['getParameter', 'isEnabled', 'getIndexedParameter']) {
+        const f = proto[name];
+        proto[name] = function () { window.__glQueries++; return f.apply(this, arguments); };
+      }
+    });
     const logs = [];
     page.on('console', (m) => logs.push(m.text()));
     // Pinned at the top tier (the desktop's shadows), so the frame time is that tier's.
@@ -182,16 +193,19 @@ const check = (ok, what) => {
     await page.setViewportSize({ width: W, height: H });
     await page.waitForTimeout(500);
     await page.evaluate(() => window.StrataGridRelay.resetStats());
+    const q0 = await page.evaluate(() => window.__glQueries);
     const f0 = await page.evaluate(() => window.__strataKit.stats().frames);
     const ms0 = Date.now();
     await page.waitForTimeout(2000);
     const f1 = await page.evaluate(() => window.__strataKit.stats().frames);
+    const queries = (await page.evaluate(() => window.__glQueries)) - q0;
     const st = JSON.parse(await page.evaluate(() => window.StrataGridRelay.stats()));
     const fps = (f1 - f0) / ((Date.now() - ms0) / 1000);
     console.log(`frame loop: ${fps.toFixed(1)} fps, relay + kit CPU ${st.cpuMs.toFixed(2)} ms a frame, ` +
       `quality ${st.quality}, ${st.width}x${st.height}`);
     fs.writeFileSync(path.join(outDir, 'timing.json'), JSON.stringify({ fps, cpuMs: st.cpuMs, quality: st.quality }));
     check(f1 > f0, 'the frame loop runs');
+    check(queries === 0, `no GL state queried while drawing (${queries} getParameter/isEnabled calls in ${f1 - f0} frames)`);
 
     // -- no frames before the first message: the game in the page is still
     // starting on the same thread, and its stalls would lower the quality

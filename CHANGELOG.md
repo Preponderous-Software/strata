@@ -63,6 +63,17 @@ moving their pin to 0.9.1.
   - the grid relay asks for its two files' sizes at once (the size gate),
     saving a round trip before the download starts.
 
+- The web kit is lighter on phones:
+  - `STRATA_FLAG_NO_HOST_STATE` (ABI 1.18; C#, Python): a host-context
+    engine whose host keeps no GL state of its own skips saving and
+    restoring that state around each call. That was some sixty
+    `getParameter`/`isEnabled` queries a frame, and in a browser each one is
+    a synchronous round trip to the GPU process; `strata_kit.h` passes the
+    flag (under `#if STRATA_ABI_MINOR >= 18`). In headless Chromium the grid
+    relay's main-thread time per frame went from about 290 ms to under 1 ms
+    (SwiftShader, where those round trips wait for the drawing), which under
+    pygbag is time CPython gets back. Other hosts are unchanged;
+
 - The grid relay and the web kit take `keys: false`, for a page with its own
   keyboard UI (a React or DOM board whose buttons are used with Tab, Space
   and Enter): `StrataGridRelay.request('{"keys": false}')` (or
