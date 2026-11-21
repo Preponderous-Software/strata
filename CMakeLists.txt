@@ -246,7 +246,18 @@ if(STRATA_BUILD_TOOLS)
     target_link_libraries(strata_scene PUBLIC strata)
     strata_set_warnings(strata_scene)
 
-    add_executable(strata-golden tools/strata-golden/main.cpp)
+    # The command line (main.cpp), the core and service, and one file per
+    # adapter; see tools/strata-golden/README.md.
+    add_executable(strata-golden
+        tools/strata-golden/main.cpp
+        tools/strata-golden/golden.cpp
+        tools/strata-golden/service.cpp
+        tools/strata-golden/adapters/directory_scene_source.cpp
+        tools/strata-golden/adapters/engine_scene_renderer.cpp
+        tools/strata-golden/adapters/png_golden_directory.cpp
+        tools/strata-golden/adapters/png_file_sink.cpp
+        tools/strata-golden/adapters/stdio_console.cpp)
+    target_include_directories(strata-golden PRIVATE tools/strata-golden)
     target_link_libraries(strata-golden PRIVATE strata strata_scene strata_image)
     strata_set_warnings(strata-golden)
 
