@@ -16,6 +16,7 @@
 
 namespace strata::drive {
 
+#if defined(STRATA_DRIVE_POSIX)
 namespace {
 
 Received closed(std::string reason) {
@@ -26,6 +27,7 @@ Received closed(std::string reason) {
 }
 
 }  // namespace
+#endif
 
 UnixSocketLink::UnixSocketLink(int fd) {
 #if defined(STRATA_DRIVE_POSIX)
