@@ -39,7 +39,7 @@ RELEASE = "0.7.0"
 
 # The projects in docs/SHOWCASE.md, by section and in its order, with their
 # repository size in KB.
-SIZES_READ = "2026-10-29"
+SIZES_READ = "2026-10-29"  # ophidian, Tic-Tak-Toe, apex and graphik: 2026-11-20
 RINGS = [
     # (section, ring radius, colour)
     ("Renders and previews", 3.4, (0.60, 0.42, 1.00)),
@@ -56,8 +56,12 @@ PROJECTS = {
         ("Preponderous-Software/sisyphus", 15771),
         ("Preponderous-Software/familiar", 125),
         ("Stephenson-Software/FishE", 2723),
+        ("Preponderous-Software/ophidian", 3180),
+        ("Stephenson-Software/Tic-Tak-Toe", 148),
     ],
     "Simulations and views": [
+        ("Preponderous-Software/apex", 3947),
+        ("Stephenson-Software/graphik", 347),
         ("Preponderous-Software/microbiome", 11053),
         ("Preponderous-Software/env-lib-cpp", 2824),
         ("Preponderous-Software/viron-strata", 774),
