@@ -73,6 +73,14 @@ moving their pin to 0.9.1.
     relay's main-thread time per frame went from about 290 ms to under 1 ms
     (SwiftShader, where those round trips wait for the drawing), which under
     pygbag is time CPython gets back. Other hosts are unchanged;
+  - `strata-kit.js` takes quality back: after 8 s (`upMs`) of frames at or
+    under 0.6 × `slowMs` (`fastMs`) it undoes the last step down (the tier,
+    then the pixel density), with the same settle window. A step back up
+    that is lowered again soon doubles the wait, and after three tries
+    (`maxUpFailures`) that step stays down, so the view never flips between
+    two levels. Before, any stall (a game booting in the page, a tab coming
+    back) cost the view its pixel density and shadows for the rest of the
+    visit;
 
 - The grid relay and the web kit take `keys: false`, for a page with its own
   keyboard UI (a React or DOM board whose buttons are used with Tab, Space

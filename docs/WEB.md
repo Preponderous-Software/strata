@@ -154,7 +154,7 @@ from `v0.7.0` on (older tarballs have no `kit/`):
 | File | What it is |
 |---|---|
 | `strata_kit.h` | Header-only C++ host shell. Creates the WebGL 2 context (`preserveDrawingBuffer` on, so frames can be read back) and the engine, with `STRATA_FLAG_NO_HOST_STATE` (Strata ABI 1.18) since nothing else draws in that context, so the engine does not query and restore its GL state around every frame; resizing; three quality tiers (sun cascades, shadow map size, point-light budget, point thinning); an orbit camera and its view-projection matrix; the sun from latitude, longitude and time; per-frame batches of primitives, points (alpha clamped), lines, prioritised point lights and, from kit 1.2, engine-drawn world labels (`Host::label`, Strata ABI 1.14) and, from kit 1.3, screen panels and screen text (`Host::rect`, `Host::text`) and the frame's clear (`Host::clearFlags`, `Host::clearColor`; the sky by default, as before); frame stats (`sk_stats`: primitives, points, lines, lights, terrain samples and, from kit 1.1, the meshes the host counts in `Host::meshes`). Exports `sk_init`, `sk_restore`, `sk_resize`, `sk_set_quality`, `sk_set_camera`, `sk_set_sun`, `sk_view_proj`, `sk_stats`, `sk_frame` and `sk_kit_version`. Natively (no Emscripten) the same file opens a headless engine: `sk_init_headless`, `sk_save_png` and `sk_shutdown`, so a scene also renders stills |
-| `strata-kit.js` | Dependency-free page shell (`window.StrataKit`): canvas sizing with a capped device pixel ratio; adaptive quality (pixel density first, then the tier, with settle windows, reset when the tab is hidden); orbit, pan, pinch, wheel and keyboard camera; `project()` and `pick()` in CSS pixels; `webglcontextlost`/`webglcontextrestored`; `?quality=`, `?fps=1` and `?drive=1`; label placement with collision and hysteresis (`StrataKit.placeLabels`); `window.__strataKit` for tools |
+| `strata-kit.js` | Dependency-free page shell (`window.StrataKit`): canvas sizing with a capped device pixel ratio; adaptive quality (pixel density first, then the tier, with settle windows, reset when the tab is hidden, and each step taken back after a sustained run of fast frames); orbit, pan, pinch, wheel and keyboard camera; `project()` and `pick()` in CSS pixels; `webglcontextlost`/`webglcontextrestored`; `?quality=`, `?fps=1` and `?drive=1`; label placement with collision and hysteresis (`StrataKit.placeLabels`); `window.__strataKit` for tools |
 | `strata-loader.js` | The loading shell (`window.StrataLoader`): the poster as a blurred backdrop, byte-accurate download progress with the size (or, for a host that boots its own way, `StrataLoader.show()` and `StrataLoader.progress(fraction, label)`: see below), and a fallback to the trailer clip or the poster, with the reason in words, when WebGL 2 is missing, the engine fails, a lost context does not come back, or the device is too slow at the lowest tier |
 | `build-kit.sh` | One parameterised build: emsdk version check, the Strata tarball's SHA-256 (or a source build's `libstrata.a`), fixed flags (`-O2 -fwasm-exceptions`, WebGL 2 only, `MODULARIZE`, and `INCOMING_MODULE_JS_API` with `wasmBinary`, so the glue takes the bytes `strata-loader.js` already fetched instead of downloading the `.wasm` again) and the export list. Copies the page scripts beside the `.wasm`. A host that links its own glue with `strata-loader.js` needs `wasmBinary` in `-sINCOMING_MODULE_JS_API` too: emsdk 6.0.11's default list leaves it out |
 | `ci-snippet.yml` | A GitHub Actions job for a host that commits its build: rebuild, `git diff --exit-code`, and the smoke test |
@@ -277,10 +277,21 @@ Rules the kit keeps, which a hand-written shell tends to lose:
 - **Pixel density is given up before shadows.** Frames over `slowMs`
   (default 28 ms) averaged over 1.5 s first lower the DPR cap by a quarter,
   down to 1, then the tier; each step waits 2.5 s to settle, as do the first
-  frames after `kit.start()`. Only then does `onSlow` fire, once. Nothing
-  steps back up, so a page whose own start-up stalls the thread (a game
-  booting in the same page) should start the loop once that is done: the
-  grid relay starts it with its first message.
+  frames after `kit.start()`. Only then does `onSlow` fire, once.
+- **Quality comes back.** After `upMs` (default 8 s) of frames at or under
+  `fastMs` (default 0.6 × `slowMs`), the last step down is taken back (the
+  tier first, then the pixel density, each to exactly what it was), with
+  the same settle window; frames between `fastMs` and `slowMs` change
+  nothing, so one step's cost cannot flip it straight back. A step up that
+  is lowered again within the settle window and two measurements doubles
+  the wait before the next try, and after three (`maxUpFailures`) that step
+  is left down for good while the ones under it may still come back. So a
+  stall (a game booting in the same page, a busy moment, a tab coming back)
+  no longer costs the view its quality for the rest of the visit. The
+  measure is the frame interval, so a page held to 30 fps never looks
+  fast; a page whose own start-up stalls the thread should still start the
+  loop once that is done (the grid relay starts it with its first
+  message). The smoke test checks both directions on a fake clock.
 - **Keys are the page's when it says so.** On the focused canvas the arrow
   keys and +/- move the camera, and `onKey` returning true keeps a key from
   the page. A page with its own keyboard UI passes `keys: false`: the kit

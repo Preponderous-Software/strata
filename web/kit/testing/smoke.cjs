@@ -312,6 +312,7 @@ async function kitChecks(browser) {
     await gestureChecks(context);
     await hiddenContextLossChecks(context);
     await keyChecks(context);
+    await qualityRecoveryChecks(context);
   } catch (e) {
     check(false, `kit: ${String(e).split('\n')[0]}`);
   } finally {
@@ -451,6 +452,68 @@ async function keyChecks(context) {
   check(!r.b.arrow && !r.b.tab && !r.b.moved,
     `kit: with keys: false no key is prevented or moves the camera (arrow ${r.b.arrow}, Tab ${r.b.tab}, moved ${r.b.moved})`);
   check(errors.length === 0, `kit: keys: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
+  await page.close();
+}
+
+// Adaptive quality, both ways, on a fake clock (performance.now and
+// requestAnimationFrame replaced, so minutes of frames run in moments):
+// slow frames lower the pixel density and then the tier; a sustained run of
+// fast frames takes each step back, last first, up to where it started;
+// frames between fastMs and slowMs change nothing; and a scene that is only
+// slow at the top tier settles one below it after a few tries, instead of
+// flipping between the two, and the pixel density under it still comes back.
+async function qualityRecoveryChecks(context) {
+  const { page, errors } = await kitStubPage(context,
+    '<canvas id="view" style="display:block;width:400px;height:300px"></canvas>');
+  const r = await page.evaluate(() => {
+    let clock = 1000, pending = null;
+    performance.now = () => clock;
+    window.requestAnimationFrame = (cb) => { pending = cb; return 1; };
+    const logs = [];
+    const log = console.log;
+    console.log = (...a) => { logs.push(a.join(' ')); log.apply(console, a); };
+    const canvas = document.getElementById('view');
+    const kit = StrataKit.create({ module: window.__stubModule(), canvas, idleOrbit: false, quality: 2, slowMs: 40 });
+    let tierChanges = 0;
+    const setQuality = kit.setQuality;
+    kit.setQuality = (n) => { tierChanges++; setQuality(n); };
+    kit.start();
+    // Runs `seconds` of frames, each taking frameMs(kit) milliseconds.
+    const run = (seconds, frameMs) => {
+      const end = clock + seconds * 1000;
+      while (clock < end && pending) {
+        const cb = pending;
+        pending = null;
+        clock += typeof frameMs === 'function' ? frameMs(kit) : frameMs;
+        cb(clock);
+      }
+    };
+    const state = () => ({ quality: kit.quality, dpr: +Math.min(devicePixelRatio, kit.dprCap).toFixed(3) });
+    const out = { start: state() };
+    run(30, 120);
+    out.slow = state();
+    run(25, 30);
+    out.between = state();
+    run(120, 16);
+    out.recovered = state();
+    out.fastLogs = logs.filter((l) => /frames are fast/.test(l)).length;
+    // Only the top tier is slow: it is tried again a few times, then left.
+    run(30, 120);
+    tierChanges = 0;
+    run(600, (k) => (k.quality >= 2 ? 60 : 16));
+    out.flip = Object.assign(state(), { tierChanges });
+    return out;
+  });
+  check(r.start.quality === 2 && r.start.dpr === 2, `kit: quality starts at tier 2, pixel density 2 (${JSON.stringify(r.start)})`);
+  check(r.slow.quality === 0 && r.slow.dpr === 1,
+    `kit: slow frames lower the pixel density to 1 and then the tier to 0 (${JSON.stringify(r.slow)})`);
+  check(r.between.quality === 0 && r.between.dpr === 1,
+    `kit: frames between fastMs and slowMs change nothing (${JSON.stringify(r.between)})`);
+  check(r.recovered.quality === 2 && r.recovered.dpr === 2 && r.fastLogs === 5,
+    `kit: a sustained run of fast frames takes back every step, last first (${JSON.stringify(r.recovered)}, ${r.fastLogs} steps up)`);
+  check(r.flip.quality === 1 && r.flip.dpr === 2 && r.flip.tierChanges <= 8,
+    `kit: a scene slow only at the top tier settles one below it, at full pixel density (${JSON.stringify(r.flip)})`);
+  check(errors.length === 0, `kit: quality recovery: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
   await page.close();
 }
 
