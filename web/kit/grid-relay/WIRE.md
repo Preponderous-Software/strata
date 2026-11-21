@@ -41,8 +41,8 @@ nothing richer (pygbag's `platform.window`) can drive it.
 
 | Call | What it does |
 |---|---|
-| `StrataGridRelay.request(json)` | Starts loading the 3D view and returns at once. Options: `canvas` (id, default `relay`), `maxBytes` (the size gate, default 4 MiB: the `.wasm` and glue, measured with `HEAD` before any download), `base`, `title`, `quality`, `reducedMotion`, `gate` (`StrataLoader`'s data-saver prompt). Nothing is downloaded before it is called |
-| `StrataGridRelay.state()` | `idle`, `loading`, `ready` or `failed:<reason>` (over the size gate, no WebGL 2, the engine failed, a lost context that did not come back). A game keeps its 2D view on `failed:` |
+| `StrataGridRelay.request(json)` | Starts loading the 3D view and returns at once. Options: `canvas` (id, default `relay`), `maxBytes` (the size gate, default 4 MiB: the `.wasm` and glue, measured with `HEAD` before any download), `base`, `title`, `quality`, `reducedMotion`, `slowMs` (the frame time over which the kit lowers its quality, default 40: 25 frames a second, so a page held to 30 by a battery saver keeps its quality), `gate` (`StrataLoader`'s data-saver prompt). Nothing is downloaded before it is called |
+| `StrataGridRelay.state()` | `idle`, `loading`, `ready` or `failed:<reason>` (over the size gate, no WebGL 2, the engine failed, a lost context that did not come back). A game keeps its 2D view on `failed:`. The frame loop starts with the first message the module accepts, not at `ready`: until then there is nothing to draw, and the game in the page is usually still starting on the same thread |
 | `StrataGridRelay.send(base64)` | One message. Returns 0, 1 when queued (the module is still loading; the latest message of each kind is kept, as each replaces the last of its kind) or a negative status (below) |
 | `StrataGridRelay.sendBytes(u8)` | The same, from a `Uint8Array` |
 | `StrataGridRelay.poll()` | The input since the last poll, as a JSON array (below) |

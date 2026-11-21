@@ -18,6 +18,7 @@
 - `grid-relay.js`: a `close()` while the module loads is kept (it finishes
   loading hidden and idle, and the next `request()` shows it); before, it
   finished drawing on a hidden canvas that a later `request()` never showed.
+  A `close()` and then a `request()` while it loads shows it once loaded.
   Messages sent before the module are kept as the latest of each kind, not
   all of them.
 - Web kit: a `strata_set_point_lights` the engine refuses is reported once on
@@ -28,6 +29,27 @@
   grid3d (`tests/unit/grid_relay_wire_1_0.inc`). `tests/web/grid_relay_js.cjs`
   checks `grid-relay.js` in Node with the module stubbed. CI checks the wasm
   tarball carries the prebuilt relay (`kit/grid-relay/dist/`).
+- The web kit holds up better on phones (page scripts only: the `.wasm` and
+  goldens are unchanged, and the kit stays 1.3):
+  - a WebGL context lost while the page is hidden (iOS Safari takes it when
+    the player switches apps or locks the screen) is no longer given up on:
+    such a loss is not counted as a repeat, and the 5 seconds the kit waits
+    for the restore (now `restoreMs`) start when the page is visible again.
+    Before, coming back to the tab could find the 3D view replaced by its
+    fallback;
+  - `kit.start()` begins a fresh settle window, so a page that starts the
+    loop later than it creates the kit measures frames from then;
+  - the grid relay starts its frame loop with the first message the module
+    accepts instead of at `ready`. Under pygbag the relay used to draw empty
+    frames while CPython was still booting on the same thread, and those
+    stalls (hundreds of ms to seconds a frame) lowered the pixel density to
+    1 and the shadows to tier 0 for good on every phone;
+  - the grid relay counts frames as slow over 40 ms (25 fps; `slowMs`), not
+    the kit's 28, so a page held to 30 fps by iOS Low Power Mode or a
+    battery saver keeps its quality;
+  - the grid relay asks for its two files' sizes at once (the size gate),
+    saving a round trip before the download starts.
+
 - README.md and ARCHITECTURE.md catch up with ABI 1.17: the README's status
   text names the C ABI as 1.17 (it still said 1.16) and its status table gains
   a window-fullscreen row, and ARCHITECTURE.md's list of minors gains

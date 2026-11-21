@@ -4,7 +4,8 @@
 // harness (run_grid_relay.cjs) can't reach without timing luck:
 //
 //   - close() while the module loads: the relay finishes loading hidden and
-//     idle, draws nothing, and the next request() shows it and draws;
+//     idle, draws nothing, and the next request() shows it; it draws from
+//     the first message the module accepts, not before;
 //   - messages sent before the module are kept as the latest of each kind
 //     (a bounded queue), then submitted in order once it is in;
 //   - a short or foreign message is refused before the module, as after.
@@ -73,8 +74,42 @@ const msg = (kind, tag) => Buffer.from([0x47, 0x33, 1, 0, kind, 0, 0, 0, tag]).t
     await settle();
     check(p.relay.state() === 'idle' && p.canvas.hidden && p.kit.starts === 0,
       'loaded after close(): idle, hidden, not drawing');
+    check(p.relay.request('{}') === 'ready' && !p.canvas.hidden && !p.kit.running,
+      'the next request() shows it, with nothing to draw yet');
+    check(p.relay.send(msg(1, 1)) === 0 && p.kit.running && p.kit.starts === 1,
+      'and the first message starts the frame loop');
+  }
+  {
+    // messages queued, then close() while loading: they reach the module, but
+    // nothing is drawn until the page asks again
+    const p = page();
+    p.relay.request('{}');
+    await settle();
+    p.relay.send(msg(1, 3));
+    p.relay.close();
+    p.release();
+    await settle();
+    await settle();
+    check(p.submitted.length === 1 && p.relay.state() === 'idle' && p.canvas.hidden && p.kit.starts === 0,
+      'queued, then closed while loading: submitted, idle, hidden, not drawing');
     check(p.relay.request('{}') === 'ready' && !p.canvas.hidden && p.kit.running,
-      'the next request() shows it and draws');
+      'the next request() shows it and draws what it has');
+  }
+  {
+    // close() and then request() while loading: it is shown after all
+    const p = page();
+    p.relay.request('{}');
+    await settle();
+    await settle();
+    p.relay.close();
+    check(p.relay.request('{}') === 'loading', 'request() after close() while loading: still loading');
+    p.release();
+    await settle();
+    await settle();
+    check(p.relay.state() === 'ready' && !p.canvas.hidden && !p.kit.running,
+      'loaded: ready and shown, not drawing before the first message');
+    p.relay.send(msg(0, 1));
+    check(p.kit.running, 'the first message starts the frame loop');
   }
   {
     const p = page();

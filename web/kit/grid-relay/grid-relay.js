@@ -72,6 +72,7 @@
   let heap = 0, heapCap = 0;
   let cpuMs = 0, cpuFrames = 0, frameStart = 0, lastErr = null;
   const held = new Set();
+  let fed = false;  // the module has accepted a message: there is something to draw
 
   function fail(reason) {
     state = "failed:" + reason;
@@ -193,7 +194,11 @@
     }
     new Uint8Array(mod.HEAPU8 ? mod.HEAPU8.buffer : mod.HEAP32.buffer, heap, bytes.length).set(bytes);
     const rc = mod._gr_submit(heap, bytes.length);
-    if (rc !== 0) {
+    if (rc === 0) {
+      fed = true;
+      // not while open() replays the queue for a page that said close()
+      if (state === "ready" && !closed && kit && !kit.running) kit.start();
+    } else {
       const msg = `grid-relay: message kind ${bytes[4]} refused: ${STATUS[rc] || "status " + rc}`;
       if (lastErr !== msg) console.error(msg);
       lastErr = msg;
@@ -216,8 +221,10 @@
     if (!canvas) return fail("no canvas #" + opts.canvas);
     state = "loading";
     const base = opts.base;
-    // The size gate: the module's bytes, before any are downloaded.
-    const bytes = (await headBytes(base + opts.wasm)) + (await headBytes(base + opts.script));
+    // The size gate: the module's bytes, before any are downloaded. Both
+    // asked at once: on a phone each round trip is a tenth of a second or more.
+    const sizes = await Promise.all([headBytes(base + opts.wasm), headBytes(base + opts.script)]);
+    const bytes = sizes[0] + sizes[1];
     if (opts.maxBytes && bytes > opts.maxBytes) {
       return fail(`the 3D view is ${(bytes / 1e6).toFixed(1)} MB, over the ${(opts.maxBytes / 1e6).toFixed(1)} MB limit`);
     }
@@ -235,6 +242,11 @@
     try {
       kit = StrataKit.create({
         module: mod, canvas, idleOrbit: false, quality: opts.quality, reducedMotion: opts.reducedMotion,
+        // Slow means under 25 frames a second, not the kit's 35: a board game
+        // is fine at 30, and iOS Low Power Mode (and many Android battery
+        // savers) hold every page to 30, which would otherwise cost the view
+        // its pixel density and shadows on a phone with a GPU to spare.
+        slowMs: opts.slowMs || 40,
         limits: {minPitch: -1.6, maxPitch: 1.6, minDist: 0, maxDist: 1e9},
         // The game owns every key: none moves the kit's camera.
         onKey: () => true,
@@ -276,7 +288,14 @@
       state = "idle";
       return kit;
     }
-    kit.start();
+    // a close() and then a request() while loading: shown after all
+    canvas.hidden = false;
+    // The frame loop starts with the first message the module accepts (in
+    // submit), not before: until then there is nothing to draw, and on a
+    // phone the game in the page is usually still starting (pygbag compiles
+    // and boots CPython on this thread), so frames drawn now would slow that
+    // down and their times would make the kit lower its quality for good.
+    if (fed && !kit.running) kit.start();
     return kit;
   }
 
@@ -287,15 +306,15 @@
     request(json) {
       closed = false;
       if (state === "loading") return state;
-      if (state === "ready") {  // shown and drawing (again, if close() came while it loaded)
+      if (state === "ready") {  // shown, and drawing once there is something to draw
         canvas.hidden = false;
-        kit.start();
+        if (fed && !kit.running) kit.start();
         return state;
       }
-      if (kit && state === "idle") {  // reopened after close(): the module is still here
+      if (kit && state === "idle") {  // reopened after close(), or after a close() while it loaded
         canvas.hidden = false;
         state = "ready";
-        kit.start();
+        if (fed) kit.start();
         return state;
       }
       let o = {};

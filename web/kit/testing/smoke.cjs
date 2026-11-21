@@ -309,6 +309,7 @@ async function kitChecks(browser) {
   try {
     await canvasSizeChecks(context);
     await gestureChecks(context);
+    await hiddenContextLossChecks(context);
   } catch (e) {
     check(false, `kit: ${String(e).split('\n')[0]}`);
   } finally {
@@ -412,6 +413,60 @@ async function gestureChecks(context) {
   const left = await real('left', () => page.mouse.click(box.x + 210, box.y + 140));
   check(left.length === 1 && left[0] === '210,140', `kit: a left click taps once (${left.join(' ') || 'no tap'})`);
   check(errors.length === 0, `kit: gestures: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
+  await page.close();
+}
+
+// A phone takes a hidden page's WebGL context away (iOS Safari does when the
+// player switches apps) and gives it back on return. Losses while hidden are
+// not repeats, and the wait for the restore starts once the page is visible;
+// three losses in a minute while visible, or none restored in restoreMs once
+// visible, are still fatal. Synthetic context events and a stubbed
+// visibilityState, with restoreMs at 200 to keep it quick.
+async function hiddenContextLossChecks(context) {
+  const { page, errors } = await kitStubPage(context,
+    '<canvas id="view" style="display:block;width:400px;height:300px"></canvas>');
+  const r = await page.evaluate(async () => {
+    let vis = 'visible';
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => vis });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => vis === 'hidden' });
+    const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+    const show = (v) => { vis = v; document.dispatchEvent(new Event('visibilitychange')); };
+    const make = () => {
+      const old = document.getElementById('view');
+      const canvas = old.cloneNode(false);
+      old.replaceWith(canvas);
+      const fatal = [];
+      const kit = StrataKit.create({ module: window.__stubModule(), canvas, driven: true, idleOrbit: false,
+        restoreMs: 200, onFatal: (code) => fatal.push(code) });
+      return { kit, fatal,
+        lose: () => canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true })),
+        restore: () => canvas.dispatchEvent(new Event('webglcontextrestored')) };
+    };
+    const out = {};
+    let k = make();
+    show('hidden'); k.lose(); await wait(400);
+    out.hiddenLong = k.fatal.length;
+    show('visible'); await wait(50); k.restore();
+    out.returned = { fatal: k.fatal.length, lost: k.kit.lost };
+    for (let i = 0; i < 4; i++) { show('hidden'); k.lose(); await wait(10); show('visible'); await wait(10); k.restore(); }
+    out.switches = { fatal: k.fatal.length, lost: k.kit.lost };
+    show('hidden'); k.lose(); await wait(300);
+    out.beforeVisible = k.fatal.length;
+    show('visible'); await wait(400);
+    out.neverBack = k.fatal.slice();
+    k = make();
+    for (let i = 0; i < 3; i++) { k.lose(); await wait(10); if (i < 2) k.restore(); }
+    out.visibleRepeats = k.fatal.slice();
+    return out;
+  });
+  check(r.hiddenLong === 0, `kit: a context lost while hidden is not given up on while the page stays hidden (${r.hiddenLong} fatal)`);
+  check(r.returned.fatal === 0 && !r.returned.lost, 'kit: restored after the page is visible again, the view draws on');
+  check(r.switches.fatal === 0 && !r.switches.lost, 'kit: four app switches in a minute, each losing the context while hidden, are not fatal');
+  check(r.beforeVisible === 0 && r.neverBack.length === 1 && r.neverBack[0] === 'context-lost',
+    `kit: a context still not back restoreMs after the page is visible is fatal (${r.neverBack.join(' ') || 'not fatal'})`);
+  check(r.visibleRepeats.length === 1 && r.visibleRepeats[0] === 'context-lost',
+    `kit: three losses in a minute while visible are fatal (${r.visibleRepeats.join(' ') || 'not fatal'})`);
+  check(errors.length === 0, `kit: hidden context loss: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
   await page.close();
 }
 
