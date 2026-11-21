@@ -6,6 +6,11 @@
   `MonotonicClock`, under `src/core/drive/` (see its README). Nothing a host
   or harness sees changes: the same replies, log lines and C ABI. The protocol
   is now unit-tested on every platform through fakes.
+- `strata-golden` is split the same way: a core that decides what a check
+  does and reports, with five ports (scenes, rendering, goldens, artifacts,
+  console) and their adapters under `tools/strata-golden/` (see its README).
+  The command line, its output, exit codes and written files are unchanged;
+  the check and bless policy is now unit-tested without a GPU.
 
 ## 0.10.0
 
