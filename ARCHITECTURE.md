@@ -25,7 +25,7 @@ is built now. Where the RFC plans more, that is called out as **later**.
 | `src/rhi/` | `GpuDevice`, the interface the passes draw through; its GL 4.5 DSA backend and its GLES 3.0 / WebGL 2 backend, with the GLSL 4.50 to GLSL ES 3.00 rewrite (see [docs/WEB.md](docs/WEB.md)) | **yes, only here** |
 | `src/render/` | Primitive meshes, sun and sky model, cascade maths, point lights, terrain and static meshes, overlays, pass list, `Renderer` | no: draws through `GpuDevice` |
 | `src/image/` | PNG reading and writing (stb), golden-image comparison | no |
-| `src/core/` | Errors, the log sink, and the event queue, frame clock and drive channel (`Drive`, with the JSON lines it speaks; see [docs/DRIVE.md](docs/DRIVE.md)) | no |
+| `src/core/` | Errors, the log sink, the JSON lines the drive channel speaks, and `drive/`: the event queue, frame clock and drive channel as a core (`Drive`) with two ports, `HarnessLink` (Unix socket) and `MonotonicClock` (steady clock), and a composition root that connects from `STRATA_DRIVE` (see [src/core/drive/README.md](src/core/drive/README.md) and [docs/DRIVE.md](docs/DRIVE.md)) | no |
 | `tools/` | `strata-golden`, `strata-imgcmp`, the scene-file parser | no |
 | `bindings/` | `csharp/Strata.Interop` (P/Invoke) and `python/strata` (ctypes): declarations of the C ABI, each checked against the library's layout tables | no |
 | `web/kit/` | The shell around a scene embedded in a web page: a header-only C++ host, page and loading scripts, a build script and smoke tests (see [docs/WEB.md](docs/WEB.md#the-web-kit)). It draws through the C ABI | context creation only |

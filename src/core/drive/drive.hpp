@@ -9,24 +9,24 @@
 // frameSeconds and present, so a game's state is only touched where the game
 // expects input anyway.
 //
-// No GL here: the engine passes in what it needs (drawable size, screenshots,
-// frame stats) as hooks, so the protocol is unit-tested with a socket pair.
+// No GL and no I/O here: the engine passes in what it needs (drawable size,
+// screenshots, frame stats) as hooks, the bytes come through a HarnessLink and
+// the time through a MonotonicClock, so the protocol is unit-tested with
+// fakes. service.hpp wires the production adapters.
 #pragma once
 
-#include <chrono>
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <memory>
 #include <string>
 
+#include "core/drive/model.hpp"
+#include "core/drive/ports/harness_link.hpp"
+#include "core/drive/ports/monotonic_clock.hpp"
 #include "strata/strata.h"
 
 namespace strata::drive {
-
-constexpr size_t kMaxQueuedEvents = 4096;
-constexpr int kProtocolVersion = 1;
-
-enum class ClockMode { Free, Stepped };
 
 struct Hooks {
     std::function<void(int32_t& width, int32_t& height)> drawableSize;
@@ -43,25 +43,21 @@ const char* eventTypeName(int32_t type);
 
 class Drive {
 public:
-    Drive();
+    explicit Drive(std::unique_ptr<MonotonicClock> clock);
     ~Drive();
     Drive(const Drive&) = delete;
     Drive& operator=(const Drive&) = delete;
 
-    // Reads STRATA_DRIVE (a Unix socket path), STRATA_DRIVE_CLOCK
-    // (free|stepped) and STRATA_DRIVE_STEP (seconds) and connects. Without
-    // STRATA_DRIVE nothing happens; a failed connection logs a warning and
-    // leaves the engine undriven. Never throws.
-    void connectFromEnvironment();
-    // Takes ownership of an already connected stream socket (tests use a
-    // socket pair). POSIX only.
-    void adopt(int fd, ClockMode mode, double step);
+    // Takes ownership of a connected link and drives the engine through it.
+    // A step outside (0, 1] seconds becomes 1/60. (connectFromEnvironment in
+    // service.hpp builds the link from STRATA_DRIVE.)
+    void attach(std::unique_ptr<HarnessLink> link, ClockMode mode, double step);
 
     void setHooks(Hooks hooks) { hooks_ = std::move(hooks); }
 
     // True from a successful connection until the harness says bye or the
     // connection drops.
-    bool connected() const { return fd_ >= 0; }
+    bool connected() const { return link_ != nullptr; }
     // True if this engine was ever driven. Stays true after a disconnect, so a
     // game that turned off its saves for a driven run keeps them off.
     bool wasDriven() const { return wasDriven_; }
@@ -101,8 +97,9 @@ private:
     void disconnect(const char* why);
 
     Hooks hooks_;
+    std::unique_ptr<MonotonicClock> clock_;
     std::deque<StrataEvent> queue_;
-    int fd_ = -1;
+    std::unique_ptr<HarnessLink> link_;
     bool wasDriven_ = false;
     ClockMode mode_ = ClockMode::Free;
     double step_ = 1.0 / 60.0;
@@ -115,7 +112,7 @@ private:
     int64_t stepFramesRun_ = 0;
 
     bool haveLast_ = false;
-    std::chrono::steady_clock::time_point last_{};
+    double last_ = 0.0;
 
     bool relativeMouse_ = false;
 };

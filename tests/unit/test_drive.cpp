@@ -4,10 +4,14 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <string>
 #include <vector>
 
-#include "core/drive.hpp"
+#include "core/drive/adapters/steady_clock.hpp"
+#include "core/drive/adapters/unix_socket_link.hpp"
+#include "core/drive/drive.hpp"
+#include "core/drive/service.hpp"
 #include "core/error.hpp"
 #include "core/json_line.hpp"
 #include "strata/strata.h"
@@ -24,6 +28,9 @@ using strata::drive::ClockMode;
 using strata::drive::Drive;
 
 namespace {
+
+std::unique_ptr<strata::drive::MonotonicClock> steadyClock() { return std::make_unique<strata::drive::SteadyClock>(); }
+[[maybe_unused]] std::unique_ptr<strata::drive::HarnessLink> socketLink(int fd) { return std::make_unique<strata::drive::UnixSocketLink>(fd); }
 
 StrataEvent key(int32_t type, int32_t scancode) {
     StrataEvent e{};
@@ -218,7 +225,7 @@ TEST(event_type_names_round_trip) {
 }
 
 TEST(pushed_events_come_back_first_in_first_out) {
-    Drive d;
+    Drive d{steadyClock()};
     d.push(key(STRATA_EVENT_KEY_DOWN, 4));
     d.push(key(STRATA_EVENT_KEY_UP, 4));
     StrataEvent e{};
@@ -231,7 +238,7 @@ TEST(pushed_events_come_back_first_in_first_out) {
 }
 
 TEST(push_rejects_unknown_types_and_a_full_queue) {
-    Drive d;
+    Drive d{steadyClock()};
     bool threw = false;
     try {
         d.push(key(42, 0));
@@ -250,7 +257,7 @@ TEST(push_rejects_unknown_types_and_a_full_queue) {
 }
 
 TEST(relative_mouse_mode_zeroes_injected_positions) {
-    Drive d;
+    Drive d{steadyClock()};
     d.setRelativeMouse(true);
     StrataEvent m{};
     m.type = STRATA_EVENT_MOUSE_MOTION;
@@ -268,7 +275,7 @@ TEST(relative_mouse_mode_zeroes_injected_positions) {
 }
 
 TEST(undriven_frame_seconds_starts_at_zero_and_never_goes_back) {
-    Drive d;
+    Drive d{steadyClock()};
     CHECK(!d.connected());
     CHECK(!d.wasDriven());
     CHECK(d.frameSeconds() == 0.0);
@@ -292,12 +299,12 @@ TEST(abi_1_12_calls_reject_bad_arguments_without_a_context) {
 TEST(drive_stepped_clock_delivers_events_on_the_first_granted_frame) {
     Pair pair;
     REQUIRE(pair.engine >= 0);
-    Drive d;
+    Drive d{steadyClock()};
     strata::drive::Hooks hooks;
     hooks.drawableSize = [](int32_t& w, int32_t& h) { w = 320; h = 200; };
     hooks.surfaceKind = "headless";
     d.setHooks(hooks);
-    d.adopt(pair.engine, ClockMode::Stepped, 0.05);
+    d.attach(socketLink(pair.engine), ClockMode::Stepped, 0.05);
     CHECK(d.connected());
     CHECK(d.wasDriven());
 
@@ -333,8 +340,8 @@ TEST(drive_stepped_clock_delivers_events_on_the_first_granted_frame) {
 TEST(drive_holds_pipelined_lines_for_the_next_step) {
     Pair pair;
     REQUIRE(pair.engine >= 0);
-    Drive d;
-    d.adopt(pair.engine, ClockMode::Stepped, 1.0 / 60.0);
+    Drive d{steadyClock()};
+    d.attach(socketLink(pair.engine), ClockMode::Stepped, 1.0 / 60.0);
     pair.write("{\"op\":\"step\",\"frames\":1}\n"
                "{\"op\":\"event\",\"type\":\"key_down\",\"scancode\":4}\n"
                "{\"op\":\"step\",\"frames\":1}\n");
@@ -356,8 +363,8 @@ TEST(drive_holds_pipelined_lines_for_the_next_step) {
 TEST(drive_refuses_bad_lines_without_disconnecting) {
     Pair pair;
     REQUIRE(pair.engine >= 0);
-    Drive d;
-    d.adopt(pair.engine, ClockMode::Free, 1.0 / 60.0);
+    Drive d{steadyClock()};
+    d.attach(socketLink(pair.engine), ClockMode::Free, 1.0 / 60.0);
     pair.write("not json\n"
                "{\"op\":\"teleport\"}\n"
                "{\"op\":\"step\",\"frames\":3}\n"
@@ -380,12 +387,12 @@ TEST(drive_refuses_bad_lines_without_disconnecting) {
 TEST(drive_switches_clock_and_takes_screenshots_through_hooks) {
     Pair pair;
     REQUIRE(pair.engine >= 0);
-    Drive d;
+    Drive d{steadyClock()};
     std::string shotPath;
     strata::drive::Hooks hooks;
     hooks.screenshot = [&](const std::string& path) { shotPath = path; };
     d.setHooks(hooks);
-    d.adopt(pair.engine, ClockMode::Free, 1.0 / 60.0);
+    d.attach(socketLink(pair.engine), ClockMode::Free, 1.0 / 60.0);
     pair.write("{\"op\":\"clock\",\"mode\":\"stepped\",\"step\":0.25}\n"
                "{\"op\":\"shot\",\"path\":\"/tmp/x.png\"}\n"
                "{\"op\":\"step\",\"frames\":1}\n");
@@ -403,11 +410,11 @@ TEST(drive_switches_clock_and_takes_screenshots_through_hooks) {
 }
 
 TEST(drive_falls_back_to_a_free_clock_when_the_harness_goes) {
-    Drive d;
+    Drive d{steadyClock()};
     {
         Pair pair;
         REQUIRE(pair.engine >= 0);
-        d.adopt(pair.engine, ClockMode::Stepped, 0.1);
+        d.attach(socketLink(pair.engine), ClockMode::Stepped, 0.1);
     }  // the harness end closes
     d.beginPoll();  // would wait for ever if the drop were not noticed
     CHECK(!d.connected());
@@ -420,8 +427,8 @@ TEST(drive_falls_back_to_a_free_clock_when_the_harness_goes) {
 TEST(drive_bye_disconnects_cleanly) {
     Pair pair;
     REQUIRE(pair.engine >= 0);
-    Drive d;
-    d.adopt(pair.engine, ClockMode::Stepped, 0.1);
+    Drive d{steadyClock()};
+    d.attach(socketLink(pair.engine), ClockMode::Stepped, 0.1);
     pair.write("{\"op\":\"bye\"}\n");
     d.beginPoll();
     CHECK(!d.connected());
@@ -434,8 +441,8 @@ TEST(drive_answers_a_pending_step_when_the_engine_goes_away) {
     Pair pair;
     REQUIRE(pair.engine >= 0);
     {
-        Drive d;
-        d.adopt(pair.engine, ClockMode::Stepped, 0.1);
+        Drive d{steadyClock()};
+        d.attach(socketLink(pair.engine), ClockMode::Stepped, 0.1);
         pair.write("{\"op\":\"step\",\"frames\":3}\n");
         d.beginPoll();
         d.presented();
@@ -454,8 +461,8 @@ TEST(drive_owes_no_reply_at_destruction_once_the_step_has_answered) {
     Pair pair;
     REQUIRE(pair.engine >= 0);
     {
-        Drive d;
-        d.adopt(pair.engine, ClockMode::Stepped, 0.1);
+        Drive d{steadyClock()};
+        d.attach(socketLink(pair.engine), ClockMode::Stepped, 0.1);
         pair.write("{\"op\":\"step\",\"frames\":1}\n");
         d.beginPoll();
         d.presented();

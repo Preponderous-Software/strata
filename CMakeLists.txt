@@ -103,7 +103,11 @@ strata_set_warnings(strata_image)
 set(STRATA_ENGINE_SOURCES
     src/core/log.cpp
     src/core/error.cpp
-    src/core/drive.cpp
+    src/core/drive/drive.cpp
+    src/core/drive/settings.cpp
+    src/core/drive/service.cpp
+    src/core/drive/adapters/unix_socket_link.cpp
+    src/core/drive/adapters/steady_clock.cpp
     src/core/json_line.cpp
     src/platform/surface.cpp
     src/platform/host_surface.cpp
