@@ -275,6 +275,9 @@ jobs:
           # with the loader contained to that section.
           node web/kit/testing/smoke.cjs "http://127.0.0.1:8765/index.html?embed=1" golden-out/kit-smoke-embed --dpr 1,3
 
+      - name: Grid relay page logic (Node, stubbed module)
+        run: node tests/web/grid_relay_js.cjs
+
       - name: Grid relay against desktop stills, versioning and input
         run: node tests/web/run_grid_relay.cjs build-web/grid-relay tests/web/grid-relay golden-out/grid-relay
 
@@ -435,7 +438,16 @@ jobs:
             if [ ! -f "unpacked-web/$f" ]; then echo "::error::$f is missing from the wasm tarball"; exit 1; fi
           done
           if [ ! -x unpacked-web/kit/build-kit.sh ]; then echo "::error::kit/build-kit.sh is not executable"; exit 1; fi
-          echo "the wasm tarball carries the web kit"
+          # The grid relay's sources, and its prebuilt dist/ that hosts (graphik's
+          # grid3d.relay) copy as is: staging copies dist/ with `|| true`, so a
+          # relay build that produced nothing is caught here, not by a game.
+          for f in kit/grid-relay/relay.h kit/grid-relay/main.cpp kit/grid-relay/WIRE.md \
+                   kit/grid-relay/dist/grid-relay-scene.js kit/grid-relay/dist/grid-relay-scene.wasm \
+                   kit/grid-relay/dist/grid-relay.js kit/grid-relay/dist/strata-kit.js \
+                   kit/grid-relay/dist/strata-loader.js; do
+            if [ ! -s "unpacked-web/$f" ]; then echo "::error::$f is missing or empty in the wasm tarball"; exit 1; fi
+          done
+          echo "the wasm tarball carries the web kit and the prebuilt grid relay"
       - uses: actions/upload-artifact@v4
         with:
           name: release-assets

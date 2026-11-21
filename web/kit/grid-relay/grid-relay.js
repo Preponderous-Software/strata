@@ -61,7 +61,12 @@
     "PageDown", "Home", "End", "Backspace"]);
 
   let state = "idle", kit = null, mod = null, canvas = null, opts = {};
-  let queue = [];  // wire messages that arrived before the module
+  // Wire messages that arrived before the module: the latest of each kind,
+  // as each replaces the last of its kind (WIRE.md), so a game that keeps
+  // sending while the module loads (or waits on the data-saver prompt) keeps
+  // at most four messages here, in the order their kinds last arrived.
+  let queue = [];
+  let closed = false;  // close() came while loading: stay hidden once loaded
   let events = [];
   const MAX_EVENTS = 1024;
   let heap = 0, heapCap = 0;
@@ -174,7 +179,13 @@
       lastErr = msg;
       return -2;
     }
-    if (!mod) { queue.push(bytes); return 1; }
+    if (!mod) {
+      if (bytes.length < 2 || bytes[0] !== 0x47 || bytes[1] !== 0x33) return -1;
+      if (bytes.length < 8) return -3;  // as relay.h says it, once loaded
+      queue = queue.filter((m) => m[4] !== bytes[4]);
+      queue.push(bytes);
+      return 1;
+    }
     if (bytes.length > heapCap) {
       if (heap) mod._free(heap);
       heapCap = Math.max(bytes.length, 4096);
@@ -257,8 +268,15 @@
     const pending = queue;
     queue = [];
     for (const m of pending) submit(m);
-    kit.start();
     StrataLoader.done();
+    if (closed) {
+      // the page said close() while the module loaded: keep it, hidden and
+      // not drawing, until request() shows it again
+      canvas.hidden = true;
+      state = "idle";
+      return kit;
+    }
+    kit.start();
     return kit;
   }
 
@@ -267,7 +285,13 @@
     EVENTS: EV,
     open,
     request(json) {
-      if (state === "loading" || state === "ready") return state;
+      closed = false;
+      if (state === "loading") return state;
+      if (state === "ready") {  // shown and drawing (again, if close() came while it loaded)
+        canvas.hidden = false;
+        kit.start();
+        return state;
+      }
       if (kit && state === "idle") {  // reopened after close(): the module is still here
         canvas.hidden = false;
         state = "ready";
@@ -301,6 +325,7 @@
     close() {
       if (kit) kit.running = false;
       if (canvas) canvas.hidden = true;
+      if (state === "loading") closed = true;  // open() finishes hidden and idle
       state = state === "ready" ? "idle" : state;
     },
     get kit() { return kit; },

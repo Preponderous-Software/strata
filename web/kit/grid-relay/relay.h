@@ -40,7 +40,8 @@ enum Status : int {
     kBadMajor = -2,       // another major version of the format
     kTruncated = -3,      // shorter than its counts say
     kBadKind = -4,        // unknown message kind
-    kBadValue = -5,       // a shape kind, attachment or index out of range, or a non-finite number
+    kBadValue = -5,       // a shape kind, attachment or index out of range, a non-finite number, or a
+                          // light or HUD colour the engine would refuse
     kTooLarge = -6,       // over the limits below
 };
 
@@ -55,6 +56,19 @@ constexpr size_t kViewBytes = 64;
 constexpr uint32_t kMaxShapes = 1u << 16;
 constexpr uint32_t kMaxAnchors = 1u << 15;
 constexpr uint32_t kMaxHudItems = 4096;
+// Shadow-casting lights in one message (strata.h's STRATA_MAX_SHADOWED_POINT_LIGHTS). A frame
+// also keeps to it across the board's and the pieces' lights together: see build().
+constexpr uint32_t kMaxShadowedLights = STRATA_MAX_SHADOWED_POINT_LIGHTS;
+// The largest world coordinate, offset, size or light range taken. A board
+// is a few hundred units across at most; the bound keeps every sum the relay
+// makes (an anchor plus an offset, a slide between two anchors) finite.
+constexpr float kMaxCoordinate = 1.0e6f;
+
+inline bool within(const float* v, int n) {
+    for (int i = 0; i < n; ++i)
+        if (!(std::fabs(v[i]) <= kMaxCoordinate)) return false;
+    return true;
+}
 
 // Attachments: where a shape or light's position is measured from.
 enum Attach : uint8_t {
@@ -162,10 +176,14 @@ struct Frame {
 class Relay {
 public:
     // One message. Returns kOk or a negative Status; on an error nothing changes.
+    // The header is read field by field, so a short message says what it is
+    // as far as it goes: not a relay message, another major, or truncated
+    // (WIRE.md, "Errors"; graphik's grid3d.web.readHeader agrees).
     int submit(const uint8_t* data, size_t size) {
-        if (!data || size < kHeaderBytes) return kBadMagic;
-        if (data[0] != 'G' || data[1] != '3') return kBadMagic;
+        if (!data || size < 2 || data[0] != 'G' || data[1] != '3') return kBadMagic;
+        if (size < 3) return kTruncated;
         if (data[2] != kMajor) return kBadMajor;
+        if (size < kHeaderBytes) return kTruncated;
         Reader r(data, size);
         r.skip(kHeaderBytes);
         switch (data[4]) {
@@ -204,8 +222,14 @@ public:
         out.texts.clear();
         for (const Shape& s : boardShapes_) emitShape(s, out);
         for (const Shape& s : pieceShapes_) emitShape(s, out);
-        for (const Light& l : boardLights_) emitLight(l, out);
-        for (const Light& l : pieceLights_) emitLight(l, out);
+        // Each message keeps to the engine's shadow-caster limit, but the
+        // board's and the pieces' together may not: past the limit a light
+        // still shines, without its shadow (the engine would refuse the
+        // whole frame's lights otherwise).
+        uint32_t casters = 0;
+        for (const Light& l : boardLights_) emitLight(l, out, casters);
+        for (const Light& l : pieceLights_) emitLight(l, out, casters);
+        if (!(uiScale > 0.0f) || !std::isfinite(uiScale)) uiScale = 1.0f;
         for (const Panel& p : panels_) {
             StrataRect r{};
             r.x = p.x * uiScale;
@@ -213,12 +237,17 @@ public:
             r.width = std::max(p.w, 0.0f) * uiScale;
             r.height = std::max(p.h, 0.0f) * uiScale;
             std::copy(p.color, p.color + 4, r.color);
+            // one panel scaled past a float's range would make the engine
+            // refuse every panel this frame: that one is left out
+            if (!std::isfinite(r.x) || !std::isfinite(r.y) || !std::isfinite(r.width) || !std::isfinite(r.height))
+                continue;
             out.rects.push_back(r);
         }
         for (const Label& l : labels_) {
             StrataText x{};
             x.x = l.x * uiScale;
             x.y = l.y * uiScale;
+            if (!std::isfinite(x.x) || !std::isfinite(x.y)) continue;  // as for panels
             x.pixel_size = std::clamp(l.size * uiScale, 1.0f, 512.0f);
             x.flags = STRATA_TEXT_SHADOW;
             std::copy(l.color, l.color + 4, x.color);
@@ -243,8 +272,12 @@ private:
         r.floats(s.pos, 3);
         r.floats(s.scale, 3);
         r.floats(s.color, 4);
-        return s.kind < STRATA_PRIMITIVE_KIND_COUNT && s.attach <= kBridge;
+        return s.kind < STRATA_PRIMITIVE_KIND_COUNT && s.attach <= kBridge && within(s.pos, 3) && within(s.scale, 3);
     }
+    // What strata_set_point_lights takes (src/render/lights.cpp): a positive
+    // range, a colour and intensity that are not negative. A light the engine
+    // would refuse is refused here, where send() can say so, rather than
+    // dropping every light of every frame later.
     static bool readLight(Reader& r, Light& l) {
         l.attach = r.u8();
         l.flags = r.u8();
@@ -253,7 +286,14 @@ private:
         r.floats(l.color, 3);
         l.radius = r.f32();
         l.intensity = r.f32();
-        return l.attach <= kPiece && (l.flags & ~1u) == 0;
+        return l.attach <= kPiece && (l.flags & ~1u) == 0 && within(l.pos, 3) && l.radius > 0.0f &&
+               l.radius <= kMaxCoordinate && l.intensity >= 0.0f &&
+               l.color[0] >= 0.0f && l.color[1] >= 0.0f && l.color[2] >= 0.0f;
+    }
+    // What strata_submit_rects and strata_submit_text take for a colour:
+    // nothing negative, alpha at most 1 (NaN is caught by Reader::finite).
+    static bool hudColorOk(const float c[4]) {
+        return c[0] >= 0.0f && c[1] >= 0.0f && c[2] >= 0.0f && c[3] >= 0.0f && c[3] <= 1.0f;
     }
     static bool attachOk(uint8_t attach, uint16_t a, uint16_t b, size_t anchors) {
         if (attach == kWorld) return true;
@@ -269,9 +309,13 @@ private:
         for (Shape& s : shapes)
             if (!readShape(r, s) || !attachOk(s.attach, s.a, s.b, anchors)) return kBadValue;
         lights.resize(nLights);
-        for (Light& l : lights)
+        uint32_t casters = 0;
+        for (Light& l : lights) {
             if (!readLight(r, l) || !attachOk(l.attach, l.a, 0, anchors)) return kBadValue;
-        return r.finite() ? kOk : kBadValue;
+            casters += l.flags & 1u;
+        }
+        if (!r.finite()) return kBadValue;
+        return casters > kMaxShadowedLights ? kTooLarge : kOk;
     }
 
     int readBoard(Reader& r) {
@@ -298,6 +342,7 @@ private:
         for (Anchor& a : anchors) {
             r.floats(a.start, 2);
             r.floats(a.end, 2);
+            if (!within(a.start, 2) || !within(a.end, 2)) return kBadValue;
         }
         std::vector<Shape> shapes;
         std::vector<Light> lights;
@@ -325,6 +370,7 @@ private:
             p.w = r.f32();
             p.h = r.f32();
             r.floats(p.color, 4);
+            if (!hudColorOk(p.color)) return kBadValue;
         }
         std::vector<Label> labels(nLabels);
         for (Label& l : labels) {
@@ -339,7 +385,7 @@ private:
             if (!r.has(padded)) return kTruncated;
             l.text.assign(reinterpret_cast<const char*>(r.here()), len);
             r.skip(padded);
-            if (l.text.find('\0') != std::string::npos) return kBadValue;
+            if (l.text.find('\0') != std::string::npos || !hudColorOk(l.color)) return kBadValue;
         }
         if (!r.finite()) return kBadValue;
         panels_.swap(panels);
@@ -360,6 +406,9 @@ private:
         r.floats(v.sun, 3);
         if (!r.finite() || v.fov <= 0.0f || v.fov >= 180.0f || v.nearPlane <= 0.0f || v.farPlane <= v.nearPlane)
             return kBadValue;
+        if (!within(v.eye, 3) || !within(v.target, 3)) return kBadValue;
+        // an eye on its target looks nowhere (the orbit's distance would be 0)
+        if (v.eye[0] == v.target[0] && v.eye[1] == v.target[1] && v.eye[2] == v.target[2]) return kBadValue;
         view_ = v;
         hasView_ = true;
         ++messages_;
@@ -394,13 +443,15 @@ private:
         out.items.push_back(it);
     }
 
-    void emitLight(const Light& l, Frame& out) const {
+    void emitLight(const Light& l, Frame& out, uint32_t& casters) const {
         StrataPointLight p{};
         std::copy(l.pos, l.pos + 3, p.position);
         std::copy(l.color, l.color + 3, p.color);
         p.range = l.radius;
         p.intensity = l.intensity;
-        p.flags = l.flags & 1u ? STRATA_POINT_LIGHT_CAST_SHADOWS : 0u;
+        const bool shadows = (l.flags & 1u) && casters < kMaxShadowedLights;
+        casters += shadows ? 1u : 0u;
+        p.flags = shadows ? STRATA_POINT_LIGHT_CAST_SHADOWS : 0u;
         if (l.attach == kPiece) {
             float x, z;
             anchorAt(l.a, x, z);

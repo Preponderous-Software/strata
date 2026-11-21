@@ -152,6 +152,7 @@ struct Host {
     int32_t pointsRejected = 0;
     int32_t labelsRejected = 0;  // kit 1.2: calls to strata_submit_world_text (1.3: and rects, text) that failed
     int32_t levelsRejected = 0;  // kit 1.2: bad ambient or sun levels, reported once
+    int32_t lightsRejected = 0;  // calls to strata_set_point_lights that failed, reported once
 #ifdef __EMSCRIPTEN__
     EMSCRIPTEN_WEBGL_CONTEXT_HANDLE context = 0;
 #endif
@@ -607,7 +608,11 @@ STRATA_KIT_EXPORT int sk_frame(double seconds) {
 #endif
     const int32_t n = cutLights(h.lights, tier.maxLights, kept, lift);
     h.lightsDrawn = n;
-    strata_set_point_lights(h.engine, kept, n);
+    // A light the engine refuses (a range of 0, a negative colour, a fifth
+    // shadow caster) drops the whole call; say so once, not every frame.
+    if (strata_set_point_lights(h.engine, kept, n) != STRATA_OK && h.lightsRejected++ == 0) {
+        std::fprintf(stderr, "%s: strata_set_point_lights: %s\n", o.name, strata_last_error());
+    }
 #if STRATA_ABI_MINOR >= 16
     for (float& v : lift) v = std::clamp(v, 0.0f, 1.0f);
     const float ambientTint[3] = {h.ambientTint.r, h.ambientTint.g, h.ambientTint.b};
