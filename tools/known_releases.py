@@ -52,7 +52,7 @@ class InputError(Exception):
 
 
 def project_version(cmakelists: Path = CMAKELISTS) -> str:
-    match = re.search(r"project\(\s*strata\b[^)]*?\bVERSION\s+([0-9]+\.[0-9]+\.[0-9]+)", cmakelists.read_text(), re.S)
+    match = re.search(r"project\(\s*strata\b[^)]*?\bVERSION\s+([0-9]+\.[0-9]+\.[0-9]+)", cmakelists.read_text(encoding="utf-8"), re.S)
     if not match:
         raise InputError("no project(strata VERSION x.y.z) in %s" % cmakelists)
     return match.group(1)
@@ -144,8 +144,8 @@ def main(argv=None) -> int:
         if args.command == "version":
             print(project_version())
             return 0
-        hashes = parse_sha256sums(args.sha256sums.read_text())
-        source = LOADER.read_text()
+        hashes = parse_sha256sums(args.sha256sums.read_text(encoding="utf-8"))
+        source = LOADER.read_text(encoding="utf-8")
         if args.command == "pin":
             LOADER.write_text(pin(source, args.version, hashes))
             print("pinned v%s in %s:\n%s" % (args.version, LOADER.relative_to(ROOT), entry_lines(args.version, hashes)), end="")
