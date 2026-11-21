@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.10.0
+
+The browser grid view is much lighter on a phone's main thread. ABI 1.18 adds
+`STRATA_FLAG_NO_HOST_STATE`, which the web kit sets so a host-context engine no
+longer saves and restores the page's GL state around every call (some sixty
+synchronous queries a frame); the grid relay's main-thread time per frame drops
+from about 100 ms to about 1 ms in headless Chromium. The kit's adaptive quality
+now steps back up after a run of fast frames, the loader compiles the `.wasm`
+while it downloads, and the relay's glue is minified (206 KB to 82 KB). Every
+addition is compatible (`STRATA_ABI_VERSION` stays 1); the wire format stays 1.0.
+
 - The web kit is lighter on phones:
   - `STRATA_FLAG_NO_HOST_STATE` (ABI 1.18; C#, Python): a host-context
     engine whose host keeps no GL state of its own skips saving and

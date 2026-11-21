@@ -100,7 +100,9 @@ taken from the project itself.
 
 ## Status
 
-`v0.9.1` hardens the grid relay (it refuses what the engine would refuse),
+`v0.10.0` makes the browser grid view much lighter on phones (ABI 1.18:
+`STRATA_FLAG_NO_HOST_STATE`; adaptive quality that steps back up; streamed
+compile; smaller glue). `v0.9.1` hardened the grid relay (it refuses what the engine would refuse),
 keeps its quality and WebGL context on phones, and adds `keys: false` for
 pages with their own keyboard UI. `v0.9.0` added the grid relay, a web-kit scene that draws a grid scene sent
 as page messages (web kit 1.3). `v0.8.0` added wide lines, world-anchored labels, RGBA mesh colours, ambient
