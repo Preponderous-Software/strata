@@ -88,6 +88,12 @@ moving their pin to 0.9.1.
     whose first context can take a phone a while, so the two overlap. With
     no WebGL 2 the download is cancelled; behind `gate` it still waits for
     the tap. Otherwise the bytes are handed over as before;
+  - `build-kit.sh` minifies the glue with the Closure Compiler
+    (`KIT_CLOSURE=0` turns it off): the grid relay's `.js` goes from 206 KB
+    to 82 KB (46 KB to 27 KB gzipped). The `.wasm` is unchanged;
+  - the grid relay's context drops `preserveDrawingBuffer` (nothing reads
+    its frames back; tools capture the screen), which spares a phone's tiled
+    GPU a copy or a tile load each frame. The kit's default is unchanged.
 
 - The grid relay and the web kit take `keys: false`, for a page with its own
   keyboard UI (a React or DOM board whose buttons are used with Tab, Space
