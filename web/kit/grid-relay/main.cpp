@@ -47,6 +47,10 @@ void strata_kit_configure(strata_kit::Options& o) {
     // surfaces both ask for none), and the relay is held to the desktop's
     // golden images, so the browser's MSAA is turned off too.
     o.antialias = false;
+    // Nothing reads the relay's frames back (tools capture what is on
+    // screen), and keeping the buffer costs a phone's tiled GPU a copy or a
+    // tile load on every frame.
+    o.preserveDrawingBuffer = false;
     o.fog = false;
     o.shadowDistanceMin = 40.0f;
     o.shadowDistancePerDist = 0.0f;

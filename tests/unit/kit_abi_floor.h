@@ -28,5 +28,7 @@
 #pragma GCC poison STRATA_MESH_COLORS_RGBA
 // ABI 1.16
 #pragma GCC poison strata_set_ambient strata_set_sun_intensity
+// ABI 1.18
+#pragma GCC poison STRATA_FLAG_NO_HOST_STATE
 
 #endif  // STRATA_KIT_ABI_FLOOR_H

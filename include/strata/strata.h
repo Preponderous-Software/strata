@@ -95,9 +95,10 @@
  *   1.15 per-vertex RGBA mesh colours (STRATA_MESH_COLORS_RGBA)
  *   1.16 ambient and sun levels (strata_set_ambient,
  *        strata_set_sun_intensity)
- *   1.17 window fullscreen (strata_set_fullscreen, strata_is_fullscreen) */
+ *   1.17 window fullscreen (strata_set_fullscreen, strata_is_fullscreen)
+ *   1.18 a host context whose GL state is not kept (STRATA_FLAG_NO_HOST_STATE) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 17u
+#define STRATA_ABI_MINOR 18u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -170,7 +171,17 @@ enum {
     STRATA_FLAG_VSYNC = 1u << 0,         /* window surface only */
     STRATA_FLAG_DEBUG_CONTEXT = 1u << 1, /* request a GL debug context and log its messages */
     STRATA_FLAG_HIDDEN_WINDOW = 1u << 2, /* window surface only: create it hidden */
-    STRATA_FLAG_GPU_TIMING = 1u << 3     /* glFinish at end of frame and report the wait */
+    STRATA_FLAG_GPU_TIMING = 1u << 3,    /* glFinish at end of frame and report the wait */
+    /* ABI 1.18, host context only: the host keeps no GL state of its own
+       across Strata's calls (a context made for Strata alone, such as the
+       web kit's canvas), so the engine does not save the host's state before
+       each call that draws or reads and restore it after. Saving it is some
+       sixty glGet and glIsEnabled queries a frame; in a browser each one is a
+       synchronous round trip to the GPU process that stalls the page's main
+       thread. With the flag the engine leaves its own state bound, as it does
+       on its own window. Ignored on other surfaces, and by libraries older
+       than 1.18 (which save and restore as before). */
+    STRATA_FLAG_NO_HOST_STATE = 1u << 4
 };
 
 /* Resolves a GL entry point by name for STRATA_SURFACE_HOST_CONTEXT. Called

@@ -39,7 +39,8 @@ public:
     virtual bool needsOffscreenTarget() const = 0;
 
     // True when the GL context belongs to someone else, whose state the
-    // renderer must leave as it found it.
+    // renderer must leave as it found it (a host context, unless the host
+    // passed STRATA_FLAG_NO_HOST_STATE).
     virtual bool isHostOwned() const { return false; }
 
     virtual bool pollEvent(StrataEvent& out) {

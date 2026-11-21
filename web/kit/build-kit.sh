@@ -14,6 +14,12 @@
 #   KIT_EXPORTS      the scene's own exports, comma-separated, each with its
 #                    leading underscore (e.g. _g3_set_beds,_g3_set_plants)
 #   KIT_COPY_JS      1 (default) copies strata-kit.js and strata-loader.js to KIT_OUT
+#   KIT_CLOSURE      1 (default) minifies the glue with the Closure Compiler
+#                    (--closure 1): the grid relay's glue goes from 206 KB to
+#                    82 KB (46 KB to 27 KB gzipped); the .wasm is unchanged.
+#                    Page code reaches the module only through its exports
+#                    and the runtime methods listed below, which keep their
+#                    names; 0 leaves the glue unminified.
 #   KIT_PAGES        more files to copy to KIT_OUT (space-separated), e.g. the page
 #   KIT_DIR          the kit (default: this script's directory)
 #   KIT_WORK         scratch for downloads (default: $KIT_OUT/../.strata-kit-build)
@@ -42,6 +48,7 @@ KIT_NAME="${KIT_NAME:-scene}"
 KIT_EXPORT_NAME="${KIT_EXPORT_NAME:-createScene}"
 KIT_EXPORTS="${KIT_EXPORTS:-}"
 KIT_COPY_JS="${KIT_COPY_JS:-1}"
+KIT_CLOSURE="${KIT_CLOSURE:-1}"
 EMSDK_VERSION="${EMSDK_VERSION:-6.0.11}"
 
 mkdir -p "$KIT_OUT"
@@ -86,6 +93,9 @@ incoming="$incoming,monitorRunDependencies,noExitRuntime,noInitialRun,onAbort,on
 incoming="$incoming,preInit,preRun,print,printErr,setStatus,statusMessage,stderr,stdin,stdout,thisProgram,wasm"
 incoming="$incoming,websocket,wasmBinary"
 
+closure=()
+if [ "$KIT_CLOSURE" = "1" ]; then closure=(--closure 1); fi
+
 em++ "$KIT_SOURCE" "$STRATA_LIB" -I"$STRATA_INCLUDE" -I"$KIT_DIR" \
   -std=c++17 -O2 -fwasm-exceptions -Wall -Wextra \
   -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sALLOW_MEMORY_GROWTH=1 \
@@ -93,6 +103,7 @@ em++ "$KIT_SOURCE" "$STRATA_LIB" -I"$STRATA_INCLUDE" -I"$KIT_DIR" \
   -sEXPORTED_FUNCTIONS="$exports" \
   -sINCOMING_MODULE_JS_API="$incoming" \
   -sEXPORTED_RUNTIME_METHODS=HEAPF32,HEAP32,stringToNewUTF8,UTF8ToString \
+  ${closure[@]+"${closure[@]}"} \
   -o "$KIT_WORK/$KIT_NAME.js"
 
 cp "$KIT_WORK/$KIT_NAME.js" "$KIT_WORK/$KIT_NAME.wasm" "$KIT_OUT/"

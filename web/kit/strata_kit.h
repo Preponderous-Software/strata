@@ -367,7 +367,15 @@ inline int createEngine(Host& h, int surface) {
     desc.surface = surface;
     desc.width = h.width;
     desc.height = h.height;
-    if (surface == STRATA_SURFACE_HOST_CONTEXT) desc.get_proc_address = noProcAddress;  // never called in a browser
+    if (surface == STRATA_SURFACE_HOST_CONTEXT) {
+        desc.get_proc_address = noProcAddress;  // never called in a browser
+#if STRATA_ABI_MINOR >= 18
+        // The canvas's context is the kit's alone, so the engine need not save
+        // and restore its state around every frame: in a browser each query is
+        // a synchronous round trip that stalls the page's main thread.
+        desc.flags |= STRATA_FLAG_NO_HOST_STATE;
+#endif
+    }
     const StrataStatus status = strata_create(&desc, &h.engine);
     if (status != STRATA_OK) {
         std::fprintf(stderr, "%s: strata_create failed: %s (%s)\n", h.opts.name, strata_status_string(status),

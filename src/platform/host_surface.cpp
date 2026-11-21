@@ -14,11 +14,13 @@ class HostSurface final : public Surface {
 public:
     explicit HostSurface(const StrataEngineDesc& desc)
         : getProc_(desc.get_proc_address), user_(desc.get_proc_address_user), width_(desc.width),
-          height_(desc.height) {}
+          height_(desc.height), keepsState_((desc.flags & STRATA_FLAG_NO_HOST_STATE) == 0) {}
 
     void* procAddress(const char* name) override { return getProc_(name, user_); }
     bool needsOffscreenTarget() const override { return false; }
-    bool isHostOwned() const override { return true; }
+    // ABI 1.18: a host that keeps no GL state of its own is not saved and
+    // restored around each call.
+    bool isHostOwned() const override { return keepsState_; }
 
     void drawableSize(int& width, int& height) const override {
         width = width_;
@@ -35,6 +37,7 @@ private:
     void* user_;
     int width_;
     int height_;
+    bool keepsState_;
 };
 
 }  // namespace

@@ -10,10 +10,11 @@ namespace Strata.Interop {
     public static class StrataAbi {
         public const uint Version = 1;
         /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles, 1.12 injected events, a shared frame clock and the drive channel, 1.13 wide lines, 1.14 world-to-screen projection and world-anchored text, 1.15 per-vertex RGBA mesh colours, 1.16 ambient and sun levels.</summary>
-        public const uint Minor = 17;
+        public const uint Minor = 18;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
-        public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3;
+        public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3,
+            FlagNoHostState = 1u << 4;  // ABI 1.18
         public const int LightingLegacy = 0, LightingSun = 1;
         public const int LightingSpace = 2;  // ABI 1.5
         public const uint ClearColor = 1u << 0, ClearDepth = 1u << 1, ClearSky = 1u << 2;
