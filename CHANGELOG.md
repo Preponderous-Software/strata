@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Meshes can be hidden and shaded flat (ABI 1.19; C#, Python; compatible,
+  `STRATA_ABI_VERSION` stays 1):
+  - `strata_set_mesh_visible(engine, id, visible)` hides a mesh without
+    freeing it: no pass draws it, it casts no shadow and
+    `strata_raycast_meshes` does not hit it; showing it again re-uploads
+    nothing. A host switching between large versions of one mesh (a terrain
+    per season) no longer parks the spares far below the scene (#94);
+  - `STRATA_MESH_FLAT_NORMALS` (with `strata_add_textured_mesh` and no
+    normals) shades each triangle with its own face normal, splitting shared
+    vertices, and accepts degenerate triangles instead of refusing the mesh,
+    so a host no longer filters slivers out before upload (#95);
+  - a host-made zero-length normal is now reported with the first triangle
+    that uses its vertex: `mesh: normal of vertex 3 (triangle 1, indices 3 4
+    5) has zero length` (#95);
+  - scene files gain `mesh_flat` and `mesh_hidden`, and the new golden
+    `mesh_flat_hidden` shows both.
 - The drive channel is split into a core and two ports, `HarnessLink` and
   `MonotonicClock`, under `src/core/drive/` (see its README). Nothing a host
   or harness sees changes: the same replies, log lines and C ABI. The protocol

@@ -235,6 +235,73 @@ class Render(unittest.TestCase):
             with self.assertRaises(ValueError):
                 engine.add_mesh(colors=rgb[:-3], **quad)  # one vertex short
 
+    def test_hidden_meshes_draw_nothing_and_are_not_picked(self):
+        """ABI 1.19 (#94): a hidden mesh keeps its id and buffers but draws
+        nothing, casts no shadow and is not hit; showing it brings it back."""
+        if not self.lib.has("strata_set_mesh_visible"):
+            self.skipTest("library older than ABI 1.19")
+        quad = dict(positions=[-30, -20, -5, 30, -20, -5, 30, 20, -5, -30, 20, -5], indices=[0, 1, 2, 0, 2, 3])
+        with strata.Engine(self.lib, 32, 18) as engine:
+            engine.set_camera(self.lib.look_at((0, 0, 10), (0, 0, 0), fov_y_degrees=60, aspect=32 / 18, far_plane=50))
+            engine.set_lighting(self.lib.lighting_defaults(strata.LIGHTING_LEGACY))
+            mesh = engine.add_mesh(color=(0.9, 0.2, 0.1, 1), **quad)
+
+            def frame():
+                engine.begin_frame(clear_color=(0, 0, 0, 1))
+                engine.end_frame()
+                return engine.read_pixels()[0]
+
+            shown = frame()
+            self.assertEqual(engine.raycast_meshes((0, 0, 10), (0, 0, -1)).mesh_id, mesh)
+            engine.set_mesh_visible(mesh, False)
+            self.assertEqual(set(frame()[i] for i in range(0, 32 * 18 * 4, 4)), {0})  # only the clear colour
+            self.assertEqual(engine.raycast_meshes((0, 0, 10), (0, 0, -1)).mesh_id, 0)
+            engine.set_mesh_visible(mesh, True)
+            self.assertEqual(frame(), shown)
+            with self.assertRaises(strata.StrataError) as caught:
+                engine.set_mesh_visible(mesh + 1, False)  # no such mesh
+            self.assertEqual(caught.exception.status, strata.ERROR_INVALID_ARGUMENT)
+
+    def test_flat_normals_flag_matches_host_made_flat_normals(self):
+        """ABI 1.19 (#95): MESH_FLAT_NORMALS on shared vertices draws what
+        unshared vertices with host-made face normals draw, and a degenerate
+        triangle is accepted instead of refused."""
+        if not self.lib.has("strata_set_mesh_visible"):
+            self.skipTest("library older than ABI 1.19")
+        # A tent seen from above-front: two faces sharing a ridge, plus a degenerate triangle.
+        shared = [-3, 0, 0, 0, 2, 2, 0, 2, -2, 3, 0, 0]
+        indices = [0, 1, 2, 3, 2, 1, 3, 3, 2]
+
+        def cross(a, b, c):
+            u = [b[i] - a[i] for i in range(3)]
+            v = [c[i] - a[i] for i in range(3)]
+            n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
+            length = sum(x * x for x in n) ** 0.5
+            return [x / length for x in n] if length > 0 else [0, 1, 0]
+
+        corner = [shared[i * 3 : i * 3 + 3] for i in range(4)]
+        unshared, normals = [], []
+        for t in range(0, len(indices), 3):
+            a, b, c = (corner[i] for i in indices[t : t + 3])
+            for p in (a, b, c):
+                unshared += p
+                normals += cross(a, b, c)
+        frames = []
+        for kwargs in (dict(positions=unshared, indices=list(range(9)), normals=normals),
+                       dict(positions=shared, indices=indices, flags=strata.MESH_FLAT_NORMALS)):
+            with strata.Engine(self.lib, 48, 32) as engine:
+                engine.set_camera(self.lib.look_at((0, 6, 8), (0, 1, 0), fov_y_degrees=50, aspect=48 / 32, far_plane=50))
+                engine.set_lighting(self.lib.lighting_defaults(strata.LIGHTING_LEGACY))
+                engine.add_mesh(color=(0.7, 0.7, 0.7, 1), **kwargs)
+                engine.begin_frame(clear_color=(0, 0, 0, 1))
+                engine.end_frame()
+                frames.append(engine.read_pixels()[0])
+        self.assertEqual(frames[0], frames[1])
+        with strata.Engine(self.lib, 16, 16) as engine:
+            with self.assertRaises(strata.StrataError) as caught:
+                engine.add_mesh(positions=unshared, indices=list(range(9)), normals=normals[:-9] + [0] * 9)
+            self.assertIn("(triangle 2, indices 6 7 8) has zero length", str(caught.exception))
+
     def test_ambient_and_sun_levels(self):
         """ABI 1.16: the defaults draw the same bytes; a lift and a dim sun change them."""
         ground = strata.RenderItem(strata.PRIMITIVE_CUBE, (0, -0.5, 0), (20, 1, 20), (0.6, 0.6, 0.6, 1))

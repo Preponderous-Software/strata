@@ -359,7 +359,9 @@ class Engine:
 
         normals are xyz triples and uvs are uv pairs, one per vertex.
         colors are RGB triples per vertex, or RGBA quadruples with
-        flags=MESH_COLORS_RGBA (ABI 1.15). Too few normals, uvs or colors
+        flags=MESH_COLORS_RGBA (ABI 1.15). flags=MESH_FLAT_NORMALS (ABI 1.19)
+        shades each triangle flat with its face normal (normals must then be
+        None; degenerate triangles are allowed). Too few normals, uvs or colors
         raises ValueError (the library would read past the end); RGBA without
         the flag warns, since the library reads it as RGB and every vertex
         after the first is coloured wrongly."""
@@ -426,6 +428,12 @@ class Engine:
     def set_mesh_transform(self, mesh_id: int, model: Optional[Sequence[float]]) -> None:
         """ABI 1.7. 16 floats, column-major; None restores the identity."""
         self._call("strata_set_mesh_transform", mesh_id, _floats(model, 16) if model is not None else None)
+
+    def set_mesh_visible(self, mesh_id: int, visible: bool) -> None:
+        """ABI 1.19. Hides a mesh (nothing draws it, it casts no shadow and
+        raycast_meshes skips it) or shows it again, keeping its GPU buffers,
+        so swapping between large meshes re-uploads nothing."""
+        self._call("strata_set_mesh_visible", mesh_id, 1 if visible else 0)
 
     def create_texture_rgba8(self, width: int, height: int, rgba: bytes, flags: int = 0) -> int:
         """ABI 1.7. rgba is width * height * 4 bytes, top row first. Returns the texture id.

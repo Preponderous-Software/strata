@@ -543,7 +543,8 @@ void Renderer::setTerrain(const StrataTerrainTile* tile) {
 uint32_t Renderer::addMesh(const StrataMesh& m) { return addMeshEntry(m, nullptr, 0, 0); }
 
 uint32_t Renderer::addTexturedMesh(const StrataTexturedMesh& m) {
-    if (m.flags & ~static_cast<uint32_t>(STRATA_MESH_UNLIT | STRATA_MESH_TRANSLUCENT | STRATA_MESH_COLORS_RGBA)) {
+    if (m.flags & ~static_cast<uint32_t>(STRATA_MESH_UNLIT | STRATA_MESH_TRANSLUCENT | STRATA_MESH_COLORS_RGBA |
+                                         STRATA_MESH_FLAT_NORMALS)) {
         fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: unknown flags 0x%x", m.flags);
     }
     if ((m.flags & STRATA_MESH_TRANSLUCENT) && !(m.mesh.color[3] >= 0.0f && m.mesh.color[3] <= 1.0f)) {
@@ -562,7 +563,8 @@ uint32_t Renderer::addMeshEntry(const StrataMesh& m, const float* uvs, uint32_t 
     }
     if (nextMeshId_ == 0) fail(STRATA_ERROR_INVALID_STATE, "mesh: ids exhausted");
     const int colorComponents = (flags & STRATA_MESH_COLORS_RGBA) ? 4 : 3;  // ABI 1.15
-    const StaticMesh mesh = buildStaticMesh(m, uvs, colorComponents);  // validates first; throws before anything changes
+    const bool flat = (flags & STRATA_MESH_FLAT_NORMALS) != 0;           // ABI 1.19
+    const StaticMesh mesh = buildStaticMesh(m, uvs, colorComponents, flat);  // validates first; throws before anything changes
     MeshEntry entry;
     entry.pick = buildPickGeometry(m);
     entry.vertices = device_.createBuffer(mesh.vertices.size() * sizeof(float), mesh.vertices.data(), false,
@@ -595,6 +597,15 @@ void Renderer::setMeshTransform(uint32_t id, const float* model) {
             fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh transform: the upper 3x3 is not invertible");
         }
         entry.model = m;
+        return;
+    }
+    fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: no mesh with id %u", id);
+}
+
+void Renderer::setMeshVisible(uint32_t id, bool visible) {
+    for (auto& entry : meshes_) {
+        if (entry.id != id) continue;
+        entry.visible = visible;
         return;
     }
     fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: no mesh with id %u", id);
@@ -691,6 +702,7 @@ StrataRayHit Renderer::raycastMeshes(const float* origin, const float* direction
     PickHit best;
     uint32_t bestId = 0;
     for (const auto& entry : meshes_) {
+        if (!entry.visible) continue;  // ABI 1.19: a hidden mesh is not there to hit
         const PickHit hit = raycastMesh(entry.pick, entry.model, o, unit, maxDistance);
         // Strictly nearer only, so a tie goes to the mesh added first.
         if (hit.hit && (!best.hit || hit.distance < best.distance)) {
@@ -1026,6 +1038,7 @@ void Renderer::drawWorldMeshes(rhi::PipelineHandle terrainPipeline, rhi::Pipelin
         bool bound = false;
         for (size_t i = 0; i < meshes_.size(); ++i) {
             const MeshEntry& entry = meshes_[i];
+            if (!entry.visible) continue;                          // ABI 1.19
             if (entry.flags & STRATA_MESH_TRANSLUCENT) continue;  // the translucent pass draws these
             if (((entry.flags & STRATA_MESH_UNLIT) != 0) != (unlit != 0)) continue;
             if (!bound) {
@@ -1100,7 +1113,7 @@ void Renderer::translucentPass(int width, int height) {
     std::vector<std::pair<float, size_t>> order;
     for (size_t i = 0; i < meshes_.size(); ++i) {
         const MeshEntry& entry = meshes_[i];
-        if (!(entry.flags & STRATA_MESH_TRANSLUCENT)) continue;
+        if (!(entry.flags & STRATA_MESH_TRANSLUCENT) || !entry.visible) continue;
         const glm::vec3 centre = 0.5f * (entry.pick.bounds.min + entry.pick.bounds.max);
         const glm::vec3 world = glm::vec3(entry.model * glm::vec4(centre, 1.0f));
         order.emplace_back(glm::dot(world - eye, world - eye), i);

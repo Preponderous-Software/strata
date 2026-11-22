@@ -82,7 +82,8 @@ bool EngineSceneRenderer::render(const scene::Scene& scene, int32_t surface, ima
                 console_.err(sformat("unknown texture '%s'\n", mesh.texture.c_str()));
                 ok = false;
             }
-            textured.flags = (mesh.unlit ? STRATA_MESH_UNLIT : 0u) | (mesh.translucent ? STRATA_MESH_TRANSLUCENT : 0u);
+            textured.flags = (mesh.unlit ? STRATA_MESH_UNLIT : 0u) | (mesh.translucent ? STRATA_MESH_TRANSLUCENT : 0u) |
+                             (mesh.flat ? STRATA_MESH_FLAT_NORMALS : 0u);
             ok = ok && check(strata_add_textured_mesh(engine, &textured, &id), "strata_add_textured_mesh");
         } else {
             ok = ok && check(strata_add_mesh(engine, &view, &id), "strata_add_mesh");
@@ -90,6 +91,7 @@ bool EngineSceneRenderer::render(const scene::Scene& scene, int32_t surface, ima
         if (ok && mesh.hasTransform) {
             ok = check(strata_set_mesh_transform(engine, id, mesh.transform), "strata_set_mesh_transform");
         }
+        if (ok && mesh.hidden) ok = check(strata_set_mesh_visible(engine, id, 0), "strata_set_mesh_visible");
         meshIds.push_back(id);
     }
     for (const auto& r : scene.rayExpectations) {

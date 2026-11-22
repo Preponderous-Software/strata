@@ -168,6 +168,16 @@ TEST(static_mesh_rejects_bad_meshes_naming_the_field) {
     bad = m;
     bad.normals = normals.data();
     CHECK(rejects(bad, "zero length"));
+    // The message names the first triangle using the vertex, so a host can
+    // find the face that produced it (#95).
+    CHECK(rejects(bad, "normal of vertex 0 (triangle 0, indices 0 1 2) has zero length"));
+    normals.assign(12, 1.0f);
+    normals[9] = normals[10] = normals[11] = 0.0f;  // vertex 3: only the second triangle uses it
+    CHECK(rejects(bad, "normal of vertex 3 (triangle 1, indices 2 1 3) has zero length"));
+    const std::vector<uint32_t> firstTriangleOnly = {0, 1, 2, 0, 1, 2};
+    StrataMesh unused = mesh(kQuad, firstTriangleOnly);
+    unused.normals = normals.data();
+    CHECK(rejects(unused, "normal of vertex 3 (used by no triangle) has zero length"));
     normals.assign(12, 1.0f);
     normals[9] = std::numeric_limits<float>::infinity();
     CHECK(rejects(bad, "normal of vertex 3 is not finite"));
@@ -206,4 +216,56 @@ TEST(static_mesh_rejects_non_finite_uvs) {
         threw = e.status() == STRATA_ERROR_INVALID_ARGUMENT && std::strstr(e.what(), "uv of vertex 2") != nullptr;
     }
     CHECK(threw);
+}
+
+// ABI 1.19: STRATA_MESH_FLAT_NORMALS splits shared vertices so every triangle
+// carries its own face normal (#95).
+TEST(static_mesh_flat_normals_give_each_triangle_its_face_normal) {
+    // A tent: two triangles sharing the ridge edge (vertices 1 and 2), one
+    // sloping towards -X and one towards +X.
+    const std::vector<float> tent = {-1, 0, 0, 0, 1, 1, 0, 1, -1, 1, 0, 0};
+    const std::vector<uint32_t> indices = {0, 1, 2, 3, 2, 1};
+    const std::vector<float> colors = {1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0};
+    const std::vector<float> uvs = {0, 0, 0.5f, 1, 0.5f, 0, 1, 0};
+    StrataMesh in = mesh(tent, indices);
+    in.colors = colors.data();
+    const StaticMesh flat = buildStaticMesh(in, uvs.data(), 3, true);
+    CHECK(flat.vertexCount() == 6);
+    CHECK(flat.indexCount() == 6);
+    for (int i = 0; i < 6; ++i) CHECK(flat.indices[static_cast<size_t>(i)] == static_cast<uint32_t>(i));
+    const glm::vec3 left = glm::normalize(glm::vec3(-1, 1, 0)), right = glm::normalize(glm::vec3(1, 1, 0));
+    for (int v = 0; v < 3; ++v) CHECK(near(normal(flat, v), left));
+    for (int v = 3; v < 6; ++v) CHECK(near(normal(flat, v), right));
+    // Position, colour and uv come from the source vertex: output vertex 4 is source vertex 2.
+    const float* v4 = &flat.vertices[4 * StaticMesh::kFloatsPerVertex];
+    CHECK(v4[0] == 0.0f && v4[1] == 1.0f && v4[2] == -1.0f);
+    CHECK(v4[6] == 0.0f && v4[7] == 0.0f && v4[8] == 1.0f);
+    CHECK(v4[9] == 0.5f && v4[10] == 0.0f);
+
+    // The smooth path keeps the four shared vertices, the ridge normal straight up.
+    const StaticMesh smooth = buildStaticMesh(in, uvs.data());
+    CHECK(smooth.vertexCount() == 4);
+    CHECK(near(normal(smooth, 1), glm::vec3(0, 1, 0)));
+}
+
+TEST(static_mesh_flat_normals_accept_degenerate_triangles) {
+    // The second triangle has two equal corners: no area, so "up", not an error.
+    const std::vector<float> p = {0, 0, 0, 0, 0, 1, 1, 0, 0, 2, 0, 0};
+    const std::vector<uint32_t> indices = {0, 1, 2, 3, 3, 2};
+    const StaticMesh flat = buildStaticMesh(mesh(p, indices), nullptr, 3, true);
+    CHECK(flat.vertexCount() == 6);
+    for (int v = 0; v < 6; ++v) CHECK(near(normal(flat, v), glm::vec3(0, 1, 0)));
+}
+
+TEST(static_mesh_flat_normals_refuse_host_normals) {
+    const std::vector<float> normals(12, 1.0f);
+    StrataMesh in = mesh(kQuad, kQuadIndices);
+    in.normals = normals.data();
+    try {
+        buildStaticMesh(in, nullptr, 3, true);
+        CHECK(false);
+    } catch (const strata::Error& e) {
+        CHECK(e.status() == STRATA_ERROR_INVALID_ARGUMENT);
+        CHECK(std::strstr(e.what(), "normals must be NULL") != nullptr);
+    }
 }

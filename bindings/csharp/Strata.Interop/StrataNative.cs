@@ -9,8 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles, 1.12 injected events, a shared frame clock and the drive channel, 1.13 wide lines, 1.14 world-to-screen projection and world-anchored text, 1.15 per-vertex RGBA mesh colours, 1.16 ambient and sun levels.</summary>
-        public const uint Minor = 18;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles, 1.12 injected events, a shared frame clock and the drive channel, 1.13 wide lines, 1.14 world-to-screen projection and world-anchored text, 1.15 per-vertex RGBA mesh colours, 1.16 ambient and sun levels, 1.17 window fullscreen, 1.18 a host context whose GL state is not kept, 1.19 hidden meshes and engine-made flat normals.</summary>
+        public const uint Minor = 19;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3,
@@ -35,6 +35,7 @@ namespace Strata.Interop {
         public const uint MeshUnlit = 0x1u;  // ABI 1.7
         public const uint MeshTranslucent = 0x2u;  // ABI 1.11
         public const uint MeshColorsRgba = 0x4u;  // ABI 1.15
+        public const uint MeshFlatNormals = 0x8u;  // ABI 1.19
 
         public const int MaxPointLights = 32;  // ABI 1.1
         public const uint PointLightCastShadows = 0x1u;  // ABI 1.2
@@ -337,6 +338,8 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_add_textured_mesh(IntPtr engine, StrataTexturedMesh* mesh, uint* id);
         /// <summary>ABI 1.7. model points at 16 floats, column-major; null restores the identity.</summary>
         [DllImport(Library)] public static extern int strata_set_mesh_transform(IntPtr engine, uint id, float* model);
+        /// <summary>ABI 1.19. 0 hides the mesh (no pass draws it and picking skips it, its buffers kept), non-zero shows it again.</summary>
+        [DllImport(Library)] public static extern int strata_set_mesh_visible(IntPtr engine, uint id, int visible);
         /// <summary>ABI 1.8. Replaces a width x height rectangle at (x, y) of a texture; rgba is width * height * 4 bytes, top row first.</summary>
         [DllImport(Library)] public static extern int strata_update_texture_rgba8(IntPtr engine, uint id, int x, int y, int width, int height, byte* rgba);
         /// <summary>ABI 1.8. origin and direction point at three floats each; writes the nearest mesh hit (mesh_id 0 for none).</summary>

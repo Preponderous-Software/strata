@@ -46,6 +46,7 @@ public:
     uint32_t addMesh(const StrataMesh& mesh);
     uint32_t addTexturedMesh(const StrataTexturedMesh& mesh);  // ABI 1.7
     void setMeshTransform(uint32_t id, const float* model);    // ABI 1.7; nullptr = identity
+    void setMeshVisible(uint32_t id, bool visible);            // ABI 1.19
     void removeMesh(uint32_t id);
     void clearMeshes();
     // ABI 1.7.
@@ -142,6 +143,7 @@ private:
         uint32_t texture = 0;  // texture id; 0 or a destroyed id draws white
         uint32_t flags = 0;    // STRATA_MESH_*
         float alpha = 1.0f;    // STRATA_MESH_TRANSLUCENT (ABI 1.11): color[3]
+        bool visible = true;   // ABI 1.19: a hidden mesh is skipped by every pass and by picking
         // ABI 1.8: a CPU copy of the model-space positions and indices, and
         // their bounds, for picking.
         PickGeometry pick;

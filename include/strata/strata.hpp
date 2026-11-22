@@ -98,6 +98,9 @@ public:
     void destroyTexture(uint32_t id);
     uint32_t addTexturedMesh(const StrataTexturedMesh& mesh);
     void setMeshTransform(uint32_t id, const float* model);
+    // ABI 1.19. Hides a mesh (skipped when drawing, casting shadows and
+    // picking) or shows it again, keeping its GPU buffers.
+    void setMeshVisible(uint32_t id, bool visible);
     // ABI 1.8. Replaces a width x height rectangle at (x, y) of a texture
     // (RGBA8, rows top to bottom, copied); rebuilds its mip chain if it has
     // one. Throws INVALID_ARGUMENT for an unknown id or a rectangle outside

@@ -45,6 +45,8 @@
 //   mesh_texture <name>           (the current mesh samples that texture)
 //   mesh_unlit                    (the current mesh is STRATA_MESH_UNLIT)
 //   mesh_translucent <alpha>      (ABI 1.11: the current mesh is STRATA_MESH_TRANSLUCENT with that alpha)
+//   mesh_flat                     (ABI 1.19: the current mesh is STRATA_MESH_FLAT_NORMALS)
+//   mesh_hidden                   (ABI 1.19: the current mesh is hidden with strata_set_mesh_visible once added)
 //   mesh_transform <tx ty tz> <tilt axis x y z> <tilt_deg> <spin_deg> <scale>
 //                                 (model = translate * rotate(tilt axis) * rotate(+Y, spin) * scale)
 //   sun date <YYYY-MM-DD> <HH:MM> <utc_offset_hours> <latitude> <longitude>
@@ -82,9 +84,11 @@ struct SceneMesh {
     std::string texture;      // a scene texture's name, or empty
     bool unlit = false;
     bool translucent = false;  // ABI 1.11; the alpha is color[3]
+    bool flat = false;         // ABI 1.19: STRATA_MESH_FLAT_NORMALS
+    bool hidden = false;       // ABI 1.19: strata_set_mesh_visible(.., 0) after it is added
     bool hasTransform = false;
     float transform[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
-    bool textured() const { return !uvs.empty() || !texture.empty() || unlit || translucent; }
+    bool textured() const { return !uvs.empty() || !texture.empty() || unlit || translucent || flat; }
 
     // A StrataMesh pointing into this mesh's vectors (normals computed by the engine).
     StrataMesh view() const;

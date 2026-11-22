@@ -110,6 +110,7 @@ namespace Strata.Interop.Tests {
             var mesh = new StrataTexturedMesh();
             Assert.Equal(1, StrataNative.strata_add_textured_mesh(IntPtr.Zero, &mesh, &id));
             Assert.Equal(1, StrataNative.strata_set_mesh_transform(IntPtr.Zero, 1, null));
+            Assert.Equal(1, StrataNative.strata_set_mesh_visible(IntPtr.Zero, 1, 0));
         }
 
         [Fact]

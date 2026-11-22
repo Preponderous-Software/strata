@@ -335,6 +335,12 @@ void parse(const std::string& path, Scene& scene, int depth) {
             if (scene.meshes.empty()) bad(where, "'mesh_translucent' before 'mesh'");
             read(in, scene.meshes.back().color[3], where, "alpha");
             scene.meshes.back().translucent = true;
+        } else if (word == "mesh_flat") {
+            if (scene.meshes.empty()) bad(where, "'mesh_flat' before 'mesh'");
+            scene.meshes.back().flat = true;
+        } else if (word == "mesh_hidden") {
+            if (scene.meshes.empty()) bad(where, "'mesh_hidden' before 'mesh'");
+            scene.meshes.back().hidden = true;
         } else if (word == "mesh_transform") {
             if (scene.meshes.empty()) bad(where, "'mesh_transform' before 'mesh'");
             float t[3], axis[3], tilt = 0, spin = 0, scale = 1;

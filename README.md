@@ -124,8 +124,8 @@ texture updates and relative mouse mode (ABI 1.8); `v0.3.0` static meshes
 (ABI 1.4), unlit overlays and space lighting (**O1**, ABI 1.5) and
 `modules/sim`; `v0.2.0` point lights (**L3**), point-light shadows (**L4**)
 and a terrain tile (**T1**); and `v0.1.0` the skeleton and lighting
-**L1–L2**. The C ABI is 1.18 (unreleased: a host context whose GL state is
-not kept, for the web kit): each addition is compatible, and every ABI
+**L1–L2**. The C ABI is 1.19 (unreleased: hidden meshes and engine-made flat
+normals): each addition is compatible, and every ABI
 1.0 host still works.
 
 | Milestone | What it is | Golden images |
@@ -151,6 +151,7 @@ not kept, for the web kit): each addition is compatible, and every ABI
 | Web kit *(no ABI change)* | `kit/` in the wasm tarball: `strata_kit.h` (WebGL 2 context, engine, quality tiers, orbit camera, lost-context restore), `strata-kit.js` (sizing, adaptive quality, camera input, project and pick in CSS pixels), `strata-loader.js` (progress and fallbacks), `build-kit.sh`, and smoke and capture tests | none: CI builds `web/kit/example` and runs `testing/smoke.cjs` on it (tap == pick at DPR 1/2/3, context loss) |
 | Light levels *(ABI 1.16)* | `strata_set_ambient` (ambient × tint + lift, SUN and SPACE) and `strata_set_sun_intensity` (the sun or moon scaled and tinted, direction and shadows kept), staying across `strata_set_lighting`; the defaults draw the same pixels as 1.12 | `sun_levels_overcast` (beside `l2_csm_morning`) |
 | Window fullscreen *(ABI 1.17)* | `strata_set_fullscreen` (borderless at the desktop's resolution, or back to a window at its earlier size; the browser's Fullscreen API on the web) and `strata_is_fullscreen`; window surface only, so headless and host-context engines return `STRATA_ERROR_UNSUPPORTED` | none: unit, C# and Python tests check the null-engine and headless refusals |
+| Hidden meshes and flat normals *(ABI 1.19, unreleased)* | `strata_set_mesh_visible` (a hidden mesh keeps its buffers but is not drawn, shadowed or picked) and `STRATA_MESH_FLAT_NORMALS` (the engine shades each triangle with its face normal and accepts degenerate ones); `set_mesh_visible` and `MESH_FLAT_NORMALS` in Python | `mesh_flat_hidden` (its scene also checks a ray passes the hidden mesh) |
 
 Next come streaming and larger terrain (T2–T4), and meshes and materials
 (M1–M4). The optional OpenUSD modules (`modules/usd`, `modules/save`) are
