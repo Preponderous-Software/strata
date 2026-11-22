@@ -347,6 +347,11 @@ StrataStatus strata_set_mesh_transform(StrataEngine* engine, uint32_t id, const 
     return guard([&] { engine->engine->setMeshTransform(id, model); });
 }
 
+StrataStatus strata_set_mesh_visible(StrataEngine* engine, uint32_t id, int32_t visible) {
+    if (!engine) return invalid("engine must not be NULL");
+    return guard([&] { engine->engine->setMeshVisible(id, visible != 0); });
+}
+
 StrataStatus strata_create_texture_rgba8(StrataEngine* engine, int32_t width, int32_t height, const uint8_t* rgba,
                                          uint32_t flags, uint32_t* out_id) {
     if (!engine || !rgba || !out_id) return invalid("engine, rgba and out_id must not be NULL");

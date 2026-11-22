@@ -30,7 +30,7 @@ from ctypes import (
 #: The major version this binding was written against (STRATA_ABI_VERSION).
 ABI_VERSION = 1
 #: The newest minor whose additions this binding declares (STRATA_ABI_MINOR).
-ABI_MINOR = 18
+ABI_MINOR = 19
 
 # ---------------------------------------------------------------- status
 
@@ -82,6 +82,7 @@ TEXTURE_NEAREST = 0x8  # ABI 1.10
 MESH_UNLIT = 0x1  # ABI 1.7
 MESH_TRANSLUCENT = 0x2  # ABI 1.11
 MESH_COLORS_RGBA = 0x4  # ABI 1.15
+MESH_FLAT_NORMALS = 0x8  # ABI 1.19
 
 POINT_SOFT = 0x1  # ABI 1.5
 POINT_ON_TOP = 0x2  # ABI 1.11
@@ -440,6 +441,7 @@ FUNCTIONS = {
     "strata_destroy_texture": (7, _status, [_engine, c_uint32]),
     "strata_add_textured_mesh": (7, _status, [_engine, _p(TexturedMesh), _p(c_uint32)]),
     "strata_set_mesh_transform": (7, _status, [_engine, c_uint32, _p(c_float)]),
+    "strata_set_mesh_visible": (19, _status, [_engine, c_uint32, c_int32]),
     "strata_raycast_meshes": (8, _status, [_engine, _p(c_float), _p(c_float), c_float, _p(RayHit)]),
     "strata_set_relative_mouse_mode": (8, _status, [_engine, c_int32]),
     "strata_set_fullscreen": (17, _status, [_engine, c_int32]),

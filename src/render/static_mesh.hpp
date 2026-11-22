@@ -30,13 +30,18 @@ struct StaticMesh {
 // Throws strata::Error(STRATA_ERROR_INVALID_ARGUMENT) naming the bad field:
 // a NULL positions or indices array, vertex_count outside 3..16777216,
 // index_count not a positive multiple of 3, an index out of range, a
-// non-finite position or normal, a zero-length normal, or a non-finite or
+// non-finite position or normal, a zero-length normal (named with the first
+// triangle that uses its vertex), or a non-finite or
 // negative colour. colorComponents is 3 (mesh.colors is RGB triples) or 4
 // (RGBA quadruples, STRATA_MESH_COLORS_RGBA, ABI 1.15; the alpha is ignored).
 void validateStaticMesh(const StrataMesh& mesh, int colorComponents = 3);
 
 // Validates, then builds the mesh. uvs is NULL (every vertex at 0, 0) or
-// vertex_count finite (u, v) pairs.
-StaticMesh buildStaticMesh(const StrataMesh& mesh, const float* uvs = nullptr, int colorComponents = 3);
+// vertex_count finite (u, v) pairs. flatNormals (STRATA_MESH_FLAT_NORMALS,
+// ABI 1.19) needs mesh.normals NULL and index_count <= STRATA_MAX_MESH_VERTICES:
+// each triangle gets three vertices of its own carrying its face normal ("up"
+// for a degenerate one), and the indices become 0, 1, 2, ... in triangle order.
+StaticMesh buildStaticMesh(const StrataMesh& mesh, const float* uvs = nullptr, int colorComponents = 3,
+                           bool flatNormals = false);
 
 }  // namespace strata::render

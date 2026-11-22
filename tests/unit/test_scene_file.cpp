@@ -290,6 +290,20 @@ TEST(scene_mesh_material_directives) {
     CHECK(s.meshes[2].textured());
 }
 
+TEST(scene_mesh_flat_and_hidden_directives) {
+    // ABI 1.19: mesh_flat goes through strata_add_textured_mesh (it is a
+    // flag); mesh_hidden is applied after the mesh is added and needs no flag.
+    const Scene s = parsed("mesh 1 1 1\nmesh_flat\nmesh 1 1 1\nmesh_hidden\nmesh 1 1 1\n");
+    REQUIRE(s.meshes.size() == 3);
+    CHECK(s.meshes[0].flat);
+    CHECK(!s.meshes[0].hidden);
+    CHECK(s.meshes[0].textured());
+    CHECK(s.meshes[1].hidden);
+    CHECK(!s.meshes[1].flat);
+    CHECK(!s.meshes[1].textured());
+    CHECK(!s.meshes[2].flat && !s.meshes[2].hidden);
+}
+
 TEST(scene_mesh_transform_is_translate_tilt_spin_scale) {
     // Spin +X to -Z about +Y, then tilt about +Z (the axis need not be unit
     // length), so +X stays at -Z. The other order would leave +X at +Y.
@@ -590,6 +604,9 @@ TEST(scene_errors_name_the_line_and_what_was_wrong) {
         {"mesh_texture t\n", 1, "'mesh_texture' before 'mesh'"},
         {"mesh_unlit\n", 1, "'mesh_unlit' before 'mesh'"},
         {"mesh_translucent 0.5\n", 1, "'mesh_translucent' before 'mesh'"},
+        {"mesh_flat\n", 1, "'mesh_flat' before 'mesh'"},
+        {"mesh_hidden\n", 1, "'mesh_hidden' before 'mesh'"},
+        {"mesh 1 1 1\nmesh_flat extra\n", 2, "unexpected 'extra' at the end of the line"},
         {"mesh_transform 0 0 0 0 1 0 0 0 1\n", 1, "'mesh_transform' before 'mesh'"},
         {"mesh 1 1 1\nvertices a\n", 2, "expected numbers after 'vertices'"},
         {"mesh 1 1 1\nvcolors a\n", 2, "expected numbers after 'vcolors'"},

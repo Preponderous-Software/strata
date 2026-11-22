@@ -19,6 +19,7 @@
 // Macros are undefined first: poisoning a defined macro is itself a warning.
 #undef STRATA_LINES_ROUND_CAPS
 #undef STRATA_MESH_COLORS_RGBA
+#undef STRATA_MESH_FLAT_NORMALS
 // ABI 1.13
 #pragma GCC poison StrataWideLineVertex strata_submit_wide_lines STRATA_LINES_ROUND_CAPS
 #pragma GCC poison STRATA_STRUCT_WIDE_LINE_VERTEX
@@ -30,5 +31,7 @@
 #pragma GCC poison strata_set_ambient strata_set_sun_intensity
 // ABI 1.18
 #pragma GCC poison STRATA_FLAG_NO_HOST_STATE
+// ABI 1.19
+#pragma GCC poison strata_set_mesh_visible STRATA_MESH_FLAT_NORMALS
 
 #endif  // STRATA_KIT_ABI_FLOOR_H

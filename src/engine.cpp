@@ -183,6 +183,7 @@ uint32_t Engine::createTextureRgba8(int32_t width, int32_t height, const uint8_t
 void Engine::destroyTexture(uint32_t id) { impl_->renderer->destroyTexture(id); }
 uint32_t Engine::addTexturedMesh(const StrataTexturedMesh& mesh) { return impl_->renderer->addTexturedMesh(mesh); }
 void Engine::setMeshTransform(uint32_t id, const float* model) { impl_->renderer->setMeshTransform(id, model); }
+void Engine::setMeshVisible(uint32_t id, bool visible) { impl_->renderer->setMeshVisible(id, visible); }
 void Engine::updateTextureRgba8(uint32_t id, int32_t x, int32_t y, int32_t width, int32_t height,
                                 const uint8_t* rgba) {
     impl_->renderer->updateTexture(id, x, y, width, height, rgba);

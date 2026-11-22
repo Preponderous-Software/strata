@@ -55,7 +55,8 @@ Emscripten builds always use GLES 3.0.
   the drive channel, see [docs/DRIVE.md](docs/DRIVE.md); 1.13: wide lines;
   1.14: world-to-screen projection and world-anchored text; 1.15: per-vertex
   RGBA mesh colours; 1.16: ambient and sun levels; 1.17: window fullscreen;
-  1.18: a host context whose GL state is not kept, `STRATA_FLAG_NO_HOST_STATE`).
+  1.18: a host context whose GL state is not kept, `STRATA_FLAG_NO_HOST_STATE`;
+  1.19: hidden meshes and engine-made flat normals).
 - **Layouts are checkable.** `strata_struct_size(id)` and
   `strata_struct_field_offset(id, field)` report every boundary struct. The C++
   unit tests `static_assert` the layouts. The C# tests
@@ -334,7 +335,18 @@ work. `strata_set_ambient` (ABI 1.16) applies to the flat ambient too;
   most `STRATA_MAX_MESHES` (256) at once, each up to 2^24 vertices.
 - Without host normals the engine sums each triangle's unnormalised face
   normal into its three vertices (area weighting) and normalises. Flat
-  shading is had by not sharing vertices between faces.
+  shading is had by not sharing vertices between faces, or (ABI 1.19) with
+  `STRATA_MESH_FLAT_NORMALS` and no normals: the engine then gives every
+  triangle three vertices of its own carrying its face normal, so the GPU
+  copy holds one vertex per index, and a degenerate triangle gets "up" and
+  draws nothing instead of being refused. The CPU picking copy keeps the
+  mesh as given. A host-made zero-length normal is refused with the first
+  triangle that uses its vertex named in the message.
+- **Hiding (ABI 1.19).** `strata_set_mesh_visible(id, 0)` keeps a mesh's
+  buffers, model matrix and id but leaves it out of the opaque, translucent,
+  cascade and cube-shadow passes and out of `strata_raycast_meshes`; showing
+  it again uploads nothing. A host swapping between several large versions of
+  one mesh (seasons of a terrain) hides all but one.
 - Meshes are the `meshes` frame input. They are drawn right after the terrain
   with their own pipelines, one draw call each: in the opaque pass (back
   faces culled, so triangles wind counter-clockwise seen from outside), and

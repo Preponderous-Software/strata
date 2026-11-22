@@ -96,9 +96,11 @@
  *   1.16 ambient and sun levels (strata_set_ambient,
  *        strata_set_sun_intensity)
  *   1.17 window fullscreen (strata_set_fullscreen, strata_is_fullscreen)
- *   1.18 a host context whose GL state is not kept (STRATA_FLAG_NO_HOST_STATE) */
+ *   1.18 a host context whose GL state is not kept (STRATA_FLAG_NO_HOST_STATE)
+ *   1.19 hidden meshes and engine-made flat normals (strata_set_mesh_visible,
+ *        STRATA_MESH_FLAT_NORMALS) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 18u
+#define STRATA_ABI_MINOR 19u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -325,7 +327,8 @@ typedef struct StrataTerrainTile {
  * side the normal points to); computed normals follow the same winding. Shadow
  * passes draw both faces, so an open surface still casts. Colours are linear RGB,
  * the same space as render-item and terrain colours. Flat shading is had by
- * not sharing vertices between faces. 56 bytes on 64-bit targets. */
+ * not sharing vertices between faces, or, since 1.19, with
+ * STRATA_MESH_FLAT_NORMALS. 56 bytes on 64-bit targets. */
 typedef struct StrataMesh {
     const float* positions;  /* vertex_count xyz, world space */
     const float* normals;    /* NULL (the engine computes area-weighted smooth normals) or vertex_count xyz */
@@ -380,6 +383,19 @@ typedef struct StrataMesh {
  * strata_add_textured_mesh with texture 0 to use this. A 1.7 to 1.14 library
  * rejects the flag as unknown; check strata_abi_minor() >= 15 first. */
 #define STRATA_MESH_COLORS_RGBA 0x4u
+/* ABI 1.19. Flat shading without host-made normals: mesh.normals must be
+ * NULL, and the engine gives each triangle three vertices of its own carrying
+ * that triangle's face normal (counter-clockwise winding, as computed normals
+ * always follow), so shared vertices are split and every face is shaded as one
+ * flat colour. Colours and uvs are per source vertex as usual. A degenerate
+ * triangle (two equal corners, no area) gets "up" and draws nothing, so a
+ * host need not filter them out. The GPU copy then holds index_count
+ * vertices, which must be at most STRATA_MAX_MESH_VERTICES; picking and
+ * strata_raycast_meshes still see the mesh as given (the same triangle
+ * numbers). As with STRATA_MESH_COLORS_RGBA, pass the mesh through
+ * strata_add_textured_mesh (texture 0 for none). A 1.7 to 1.18 library
+ * rejects the flag as unknown; check strata_abi_minor() >= 19 first. */
+#define STRATA_MESH_FLAT_NORMALS 0x8u
 
 /* ABI 1.7. A static mesh (as strata_add_mesh) with texture coordinates and a
  * texture. A sphere for a planet map is a latitude-longitude grid with u =
@@ -765,6 +781,13 @@ STRATA_API StrataStatus strata_add_textured_mesh(StrataEngine* engine, const Str
  * rotate(spin about +Y) * scale(radius), with the mesh built around the
  * origin. Changing the matrix re-uploads nothing but the matrix. */
 STRATA_API StrataStatus strata_set_mesh_transform(StrataEngine* engine, uint32_t id, const float model[16]);
+/* ABI 1.19. Zero `visible` hides a mesh, non-zero shows it again. A hidden
+ * mesh keeps its GPU buffers, model matrix and id, but no pass draws it (the
+ * opaque, translucent and every shadow pass) and strata_raycast_meshes does
+ * not hit it, so swapping between several large meshes costs no upload.
+ * Meshes start visible; an unknown id is STRATA_ERROR_INVALID_ARGUMENT and
+ * changes nothing. */
+STRATA_API StrataStatus strata_set_mesh_visible(StrataEngine* engine, uint32_t id, int32_t visible);
 
 /* ABI 1.8. Casts a ray against every static mesh (strata_add_mesh and
  * strata_add_textured_mesh, unlit ones included) with its current model
