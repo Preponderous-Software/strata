@@ -54,8 +54,8 @@
 // The kit's own version, separate from the engine's: a page and its wasm are
 // built from one kit, and strata-kit.js checks they agree (sk_kit_version).
 #define STRATA_KIT_VERSION_MAJOR 1
-#define STRATA_KIT_VERSION_MINOR 3
-#define STRATA_KIT_VERSION_STRING "1.3"
+#define STRATA_KIT_VERSION_MINOR 4
+#define STRATA_KIT_VERSION_STRING "1.4"
 
 namespace strata_kit {
 

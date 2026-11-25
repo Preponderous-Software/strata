@@ -37,6 +37,8 @@
 // tap, a second finger during an orbit, a small pinch) and a right or
 // middle click never call onTap; one finger moved under 6 px, a real
 // touchscreen tap and a left click each call it once.
+// placeLabels (kit 1.4) keeps labels out of a top inset and out of the
+// rectangles a page lists, on plain divs.
 // --live keeps the page's own frame loop (no ?drive=1); captures are then of
 // whatever frame is on screen. Exits 1 on any failure.
 'use strict';
@@ -313,11 +315,47 @@ async function kitChecks(browser) {
     await hiddenContextLossChecks(context);
     await keyChecks(context);
     await qualityRecoveryChecks(context);
+    await labelChecks(context);
   } catch (e) {
     check(false, `kit: ${String(e).split('\n')[0]}`);
   } finally {
     await context.close();
   }
+}
+
+// Kit 1.4: placeLabels keeps labels out of a top band (topInset) and out of
+// rectangles the page lists (avoid). A label whose box would reach into
+// either hides; one clear of them is placed as before; a never-hidden one
+// (rank 0) is moved down to just under the band. Plain divs, no module.
+async function labelChecks(context) {
+  const { page, errors } = await kitStubPage(context,
+    '<div id="host" style="position:relative;width:400px;height:300px;font:14px sans-serif"></div>');
+  const r = await page.evaluate(() => {
+    const host = document.getElementById('host');
+    const make = (text) => host.appendChild(Object.assign(document.createElement('div'),
+      { textContent: text, style: 'position:absolute;transform:translate(-50%,-100%);white-space:nowrap' }));
+    const els = { under: make('under the bar'), clear: make('clear of it'), pinned: make('never hidden'),
+      chip: make('under a chip'), free: make('no inset') };
+    const shown = (el) => !el.classList.contains('sk-label-off') && el.style.display !== 'none';
+    StrataKit.placeLabels([
+      { el: els.under, q: { x: 100, y: 40, w: 1 }, rank: 2 },
+      { el: els.clear, q: { x: 100, y: 200, w: 1 }, rank: 2 },
+      { el: els.pinned, q: { x: 300, y: 20, w: 1 }, rank: 0 },
+      { el: els.chip, q: { x: 330, y: 250, w: 1 }, rank: 2 },
+    ], { topInset: 48, avoid: [{ left: 300, top: 220, right: 400, bottom: 300 }] });
+    StrataKit.placeLabels([{ el: els.free, q: { x: 100, y: 40, w: 1 }, rank: 2 }]);
+    const top = (el) => parseFloat(el.style.top);
+    return { under: shown(els.under), clear: shown(els.clear), clearTop: top(els.clear), pinned: shown(els.pinned),
+      pinnedTop: top(els.pinned), pinnedH: els.pinned.offsetHeight, chip: shown(els.chip), free: shown(els.free) };
+  });
+  check(!r.under && r.clear && r.clearTop === 200,
+    `kit: placeLabels with topInset hides a label that would sit under the bar (shown ${r.under}) and keeps one clear of it (shown ${r.clear}, top ${r.clearTop})`);
+  check(r.pinned && r.pinnedTop >= 48 + r.pinnedH - 0.5,
+    `kit: placeLabels moves a never-hidden label down under the top inset (bottom ${r.pinnedTop}, height ${r.pinnedH})`);
+  check(!r.chip, `kit: placeLabels keeps labels off an avoid rectangle (shown ${r.chip})`);
+  check(r.free, `kit: placeLabels without topInset places the same label as before (shown ${r.free})`);
+  check(errors.length === 0, `kit: labels: no page errors${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
+  await page.close();
 }
 
 // A canvas sized only by its width/height attributes is shown at them, so a
