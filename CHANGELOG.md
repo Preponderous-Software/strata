@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.11.0
+
+A host can now hide a mesh without freeing it and shade a mesh flat, so a
+terrain that changes with the seasons no longer parks its spares under the
+scene and a host no longer filters sliver triangles out before upload (ABI
+1.19). The drive channel and `strata-golden` are each split into a core and
+ports, which a host or harness cannot see but which puts both under unit
+tests without a GPU. Every addition is compatible (`STRATA_ABI_VERSION`
+stays 1); the web kit and the grid relay's wire format are unchanged.
+
 - Meshes can be hidden and shaded flat (ABI 1.19; C#, Python; compatible,
   `STRATA_ABI_VERSION` stays 1):
   - `strata_set_mesh_visible(engine, id, visible)` hides a mesh without
