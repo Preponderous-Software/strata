@@ -58,7 +58,7 @@
    MIT licensed, as Strata. */
 (function () {
   "use strict";
-  const KIT_VERSION = "1.3";
+  const KIT_VERSION = "1.4";
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -507,12 +507,22 @@
   // blink. Labels are anchored bottom-centre at q (CSS
   // `transform: translate(-50%, -100%)`); hidden ones get the class
   // sk-label-off (opacity 0 by default, so a transition can fade them).
+  // Kit 1.4: o.topInset (CSS pixels) keeps labels out of a band along the
+  // canvas's top, where a page's bar or chips sit, and o.avoid lists more
+  // rectangles to keep clear ({left, top, right, bottom} in the same canvas
+  // CSS pixels as q; a DOMRect minus the canvas's offset will do). Both
+  // count as labels already placed: a label that would cover them steps up
+  // or hides like any other collision, and a never-hidden one (rank <= 0)
+  // that would still reach into the top band is moved down to just under it.
   function placeLabels(items, o = {}) {
     const now = performance.now();
     const hideMs = o.hideMs != null ? o.hideMs : 350, showMs = o.showMs != null ? o.showMs : 200;
     const gap = o.gap != null ? o.gap : 2;
+    const topInset = Math.max(0, o.topInset || 0);
     injectStyle();
     const taken = [];
+    if (topInset > 0) taken.push({x0: -Infinity, x1: Infinity, y0: -Infinity, y1: topInset});
+    for (const a of o.avoid || []) taken.push({x0: a.left, x1: a.right, y0: a.top, y1: a.bottom});
     const overlaps = (r) => taken.some((t) => r.x0 < t.x1 && r.x1 > t.x0 && r.y0 < t.y1 && r.y1 > t.y0);
     // Read every size before writing any style: one layout per frame.
     for (const it of items) {
@@ -543,7 +553,10 @@
       const prevK = el._skK || 0;
       if (prevK < tries && !overlaps(rectAt(prevK))) r = rectAt(prevK);
       for (let k = 0; !r && k < tries; k++) if (!overlaps(rectAt(k))) r = rectAt(k);
-      if (!r && it.rank <= 0) r = rectAt(tries - 1);
+      if (!r && it.rank <= 0) {
+        r = rectAt(tries - 1);
+        if (r.y0 < topInset) r = {x0: r.x0, x1: r.x1, y0: topInset, y1: topInset + h, k: r.k};
+      }
       const want = !!r;
       if (el._skShown == null) { el._skShown = want; el._skPending = 0; }  // first sight: no delay
       else if (want !== !!el._skShown) {

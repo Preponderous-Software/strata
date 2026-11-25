@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- The web kit moves to 1.4: `StrataKit.placeLabels` takes `topInset`, a
+  band along the canvas's top that labels keep out of (a page's top bar or
+  chips), and `avoid`, more rectangles to keep clear (a side panel, a bottom
+  sheet), both in canvas CSS pixels. They count as labels already placed, so
+  a label that would cover them steps up or hides as on any collision, and a
+  never-hidden label (rank 0 or less) is moved down to just under the band.
+  Without them placement is unchanged. A family of kit consumers had each
+  wrapped `placeLabels` to stop labels sliding under their top bars on
+  phones. The smoke test checks both options on plain divs.
+
 ## 0.11.0
 
 A host can now hide a mesh without freeing it and shade a mesh flat, so a
