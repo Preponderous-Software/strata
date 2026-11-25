@@ -3,8 +3,9 @@
 // Part of the Strata web kit (docs/WEB.md, "The web kit"). It covers the shell
 // around a scene and leaves the scene alone: the WebGL 2 context, the engine
 // in it, resizing, three quality tiers, an orbit camera, the sun, the per-frame
-// batching of primitives, points, lines, point lights, (kit 1.2) labels and
-// (kit 1.3) screen panels and text, and a stats export.
+// batching of primitives, points, lines, point lights, (kit 1.2) labels,
+// (kit 1.3) screen panels and text and (kit 1.4) the camera's screen basis
+// with camera-facing glyph planes, and a stats export.
 // The scene is the host's: it fills the batches in a hook, from whatever data
 // its own exported setters were handed.
 //
@@ -54,8 +55,8 @@
 // The kit's own version, separate from the engine's: a page and its wasm are
 // built from one kit, and strata-kit.js checks they agree (sk_kit_version).
 #define STRATA_KIT_VERSION_MAJOR 1
-#define STRATA_KIT_VERSION_MINOR 3
-#define STRATA_KIT_VERSION_STRING "1.3"
+#define STRATA_KIT_VERSION_MINOR 4
+#define STRATA_KIT_VERSION_STRING "1.4"
 
 namespace strata_kit {
 
@@ -87,6 +88,53 @@ struct Options {
     Tier tiers[3] = {{0, 1024, 4, false}, {1, 1024, 8, false}, {3, 2048, 16, false}};
 };
 
+// Kit 1.4. Where the orbit camera's eye stands for (yaw, pitch, dist) round
+// target, as sk_frame places it: yaw 0 puts the eye on +x, and yaw turns it
+// towards +z.
+inline void orbitEye(float yaw, float pitch, float dist, const float target[3], float eye[3]) {
+    const float cp = std::cos(pitch);
+    eye[0] = target[0] + dist * cp * std::cos(yaw);
+    eye[1] = target[1] + dist * std::sin(pitch);
+    eye[2] = target[2] + dist * cp * std::sin(yaw);
+}
+
+// Kit 1.4. The orbit camera's basis in world space, unit vectors: right runs
+// to the right of the screen, up to its top, and forward from the eye into
+// the screen. Right is always level (y = 0); up leans with the pitch. At the
+// default yaw (0.8) the eye stands on the +x, +z side, so +x runs to the
+// right and +z to the left: something drawn along +x and +y reads the right
+// way round, and along +z it reads mirrored. Use these, or a Billboard, for
+// anything that must face the camera.
+inline void cameraBasis(float yaw, float pitch, float right[3], float up[3], float forward[3]) {
+    const float cy = std::cos(yaw), sy = std::sin(yaw), cp = std::cos(pitch), sp = std::sin(pitch);
+    right[0] = sy;
+    right[1] = 0.0f;
+    right[2] = -cy;
+    up[0] = -sp * cy;
+    up[1] = cp;
+    up[2] = -sp * sy;
+    forward[0] = -cp * cy;
+    forward[1] = -sp;
+    forward[2] = -cp * sy;
+}
+
+// Kit 1.4. A small plane at a world point that faces the camera, for glyphs
+// drawn with lines or primitives (an arrow, a letter, a badge) that must
+// read the right way round from wherever the camera orbits. u runs
+// screen-right and v runs up, both in units of size, from the origin. Make
+// one each frame with Host::billboard, after the camera has moved.
+struct Billboard {
+    float origin[3];
+    float right[3];
+    float up[3];
+    float size;
+
+    // The world point at (u, v) on the plane.
+    void at(float u, float v, float out[3]) const {
+        for (int i = 0; i < 3; ++i) out[i] = origin[i] + (right[i] * u + up[i] * v) * size;
+    }
+};
+
 struct Light {
     StrataPointLight light;
     int priority;  // higher is kept first when there are more than the tier allows
@@ -104,6 +152,11 @@ struct Host {
     float yaw = 0.8f, pitch = 0.6f, dist = 30.0f, target[3] = {0.0f, 0.0f, 0.0f};
     float eye[3] = {0.0f, 0.0f, 0.0f};
     float viewProj[16] = {};  // of the last frame, column-major
+    // Kit 1.4: the camera's basis in world space (see cameraBasis()), set by
+    // sk_frame before strata_kit_build, so the hook sees this frame's camera.
+    float camRight[3] = {0.0f, 0.0f, -1.0f};
+    float camUp[3] = {0.0f, 1.0f, 0.0f};
+    float camForward[3] = {-1.0f, 0.0f, 0.0f};
     // Sun: direction to it, and 0 by day .. 1 at night (from its elevation).
     float toSun[3] = {0.3f, 0.8f, 0.4f};
     float night = 0.0f;
@@ -286,6 +339,37 @@ struct Host {
         texts.push_back(t);
         textStrings.emplace_back(utf8);
     }
+
+    // Kit 1.4. A camera-facing plane at (x, y, z), size world units per unit
+    // of u and v (see Billboard). Upright (the default) keeps v on world +y
+    // and turns the plane only about the vertical: a sign or a flag, which
+    // stays standing as the camera looks down. upright = false tilts it with
+    // the camera too, so it faces the eye squarely: a marker seen from above.
+    // Either way u runs screen-right, so text and arrows are never mirrored.
+    Billboard billboard(float x, float y, float z, float size, bool upright = true) const {
+        Billboard b{{x, y, z}, {camRight[0], camRight[1], camRight[2]}, {0.0f, 1.0f, 0.0f}, size};
+        if (!upright) std::copy(camUp, camUp + 3, b.up);
+        return b;
+    }
+
+    // Kit 1.4. A line on a billboard, from (u0, v0) to (u1, v1).
+    void line(const Billboard& b, float u0, float v0, float u1, float v1, Rgb c, float a = 1.0f) {
+        float p0[3], p1[3];
+        b.at(u0, v0, p0);
+        b.at(u1, v1, p1);
+        line(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], c, a);
+    }
+
+#if STRATA_ABI_MINOR >= 13
+    // Kit 1.4 (ABI 1.13). A wide line on a billboard, as wideLine() above.
+    void wideLine(const Billboard& b, float u0, float v0, float u1, float v1, Rgb c, float widthPixels,
+                  float worldWidth = 0.0f, float a = 1.0f, uint32_t flags = STRATA_LINES_ROUND_CAPS) {
+        float p0[3], p1[3];
+        b.at(u0, v0, p0);
+        b.at(u1, v1, p1);
+        wideLine(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], c, widthPixels, worldWidth, a, flags);
+    }
+#endif
 
     // A point light. All of a frame's lights are sorted by priority (stably,
     // so equal priorities keep their order) and cut to the tier's budget.
@@ -573,10 +657,8 @@ STRATA_KIT_EXPORT int sk_frame(double seconds) {
     const Options& o = h.opts;
     const Tier& tier = h.tier();
 
-    const float cp = std::cos(h.pitch);
-    h.eye[0] = h.target[0] + h.dist * cp * std::cos(h.yaw);
-    h.eye[1] = h.target[1] + h.dist * std::sin(h.pitch);
-    h.eye[2] = h.target[2] + h.dist * cp * std::sin(h.yaw);
+    orbitEye(h.yaw, h.pitch, h.dist, h.target, h.eye);
+    cameraBasis(h.yaw, h.pitch, h.camRight, h.camUp, h.camForward);
     const float up[3] = {0.0f, 1.0f, 0.0f};
     StrataCamera camera{};
     strata_camera_look_at(h.eye, h.target, up, o.fovDegrees, static_cast<float>(h.width) / h.height, o.nearPlane,

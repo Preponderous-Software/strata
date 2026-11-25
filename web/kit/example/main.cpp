@@ -58,6 +58,13 @@ void strata_kit_build(strata_kit::Host& h, double t) {
         h.add(STRATA_PRIMITIVE_CYLINDER, x, ph * 0.5f, z, 0.6f, ph * 0.5f, 0.6f, kColours[i]);
         h.add(STRATA_PRIMITIVE_SPHERE, x, ph + 0.35f, z, 0.7f, 0.7f, 0.7f, kColours[i]);
         if (i == selected) {
+#if STRATA_ABI_MINOR >= 13
+            // Kit 1.4: a chevron over the selected pillar on a camera-facing
+            // plane, so it is never seen edge-on from any side of the orbit.
+            const strata_kit::Billboard b = h.billboard(x, ph + 1.4f + 0.1f * std::sin(spin * 3.0f), z, 0.35f);
+            h.wideLine(b, -1.0f, 0.8f, 0.0f, 0.0f, {1.0f, 1.0f, 1.0f}, 4.0f, 0.08f);
+            h.wideLine(b, 0.0f, 0.0f, 1.0f, 0.8f, {1.0f, 1.0f, 1.0f}, 4.0f, 0.08f);
+#endif
             for (int k = 0; k < 24; ++k) {
                 const float b0 = k * 6.2831853f / 24 + spin, b1 = (k + 0.6f) * 6.2831853f / 24 + spin;
                 h.line(x + std::cos(b0) * 1.0f, 0.05f, z + std::sin(b0) * 1.0f, x + std::cos(b1) * 1.0f, 0.05f,

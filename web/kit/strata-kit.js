@@ -42,6 +42,9 @@
    - project() and pick() in CSS pixels. Pointer coordinates are never scaled
      by the drawing buffer's size, so the device pixel ratio (and its cap)
      never enters picking.
+   - cameraBasis() (kit 1.4): the camera's screen-right, screen-up and
+     forward vectors in world space, the same as strata_kit.h's, for
+     anything the page lays out to face the camera.
    - webglcontextlost / webglcontextrestored: the loop stops, and on restore
      the engine is rebuilt in the same canvas (sk_restore) and the host's
      onRestore runs. A context that is lost a third time in a minute, or
@@ -53,12 +56,13 @@
      does not run under ?drive=1), pickAt, tapAt, lastTapId, targets, stats,
      loseContext/restoreContext, for tools such as testing/smoke.cjs.
    - StrataKit.placeLabels: label placement with collision and hysteresis.
+   - StrataKit.cameraBasis(cam): the basis for any {yaw, pitch}.
    - StrataKit.store: localStorage that never throws.
 
    MIT licensed, as Strata. */
 (function () {
   "use strict";
-  const KIT_VERSION = "1.3";
+  const KIT_VERSION = "1.4";
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -204,10 +208,13 @@
       cam.pitch = Math.min(Math.max(cam.pitch, limits.minPitch), limits.maxPitch);
       cam.dist = Math.min(Math.max(cam.dist, limits.minDist), limits.maxDist);
     };
+    kit.cameraBasis = () => cameraBasis(cam);
+    // Drags the ground with the pointer: the target moves against the drag
+    // along screen-right, and along the level forward for vertical drags.
     kit.pan = function (dx, dy) {
       const k = cam.dist / Math.max(canvas.clientHeight, 1) * 1.1;
-      const sx = -Math.sin(cam.yaw), sz = Math.cos(cam.yaw);   // screen-right in world
-      const fx = -Math.cos(cam.yaw), fz = -Math.sin(cam.yaw);  // screen-up (forward) in world
+      const sx = Math.sin(cam.yaw), sz = -Math.cos(cam.yaw);   // screen-right in world
+      const fx = -Math.cos(cam.yaw), fz = -Math.sin(cam.yaw);  // level forward in world
       cam.tx += (-dx * sx + dy * fx) * k;
       cam.tz += (-dx * sz + dy * fz) * k;
     };
@@ -495,6 +502,17 @@
     return kit;
   }
 
+  /* ---------------------------------------------------------- camera */
+  // Kit 1.4. The orbit camera's basis in world space, unit vectors, exactly
+  // as strata_kit.h's cameraBasis(): right runs to the right of the screen
+  // (always level), up to its top (leaning with the pitch), forward from the
+  // eye into the screen. Kit 1.3's pan named (-sin yaw, cos yaw) screen-right,
+  // but that is screen-left: glyphs laid out along it read mirrored.
+  function cameraBasis(cam) {
+    const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+    return {right: [sy, 0, -cy], up: [-sp * cy, cp, -sp * sy], forward: [-cp * cy, -sp, -cp * sy]};
+  }
+
   /* ---------------------------------------------------------- labels */
   // Places HTML labels over the canvas without overlaps, steadily. Each item
   // is {el, q, rank, depth}: q from kit.project (null hides it), lower rank
@@ -574,5 +592,5 @@
     document.head.appendChild(s);
   }
 
-  window.StrataKit = {version: KIT_VERSION, create, placeLabels, store};
+  window.StrataKit = {version: KIT_VERSION, create, placeLabels, cameraBasis, store};
 })();

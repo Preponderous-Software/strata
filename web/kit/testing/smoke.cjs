@@ -37,6 +37,9 @@
 // tap, a second finger during an orbit, a small pinch) and a right or
 // middle click never call onTap; one finger moved under 6 px, a real
 // touchscreen tap and a left click each call it once.
+// With the scene drawn (not --live), the camera: cameraBasis() (kit 1.4)
+// agrees with the frame's own projection, and a pan moves the ground with
+// the pointer, both ways.
 // --live keeps the page's own frame loop (no ?drive=1); captures are then of
 // whatever frame is on screen. Exits 1 on any failure.
 'use strict';
@@ -143,6 +146,7 @@ async function runDpr(browser, o, dpr) {
         await tapEqualsPick(page, o, label + ' after restore', device.hasTouch);
       }
     }
+    if (!o.live) await cameraChecks(page, o, label);
     const fetched = [...wasmRequests].map(([p, n]) => `${p.split('/').pop()} x${n}`).join(', ') || 'none';
     check(wasmRequests.size > 0 && [...wasmRequests.values()].every((n) => n === 1),
       `${label}: each .wasm is requested once (${fetched})`);
@@ -152,6 +156,38 @@ async function runDpr(browser, o, dpr) {
   } finally {
     await context.close();
   }
+}
+
+// Kit 1.4: cameraBasis() against the frame the engine drew. From the target
+// (the middle of the screen), a step along right must land to its right and
+// level, and a step along up above it. Then a pan drags the ground with the
+// pointer: a drag right moves what was in the middle to the right, a drag
+// down moves it down. The camera is put back and redrawn afterwards.
+async function cameraChecks(page, o, label) {
+  const r = await page.evaluate(async () => {
+    const k = window.__strataKit.kit, cam = k.cam;
+    if (typeof k.cameraBasis !== 'function') return null;
+    const saved = Object.assign({}, cam);
+    const t = [cam.tx, cam.ty, cam.tz], b = k.cameraBasis(), s = cam.dist * 0.05;
+    const at = (v) => k.project(t[0] + v[0] * s, t[1] + v[1] * s, t[2] + v[2] * s);
+    const c = at([0, 0, 0]), right = at(b.right), up = at(b.up);
+    const after = (dx, dy) => {
+      Object.assign(cam, saved);
+      k.pan(dx, dy);
+      window.__strataKit.drive(0.5);
+      return k.project(t[0], t[1], t[2]);
+    };
+    const panRight = after(40, 0), panDown = after(0, 40);
+    Object.assign(cam, saved);
+    window.__strataKit.drive(0.5);
+    return { c, right, up, panRight, panDown };
+  });
+  if (!r) { console.log(`     ${label}: the page's kit has no cameraBasis (older than 1.4), skipped`); return; }
+  const f = (q) => `${q.x.toFixed(1)},${q.y.toFixed(1)}`;
+  check(r.right.x - r.c.x > 2 && Math.abs(r.right.y - r.c.y) < 1 && r.c.y - r.up.y > 2 && Math.abs(r.up.x - r.c.x) < 1,
+    `${label}: cameraBasis matches the frame (target ${f(r.c)}, +right ${f(r.right)}, +up ${f(r.up)})`);
+  check(r.panRight.x - r.c.x > 10 && r.panDown.y - r.c.y > 10,
+    `${label}: a pan drags the ground with the pointer (right 40 px: ${f(r.panRight)}, down 40 px: ${f(r.panDown)})`);
 }
 
 // Scrolls the kit's canvas to the middle of the viewport, unless it is wholly
