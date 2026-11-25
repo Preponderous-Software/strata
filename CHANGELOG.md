@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- The web kit moves to 1.4: the orbit camera's screen basis and
+  camera-facing glyph planes (docs/WEB.md, "Facing the camera"):
+  - `strata_kit::cameraBasis(yaw, pitch, right, up, forward)` and
+    `strata_kit::orbitEye(...)`, and `Host::camRight`, `camUp` and
+    `camForward`, set each frame before `strata_kit_build`. Right runs to the
+    right of the screen. At the default yaw that is towards +x, and +z runs
+    left, so a glyph laid out along +z, or along the vector kit 1.3's pan
+    called screen-right (`(-sin yaw, cos yaw)`, which is screen-left), read
+    mirrored; a family of kit consumers each wrote its own fix for this;
+  - `Host::billboard(x, y, z, size, upright)` returns a `Billboard`, a small
+    camera-facing plane whose u runs screen-right and v up, with
+    `Billboard::at(u, v, out)` and `Host::line` and `Host::wideLine`
+    overloads that draw on it. The example scene marks its selected pillar
+    with a chevron drawn this way;
+  - `kit.cameraBasis()` and `StrataKit.cameraBasis(cam)` give the page the
+    same vectors;
+  - a pan (right button, Shift or two fingers) now moves the ground with the
+    pointer sideways as it already did up and down: kit 1.3 panned along its
+    screen-left vector, so a sideways drag moved the scene against the
+    pointer;
+  - unit tests check the basis against the matrices `strata_camera_look_at`
+    makes, and the smoke test checks `cameraBasis()` and the pan direction
+    against the frame the engine drew.
+
 ## 0.11.0
 
 A host can now hide a mesh without freeing it and shade a mesh flat, so a

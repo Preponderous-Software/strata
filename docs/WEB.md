@@ -153,8 +153,8 @@ from `v0.7.0` on (older tarballs have no `kit/`):
 
 | File | What it is |
 |---|---|
-| `strata_kit.h` | Header-only C++ host shell. Creates the WebGL 2 context (`preserveDrawingBuffer` on by default, so frames can be read back; `Options::preserveDrawingBuffer = false` for a scene nothing reads back, as the grid relay is) and the engine, with `STRATA_FLAG_NO_HOST_STATE` (Strata ABI 1.18) since nothing else draws in that context, so the engine does not query and restore its GL state around every frame; resizing; three quality tiers (sun cascades, shadow map size, point-light budget, point thinning); an orbit camera and its view-projection matrix; the sun from latitude, longitude and time; per-frame batches of primitives, points (alpha clamped), lines, prioritised point lights and, from kit 1.2, engine-drawn world labels (`Host::label`, Strata ABI 1.14) and, from kit 1.3, screen panels and screen text (`Host::rect`, `Host::text`) and the frame's clear (`Host::clearFlags`, `Host::clearColor`; the sky by default, as before); frame stats (`sk_stats`: primitives, points, lines, lights, terrain samples and, from kit 1.1, the meshes the host counts in `Host::meshes`). Exports `sk_init`, `sk_restore`, `sk_resize`, `sk_set_quality`, `sk_set_camera`, `sk_set_sun`, `sk_view_proj`, `sk_stats`, `sk_frame` and `sk_kit_version`. Natively (no Emscripten) the same file opens a headless engine: `sk_init_headless`, `sk_save_png` and `sk_shutdown`, so a scene also renders stills |
-| `strata-kit.js` | Dependency-free page shell (`window.StrataKit`): canvas sizing with a capped device pixel ratio; adaptive quality (pixel density first, then the tier, with settle windows, reset when the tab is hidden, and each step taken back after a sustained run of fast frames); orbit, pan, pinch, wheel and keyboard camera; `project()` and `pick()` in CSS pixels; `webglcontextlost`/`webglcontextrestored`; `?quality=`, `?fps=1` and `?drive=1`; label placement with collision and hysteresis (`StrataKit.placeLabels`); `window.__strataKit` for tools |
+| `strata_kit.h` | Header-only C++ host shell. Creates the WebGL 2 context (`preserveDrawingBuffer` on by default, so frames can be read back; `Options::preserveDrawingBuffer = false` for a scene nothing reads back, as the grid relay is) and the engine, with `STRATA_FLAG_NO_HOST_STATE` (Strata ABI 1.18) since nothing else draws in that context, so the engine does not query and restore its GL state around every frame; resizing; three quality tiers (sun cascades, shadow map size, point-light budget, point thinning); an orbit camera and its view-projection matrix; the sun from latitude, longitude and time; per-frame batches of primitives, points (alpha clamped), lines, prioritised point lights and, from kit 1.2, engine-drawn world labels (`Host::label`, Strata ABI 1.14) and, from kit 1.3, screen panels and screen text (`Host::rect`, `Host::text`) and the frame's clear (`Host::clearFlags`, `Host::clearColor`; the sky by default, as before); from kit 1.4, the camera's screen basis (`Host::camRight`, `camUp`, `camForward`) and camera-facing glyph planes (`Host::billboard`); frame stats (`sk_stats`: primitives, points, lines, lights, terrain samples and, from kit 1.1, the meshes the host counts in `Host::meshes`). Exports `sk_init`, `sk_restore`, `sk_resize`, `sk_set_quality`, `sk_set_camera`, `sk_set_sun`, `sk_view_proj`, `sk_stats`, `sk_frame` and `sk_kit_version`. Natively (no Emscripten) the same file opens a headless engine: `sk_init_headless`, `sk_save_png` and `sk_shutdown`, so a scene also renders stills |
+| `strata-kit.js` | Dependency-free page shell (`window.StrataKit`): canvas sizing with a capped device pixel ratio; adaptive quality (pixel density first, then the tier, with settle windows, reset when the tab is hidden, and each step taken back after a sustained run of fast frames); orbit, pan, pinch, wheel and keyboard camera; `project()` and `pick()` in CSS pixels; from kit 1.4, the camera's screen basis (`kit.cameraBasis()`, `StrataKit.cameraBasis(cam)`); `webglcontextlost`/`webglcontextrestored`; `?quality=`, `?fps=1` and `?drive=1`; label placement with collision and hysteresis (`StrataKit.placeLabels`); `window.__strataKit` for tools |
 | `strata-loader.js` | The loading shell (`window.StrataLoader`): the poster as a blurred backdrop, byte-accurate download progress with the size, the `.wasm` compiled while it arrives when it is served as `application/wasm` and fetched while the WebGL 2 probe runs (or, for a host that boots its own way, `StrataLoader.show()` and `StrataLoader.progress(fraction, label)`: see below), and a fallback to the trailer clip or the poster, with the reason in words, when WebGL 2 is missing, the engine fails, a lost context does not come back, or the device is too slow at the lowest tier |
 | `build-kit.sh` | One parameterised build: emsdk version check, the Strata tarball's SHA-256 (or a source build's `libstrata.a`), fixed flags (`-O2 -fwasm-exceptions`, WebGL 2 only, `MODULARIZE`, the glue minified by the Closure Compiler unless `KIT_CLOSURE=0`, and `INCOMING_MODULE_JS_API` with `wasmBinary` and `instantiateWasm`, so the glue takes the module `strata-loader.js` already fetched and compiled instead of downloading the `.wasm` again) and the export list. Copies the page scripts beside the `.wasm`. A host that links its own glue with `strata-loader.js` needs `wasmBinary` in `-sINCOMING_MODULE_JS_API` too: emsdk 6.0.11's default list leaves it out |
 | `ci-snippet.yml` | A GitHub Actions job for a host that commits its build: rebuild, `git diff --exit-code`, and the smoke test |
@@ -188,6 +188,33 @@ keeps only 4 point lights, so a fill light that stands in for ambient should
 be added with `h.fill(light, lift, priority)`: when the tier drops it, its
 `lift` (linear RGB) is added to the ambient instead, and the scene keeps its
 level on the devices that run at the lowest tier.
+
+Facing the camera (kit 1.4): `Host::camRight`, `camUp` and `camForward`
+are this frame's camera basis in world space, set before
+`strata_kit_build` (`strata_kit::cameraBasis(yaw, pitch, ...)` computes it
+for any camera, and `kit.cameraBasis()` gives the same vectors to the page).
+Right runs to the right of the screen and is always level. At the kit's
+default yaw the eye stands on the +x, +z side, so +x runs right and +z left:
+a glyph drawn in world space along +z, or along kit 1.3's pan vector
+`(-sin yaw, cos yaw)`, which is screen-left, reads mirrored. A glyph made of
+lines or primitives (an arrow, a letter, a badge) that must read the right
+way round from every side goes on a billboard, a small camera-facing plane
+whose u runs screen-right and v up, in units of its size:
+
+```cpp
+const strata_kit::Billboard b = h.billboard(x, y + 2.0f, z, 0.3f);  // upright: v stays on world +y
+h.wideLine(b, -1, 1, 0, 0, {1, 1, 1}, 4.0f);   // a chevron pointing down at (x, y, z)
+h.wideLine(b, 0, 0, 1, 1, {1, 1, 1}, 4.0f);
+float p[3];
+b.at(0.5f, 0.5f, p);                           // any other point on the plane, for h.add(...)
+```
+
+`h.billboard(x, y, z, size, false)` tilts the plane with the camera as well,
+so it faces the eye squarely (a marker seen from above). The example scene
+draws its selection chevron this way. A drag with the right button, Shift or
+two fingers now moves the ground with the pointer both ways: kit 1.3 panned
+along its screen-left vector, so a sideways drag moved the scene against the
+pointer.
 
 `build-kit.sh` builds it (settings from the environment or a sourced file;
 see the script's header):
@@ -312,7 +339,7 @@ Rules the kit keeps, which a hand-written shell tends to lose:
   hidden are not counted, and the 5 s start when it is visible again.
 
 The kit has its own version (`STRATA_KIT_VERSION_STRING`, `StrataKit.version`;
-1.3 now), and `strata-kit.js` warns when the page's and the wasm's major
+1.4 now), and `strata-kit.js` warns when the page's and the wasm's major
 versions differ. A host that pins a release takes the kit from that release's tarball
 (`kit/build-kit.sh`, with `STRATA_VERSION` and `STRATA_SHA256` set to the
 same release) and needs no vendored copy. A host that needs a kit fix before

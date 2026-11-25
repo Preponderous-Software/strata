@@ -22,6 +22,7 @@ add_executable(strata-unit-tests
     test_glsl_es.cpp
     test_headless_driver.cpp
     test_kit_lights.cpp
+    test_kit_camera.cpp
     test_grid_relay.cpp
     test_scene_file.cpp
     # Compiled in rather than linked: the strata_scene library exists only with
@@ -36,9 +37,9 @@ add_executable(strata-unit-tests
     ${PROJECT_SOURCE_DIR}/tools/strata-golden/adapters/png_file_sink.cpp)
 find_package(Threads REQUIRED)
 target_link_libraries(strata-unit-tests PRIVATE strata_static Threads::Threads)
-# test_kit_lights.cpp includes the web kit's header (without STRATA_KIT_MAIN),
-# test_grid_relay.cpp the grid relay's; test_scene_file.cpp includes the scene
-# format's.
+# test_kit_lights.cpp and test_kit_camera.cpp include the web kit's header
+# (without STRATA_KIT_MAIN), test_grid_relay.cpp the grid relay's;
+# test_scene_file.cpp includes the scene format's.
 target_include_directories(strata-unit-tests PRIVATE ${PROJECT_SOURCE_DIR}/web/kit
                                                      ${PROJECT_SOURCE_DIR}/web/kit/grid-relay
                                                      ${PROJECT_SOURCE_DIR}/tools/common
