@@ -64,7 +64,8 @@ jobs:
         run: |
           mkdir -p dist/lib dist/bin dist/include/strata
           cp -P build/libstrata.so* dist/lib/
-          cp build/strata-golden build/strata-imgcmp dist/bin/
+          cp -P build/libstrata_gltf.so* dist/lib/
+          cp build/strata-golden build/strata-imgcmp build/strata-gltf-view dist/bin/
           cp include/strata/strata.h dist/include/strata/
           cp LICENSE THIRD_PARTY_NOTICES.md dist/
 
@@ -125,6 +126,13 @@ jobs:
             dist/bin/strata-golden check tests/scenes tests/golden golden-out/gles3
           STRATA_GL_API=gles3 STRATA_GLES_NO_DEPTH_CLAMP=1 LD_LIBRARY_PATH=dist/lib \
             dist/bin/strata-golden check tests/scenes tests/golden golden-out/gles3-no-depth-clamp
+
+      - name: glTF module goldens (headless EGL surfaceless)
+        run: |
+          python3 modules/gltf/tests/check_goldens.py --view dist/bin/strata-gltf-view \
+            --imgcmp dist/bin/strata-imgcmp --out golden-out/gltf
+        env:
+          LD_LIBRARY_PATH: dist/lib
 
       - name: C# ABI layout tests
         env:

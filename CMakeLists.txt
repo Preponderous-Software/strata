@@ -239,6 +239,16 @@ if(STRATA_WITH_SIM)
     add_subdirectory(modules/sim)
 endif()
 
+# The glTF module (modules/gltf) loads .gltf/.glb scenes through the C ABI.
+# Its parser (cgltf) and image decoder (stb_image) are vendored, so it fetches
+# nothing. Desktop only for now: off by default in a browser build.
+if(EMSCRIPTEN)
+    set(STRATA_WITH_GLTF_DEFAULT OFF)
+else()
+    set(STRATA_WITH_GLTF_DEFAULT ON)
+endif()
+option(STRATA_WITH_GLTF "Build the glTF 2.0 loader module (modules/gltf)" ${STRATA_WITH_GLTF_DEFAULT})
+
 # ---------------------------------------------------------------- tools
 if(STRATA_BUILD_TOOLS)
     add_library(strata_scene STATIC tools/common/scene_file.cpp)
@@ -335,4 +345,10 @@ install(FILES include/strata/strata.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/st
 install(FILES LICENSE THIRD_PARTY_NOTICES.md DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/strata)
 if(STRATA_BUILD_TOOLS AND NOT EMSCRIPTEN)
     install(TARGETS strata-golden strata-imgcmp RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
+# ---------------------------------------------------------------- glTF module
+# Added last: it links the shared library, strata_image and the tools above.
+if(STRATA_WITH_GLTF)
+    add_subdirectory(modules/gltf)
 endif()

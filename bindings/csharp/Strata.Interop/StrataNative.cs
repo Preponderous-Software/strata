@@ -282,9 +282,11 @@ namespace Strata.Interop {
         /// </summary>
         public static void UseLibraryDirectory(string directory) {
             NativeLibrary.SetDllImportResolver(typeof(StrataNative).Assembly, (name, assembly, path) => {
-                if (name != Library) return IntPtr.Zero;
-                string file = OperatingSystem.IsWindows() ? "strata.dll"
-                    : OperatingSystem.IsMacOS() ? "libstrata.dylib" : "libstrata.so";
+                // libstrata, and the glTF module's library beside it (StrataGltfNative).
+                string stem = name == Library ? "strata" : name == StrataGltfNative.Library ? "strata_gltf" : null;
+                if (stem == null) return IntPtr.Zero;
+                string file = OperatingSystem.IsWindows() ? stem + ".dll"
+                    : OperatingSystem.IsMacOS() ? "lib" + stem + ".dylib" : "lib" + stem + ".so";
                 return NativeLibrary.Load(Path.Combine(directory, file));
             });
         }

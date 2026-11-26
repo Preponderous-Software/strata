@@ -10,6 +10,7 @@ or are built from the following. Every licence here is permissive.
 | [glad](https://github.com/Dav1dde/glad) | 2.0.8 generator output | MIT (generated code); Khronos headers Apache-2.0 / MIT | GL 4.5 core and EGL 1.5 loaders, in `third_party/glad`. |
 | [stb_image, stb_image_write](https://github.com/nothings/stb) | 2.30 / 1.16 | Public domain or MIT | PNG reading and writing, in `third_party/stb`. |
 | [font8x8](https://github.com/dhepper/font8x8) | commit 8e279d2 (`font8x8_basic.h`) | Public domain | The overlay text font, in `third_party/font8x8`; `src/render/font8x8.hpp` is generated from it. |
+| [cgltf](https://github.com/jkuhlmann/cgltf) | 1.15 (`cgltf.h`) | MIT | glTF 2.0 parsing in the optional glTF module (`modules/gltf`, `STRATA_WITH_GLTF`), in `third_party/cgltf`. |
 
 ## SDL (zlib)
 
@@ -97,4 +98,16 @@ Author: Daniel Hepper <daniel@hepper.net>
 License: Public Domain
 
 Based on font8x8.h by Marcel Sondaar and the public domain IBM VGA fonts.
+```
+
+## cgltf (MIT)
+
+```
+Copyright (c) 2018-2021 Johannes Kuhlmann
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
