@@ -3,3 +3,6 @@
 # must be the same on Linux, on Windows runners and in Windows checkouts.
 *.sh text eol=lf
 modules/usd/openusd/** text eol=lf
+# The glTF fixtures are compared byte for byte with what make_fixtures.py
+# writes, so a Windows checkout must not turn their LF into CRLF.
+modules/gltf/tests/assets/** -text
