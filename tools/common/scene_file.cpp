@@ -187,6 +187,12 @@ void parse(const std::string& path, Scene& scene, int depth) {
             read(in, scene.nearPlane, where, "near");
             read(in, scene.farPlane, where, "far");
             scene.ortho = true;
+        } else if (word == "light_culling") {
+            std::string mode;
+            if (!(in >> mode)) bad(where, "expected 'none' or 'clustered' after 'light_culling'");
+            if (mode == "none") scene.lightCulling = STRATA_LIGHT_CULLING_NONE;
+            else if (mode == "clustered") scene.lightCulling = STRATA_LIGHT_CULLING_CLUSTERED;
+            else bad(where, "unknown light culling '" + mode + "'");
         } else if (word == "output") {
             std::string option;
             bool any = false;

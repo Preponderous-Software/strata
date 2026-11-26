@@ -150,6 +150,13 @@ const int32_t kSpotLightFields[] = {
     STRATA_OFFSET(StrataSpotLight, color),              STRATA_OFFSET(StrataSpotLight, inner_cone_degrees),
     STRATA_OFFSET(StrataSpotLight, outer_cone_degrees), STRATA_OFFSET(StrataSpotLight, flags)};
 
+const int32_t kLightStatsFields[] = {
+    STRATA_OFFSET(StrataLightStats, mode),           STRATA_OFFSET(StrataLightStats, point_lights),
+    STRATA_OFFSET(StrataLightStats, spot_lights),    STRATA_OFFSET(StrataLightStats, lights_in_view),
+    STRATA_OFFSET(StrataLightStats, clusters),       STRATA_OFFSET(StrataLightStats, clusters_lit),
+    STRATA_OFFSET(StrataLightStats, light_references), STRATA_OFFSET(StrataLightStats, max_lights_per_cluster),
+    STRATA_OFFSET(StrataLightStats, clusters_overflowed), STRATA_OFFSET(StrataLightStats, cpu_ms_culling)};
+
 #define STRATA_TABLE(type, fields) \
     FieldTable { static_cast<int32_t>(sizeof(type)), fields, static_cast<int32_t>(sizeof(fields) / sizeof(fields[0])) }
 
@@ -164,7 +171,8 @@ const FieldTable* fieldTable(int32_t structId) {
         STRATA_TABLE(StrataText, kTextFields),             STRATA_TABLE(StrataSolarPosition, kSolarPositionFields),
         STRATA_TABLE(StrataTexturedMesh, kTexturedMeshFields), STRATA_TABLE(StrataRayHit, kRayHitFields),
         STRATA_TABLE(StrataRect, kRectFields),             STRATA_TABLE(StrataWideLineVertex, kWideLineVertexFields),
-        STRATA_TABLE(StrataMaterial, kMaterialFields),     STRATA_TABLE(StrataSpotLight, kSpotLightFields)};
+        STRATA_TABLE(StrataMaterial, kMaterialFields),     STRATA_TABLE(StrataSpotLight, kSpotLightFields),
+        STRATA_TABLE(StrataLightStats, kLightStatsFields)};
     if (structId < 0 || structId >= static_cast<int32_t>(sizeof tables / sizeof tables[0])) return nullptr;
     return &tables[structId];
 }
@@ -531,6 +539,17 @@ StrataStatus strata_present(StrataEngine* engine) {
 StrataStatus strata_get_frame_stats(const StrataEngine* engine, StrataFrameStats* out) {
     if (!engine || !out) return invalid("engine and out must not be NULL");
     *out = engine->engine->frameStats();
+    return STRATA_OK;
+}
+
+StrataStatus strata_set_light_culling(StrataEngine* engine, int32_t mode) {
+    if (!engine) return invalid("engine is NULL");
+    return guard([&] { engine->engine->setLightCulling(mode); });
+}
+
+StrataStatus strata_get_light_stats(const StrataEngine* engine, StrataLightStats* out) {
+    if (!engine || !out) return invalid("engine and out must not be NULL");
+    *out = engine->engine->lightStats();
     return STRATA_OK;
 }
 

@@ -8,6 +8,7 @@ add_executable(strata-unit-tests
     test_log.cpp
     test_primitive_mesh.cpp
     test_cascades.cpp
+    test_clusters.cpp
     test_sun.cpp
     test_lights.cpp
     test_lighting_validation.cpp

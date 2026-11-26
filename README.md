@@ -157,6 +157,7 @@ normals): each addition is compatible, and every ABI
 | Window fullscreen *(ABI 1.17)* | `strata_set_fullscreen` (borderless at the desktop's resolution, or back to a window at its earlier size; the browser's Fullscreen API on the web) and `strata_is_fullscreen`; window surface only, so headless and host-context engines return `STRATA_ERROR_UNSUPPORTED` | none: unit, C# and Python tests check the null-engine and headless refusals |
 | Hidden meshes and flat normals *(ABI 1.19)* | `strata_set_mesh_visible` (a hidden mesh keeps its buffers but is not drawn, shadowed or picked) and `STRATA_MESH_FLAT_NORMALS` (the engine shades each triangle with its face normal and accepts degenerate ones); `set_mesh_visible` and `MESH_FLAT_NORMALS` in Python | `mesh_flat_hidden` (its scene also checks a ray passes the hidden mesh) |
 | Materials, spot lights, ortho camera, output *(ABI 1.20, unreleased)* | `strata_set_mesh_material`: alpha cutout in every pass (shadows included), emission (colour × strength × optional texture), tangent-space normal maps with no mesh tangents, two-sided faces; `STRATA_TEXTURE_SRGB`; `strata_set_spot_lights` (32 cone lights, shadowed ones sharing the four cube maps); `strata_camera_ortho` with shadow cascades fitted to the orthographic box; `strata_set_color_output` (exposure, Reinhard or ACES tonemap, sRGB encode) | `mat_cutout_shadows`, `mat_emissive_night`, `mat_normal_map`, `light_spot_cones`, `cam_ortho_shadows`, `output_srgb_aces` |
+| Clustered light culling *(ABI 1.21, unreleased)* | `strata_set_light_culling(engine, STRATA_LIGHT_CULLING_CLUSTERED)`: up to 4096 point and 4096 spot lights, listed per cluster of a 16 × 9 × 24 view-frustum grid on the CPU each frame, so each fragment evaluates only the lights that reach it (WebGL 2 friendly: the lists are a float texture); off by default, where the 32 + 32 cap and its exact pixels stay; `strata_get_light_stats` | `light_clustered_street_night` (240 point and 16 spot lights) |
 
 <p align="center">
   <img src="docs/media/materials-goldens.png" width="640" alt="The six ABI 1.20 goldens in a captioned grid: alpha cutout with holey shadows, emissive windows at night, normal maps, spot-light cones, an orthographic camera over pillars, and sRGB output with the ACES tonemap.">
@@ -338,6 +339,8 @@ archive for C and C++ hosts.
   linking `libstrata.a`, and what differs from the desktop.
 - [docs/DRIVE.md](docs/DRIVE.md): injected input, the frame clock and the
   drive channel (ABI 1.12), for tests, replays and playtesting harnesses.
+- [docs/LIGHTING.md](docs/LIGHTING.md): many lights with clustered light
+  culling (ABI 1.21): the design, its limits and measured frame times.
 - [docs/LARGE_SCENES.md](docs/LARGE_SCENES.md): near and far planes, camera
   height, height exaggeration, `shadow_distance` and marker size for
   map-sized worlds.

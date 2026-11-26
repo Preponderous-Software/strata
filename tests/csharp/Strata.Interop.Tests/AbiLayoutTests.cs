@@ -144,6 +144,17 @@ namespace Strata.Interop.Tests {
         }
 
         [Fact]
+        public unsafe void Abi121LightStatsMatchNativeAndCallsRejectANullEngine() {
+            Assert.Equal(40, Unsafe.SizeOf<StrataLightStats>());
+            AssertLayout<StrataLightStats>(StrataAbi.StructLightStats, "mode", "point_lights", "spot_lights",
+                                           "lights_in_view", "clusters", "clusters_lit", "light_references",
+                                           "max_lights_per_cluster", "clusters_overflowed", "cpu_ms_culling");
+            var stats = new StrataLightStats();
+            Assert.Equal(1, StrataNative.strata_set_light_culling(IntPtr.Zero, StrataAbi.LightCullingClustered));  // STRATA_ERROR_INVALID_ARGUMENT
+            Assert.Equal(1, StrataNative.strata_get_light_stats(IntPtr.Zero, &stats));
+        }
+
+        [Fact]
         public unsafe void Abi120StructsMatchNativeAndCallsRejectANullEngine() {
             Assert.Equal(36, Unsafe.SizeOf<StrataMaterial>());
             AssertLayout<StrataMaterial>(StrataAbi.StructMaterial, "alpha_cutoff", "emissive", "emissive_strength",

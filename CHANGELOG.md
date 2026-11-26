@@ -63,6 +63,34 @@
     `strata.gltf`, C# `StrataGltfNative`;
   - seven golden images in `modules/gltf/tests/golden` from synthetic assets
     (`make_fixtures.py`), checked in CI.
+- Clustered light culling for scenes with many lights (ABI 1.21; C#, Python;
+  compatible, `STRATA_ABI_VERSION` stays 1; off by default, and then every
+  earlier golden is drawn bit for bit):
+  - `strata_set_light_culling(engine, STRATA_LIGHT_CULLING_CLUSTERED)` lets
+    `strata_set_point_lights` and `strata_set_spot_lights` take up to
+    `STRATA_MAX_CLUSTERED_LIGHTS` (4096) each instead of 32. Every lit frame
+    the engine cuts the view frustum into 16 × 9 tiles × 24 depth slices,
+    lists on the CPU the lights whose range reaches each cluster (at most
+    `STRATA_MAX_LIGHTS_PER_CLUSTER`, 256, keeping the brightest there), and
+    each lit fragment evaluates only its cluster's list. The lists travel in
+    an RGBA32F texture on unit 10 read with `texelFetch`, so the same path
+    runs on WebGL 2. With the same lights the picture matches evaluating
+    every light (at most one 8-bit step apart in the tests tried). Shadowed
+    lights still share the four cube maps. Switching back to
+    `STRATA_LIGHT_CULLING_NONE` while more than 32 lights of a kind are set
+    is `STRATA_ERROR_INVALID_STATE`;
+  - `StrataLightStats` and `strata_get_light_stats`: lights in view, lit
+    clusters, list entries, the longest list, overflowed clusters and the
+    CPU time of the culling, for the last frame;
+  - the GLES device saves and restores unit 10 for a host context and so
+    needs 12 fragment texture units instead of 11;
+  - scene files gain `light_culling none|clustered`, and strata-golden prints
+    the light stats for a clustered scene; new golden
+    `light_clustered_street_night` (a synthetic town at midnight with 240
+    street lamps and 16 spot lights, written by
+    `tools/gen_street_lights_scene.py`);
+  - design, limits and llvmpipe frame times in
+    [docs/LIGHTING.md](docs/LIGHTING.md).
 
 ## 0.11.0
 

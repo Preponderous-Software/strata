@@ -132,6 +132,9 @@ bool EngineSceneRenderer::render(const scene::Scene& scene, int32_t surface, ima
             ok = false;
         }
     }
+    if (scene.lightCulling >= 0) {
+        ok = ok && check(strata_set_light_culling(engine, scene.lightCulling), "strata_set_light_culling");
+    }
     if (!scene.pointLights.empty()) {
         ok = ok && check(strata_set_point_lights(engine, scene.pointLights.data(),
                                                  static_cast<int32_t>(scene.pointLights.size())),
@@ -222,6 +225,14 @@ bool EngineSceneRenderer::render(const scene::Scene& scene, int32_t surface, ima
                     stats.instances, stats.instances_per_kind[0], stats.instances_per_kind[1],
                     stats.instances_per_kind[2], stats.instances_per_kind[3], stats.draw_calls, stats.shadow_cascades,
                     static_cast<double>(stats.cpu_ms_frame)));
+        StrataLightStats lights{};
+        if (scene.lightCulling == STRATA_LIGHT_CULLING_CLUSTERED && strata_get_light_stats(engine, &lights) == STRATA_OK) {
+            console_.out(sformat("  clustered lights: %d point + %d spot, %d in view, %d of %d clusters lit, "
+                                 "%d references, at most %d per cluster, %d overflowed, %.2f ms CPU\n",
+                                 lights.point_lights, lights.spot_lights, lights.lights_in_view, lights.clusters_lit,
+                                 lights.clusters, lights.light_references, lights.max_lights_per_cluster,
+                                 lights.clusters_overflowed, static_cast<double>(lights.cpu_ms_culling)));
+        }
     }
     if (surface == STRATA_SURFACE_WINDOW) strata_present(engine);
     strata_destroy(engine);

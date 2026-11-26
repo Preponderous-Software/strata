@@ -386,6 +386,97 @@ class Render(unittest.TestCase):
         self.assertEqual(sizes[0], sizes[1])
         self.assertAlmostEqual(sizes[0], 16 * 16, delta=16)  # half the frame across: a quarter of the pixels
 
+    def test_abi_1_21_clustered_culling_matches_and_lifts_the_light_cap(self):
+        """ABI 1.21: with the most lights the default allows (32 point, 32
+        spot, two of them shadowed), clustered culling draws the same bytes
+        as evaluating every light, in perspective and orthographically; it
+        accepts far more lights, refuses to switch back while they are set,
+        and reports what it culled."""
+        if not self.lib.has("strata_set_light_culling"):
+            self.skipTest("library older than ABI 1.21")
+        items = [strata.RenderItem(strata.PRIMITIVE_CUBE, (0, -0.5, 0), (40, 1, 40), (0.7, 0.7, 0.7, 1))]
+        for i in range(16):
+            items.append(strata.RenderItem(strata.PRIMITIVE_CUBE, ((i % 4) * 8 - 12, 1, (i // 4) * 8 - 12),
+                                           (2, 2, 2), (0.8, 0.6, 0.5, 1)))
+        items = (strata.RenderItem * len(items))(*items)
+
+        def point(i, count):
+            l = strata.PointLight()
+            l.position = ((i % 8) * 4.5 - 15.75, 1.5 + (i % 3) * 0.5, (i // 8) * 30.0 / max(count // 8, 1) - 15)
+            l.range = 3.0 + (i % 5)
+            l.color = (1.0, 0.5 + 0.1 * (i % 5), 0.3 + 0.15 * (i % 4))
+            l.intensity = 2.0
+            l.flags = strata.POINT_LIGHT_CAST_SHADOWS if i == 3 else 0
+            return l
+
+        def spot(i):
+            l = strata.SpotLight()
+            l.position = ((i % 8) * 4.5 - 15.75, 5.0, (i // 8) * 8.0 - 12)
+            l.direction = (0.2 * ((i % 3) - 1), -1.0, 0.1)
+            l.range = 9.0
+            l.color = (0.6, 0.8, 1.0)
+            l.intensity = 3.0
+            l.inner_cone_degrees = 10.0 + i % 10
+            l.outer_cone_degrees = 25.0 + i % 20
+            l.flags = strata.SPOT_LIGHT_CAST_SHADOWS if i == 5 else 0
+            return l
+
+        points = [point(i, 32) for i in range(32)]
+        spots = [spot(i) for i in range(32)]
+        cameras = (
+            self.lib.look_at((0, 18, 26), (0, 0, 0), fov_y_degrees=55, aspect=2, near_plane=0.5, far_plane=120),
+            self.lib.ortho((10, 30, 20), (0, 0, 0), half_height=16, aspect=2, near_plane=1, far_plane=100),
+        )
+        with strata.Engine(self.lib, 128, 64) as engine:
+            night = self.lib.lighting_defaults(strata.LIGHTING_SUN)
+            night.time_of_day = 0.0
+            night.fog = 0
+            engine.set_lighting(night)
+
+            def frame():
+                engine.begin_frame(clear_color=(0, 0, 0, 1))
+                engine.submit_primitives(items)
+                engine.end_frame()
+                return engine.read_pixels()[0]
+
+            engine.set_point_lights(points)
+            engine.set_spot_lights(spots)
+            self.assertEqual(engine.light_stats().mode, strata.LIGHT_CULLING_NONE)
+            for camera in cameras:
+                engine.set_camera(camera)
+                engine.set_light_culling(strata.LIGHT_CULLING_NONE)
+                every = frame()
+                engine.set_light_culling(strata.LIGHT_CULLING_CLUSTERED)
+                culled = frame()
+                self.assertGreater(sum(every), 0)
+                worst = max(abs(a - b) for a, b in zip(every, culled))
+                self.assertLessEqual(worst, 1)  # the same sum, maybe rounded apart by one step
+                stats = engine.light_stats()
+                self.assertEqual(stats.mode, strata.LIGHT_CULLING_CLUSTERED)
+                self.assertEqual((stats.point_lights, stats.spot_lights), (32, 32))
+                self.assertGreater(stats.lights_in_view, 0)
+                self.assertGreater(stats.clusters_lit, 0)
+                self.assertEqual(stats.clusters_overflowed, 0)
+
+            many = [point(i, 1000) for i in range(1000)]
+            engine.set_point_lights(many)
+            frame()
+            self.assertEqual(engine.light_stats().point_lights, 1000)
+            with self.assertRaises(strata.StrataError) as caught:
+                engine.set_light_culling(strata.LIGHT_CULLING_NONE)
+            self.assertEqual(caught.exception.status, strata.ERROR_INVALID_STATE)
+            with self.assertRaises(strata.StrataError) as caught:
+                engine.set_light_culling(7)
+            self.assertEqual(caught.exception.status, strata.ERROR_INVALID_ARGUMENT)
+            with self.assertRaises(strata.StrataError) as caught:
+                engine.set_point_lights([many[0]] * (strata.MAX_CLUSTERED_LIGHTS + 1))
+            self.assertEqual(caught.exception.status, strata.ERROR_INVALID_ARGUMENT)
+            engine.set_point_lights(points)
+            engine.set_light_culling(strata.LIGHT_CULLING_NONE)
+            with self.assertRaises(strata.StrataError) as caught:
+                engine.set_point_lights(many[:33])
+            self.assertEqual(caught.exception.status, strata.ERROR_INVALID_ARGUMENT)
+
     def test_ambient_and_sun_levels(self):
         """ABI 1.16: the defaults draw the same bytes; a lift and a dim sun change them."""
         ground = strata.RenderItem(strata.PRIMITIVE_CUBE, (0, -0.5, 0), (20, 1, 20), (0.6, 0.6, 0.6, 1))

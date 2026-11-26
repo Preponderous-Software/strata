@@ -30,7 +30,7 @@ from ctypes import (
 #: The major version this binding was written against (STRATA_ABI_VERSION).
 ABI_VERSION = 1
 #: The newest minor whose additions this binding declares (STRATA_ABI_MINOR).
-ABI_MINOR = 20
+ABI_MINOR = 21
 
 # ---------------------------------------------------------------- status
 
@@ -90,6 +90,10 @@ SPOT_LIGHT_CAST_SHADOWS = 0x1  # ABI 1.20
 OUTPUT_SRGB = 0x1  # ABI 1.20
 OUTPUT_TONEMAP_REINHARD = 0x2  # ABI 1.20
 OUTPUT_TONEMAP_ACES = 0x4  # ABI 1.20
+LIGHT_CULLING_NONE = 0  # ABI 1.21
+LIGHT_CULLING_CLUSTERED = 1  # ABI 1.21
+MAX_CLUSTERED_LIGHTS = 4096  # ABI 1.21
+MAX_LIGHTS_PER_CLUSTER = 256  # ABI 1.21
 
 POINT_SOFT = 0x1  # ABI 1.5
 POINT_ON_TOP = 0x2  # ABI 1.11
@@ -403,6 +407,25 @@ class SpotLight(Structure):
     ]
 
 
+class LightStats(Structure):
+    """ABI 1.21. 40 bytes: what the light culling did in the last frame."""
+
+    STRUCT_ID = 20
+    ABI_MINOR = 21
+    _fields_ = [
+        ("mode", c_int32),
+        ("point_lights", c_int32),
+        ("spot_lights", c_int32),
+        ("lights_in_view", c_int32),
+        ("clusters", c_int32),
+        ("clusters_lit", c_int32),
+        ("light_references", c_int32),
+        ("max_lights_per_cluster", c_int32),
+        ("clusters_overflowed", c_int32),
+        ("cpu_ms_culling", c_float),
+    ]
+
+
 #: Every boundary struct, in STRATA_STRUCT_* id order.
 STRUCTS = (
     RenderItem,
@@ -425,6 +448,7 @@ STRUCTS = (
     WideLineVertex,
     Material,
     SpotLight,
+    LightStats,
 )
 
 # ---------------------------------------------------------------- functions
@@ -474,6 +498,8 @@ FUNCTIONS = {
     "strata_set_point_lights": (1, _status, [_engine, _p(PointLight), c_int32]),
     "strata_set_spot_lights": (20, _status, [_engine, _p(SpotLight), c_int32]),
     "strata_set_color_output": (20, _status, [_engine, c_uint32, c_float]),
+    "strata_set_light_culling": (21, _status, [_engine, c_int32]),
+    "strata_get_light_stats": (21, _status, [_engine, _p(LightStats)]),
     "strata_set_terrain": (3, _status, [_engine, _p(TerrainTile)]),
     "strata_add_mesh": (4, _status, [_engine, _p(Mesh), _p(c_uint32)]),
     "strata_remove_mesh": (4, _status, [_engine, c_uint32]),

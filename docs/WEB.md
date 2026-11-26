@@ -50,11 +50,16 @@ and against the desktop golden, both at the default tolerance.
 
 Limits that matter in a browser:
 
-- Strata needs 11 fragment texture units (9 before ABI 1.20): it binds
-  units 1 to 9 (8 and 9 for a mesh's emissive texture and normal map) and
-  uses the device's last unit as a scratch unit while creating textures. WebGL 2's
-  minimum is 16, but some phone browsers report fewer (13 has been seen), so
-  the scratch unit is not fixed at 15.
+- Strata needs 12 fragment texture units (11 in ABI 1.20, 9 before): it
+  binds units 1 to 10 (8 and 9 for a mesh's emissive texture and normal map,
+  10 for the clustered light lists of ABI 1.21, bound even when culling is
+  off) and uses the device's last unit as a scratch unit while creating
+  textures. WebGL 2's minimum is 16, but some phone browsers report fewer (13
+  has been seen), so the scratch unit is not fixed at 15.
+- Clustered light culling (ABI 1.21) reads its lists from an RGBA32F texture
+  with `texelFetch`, which WebGL 2 supports without extensions (no storage
+  buffers, no float filtering, no float render targets needed). The lit
+  shader's per-fragment loop has a dynamic bound, which WebGL 2 allows.
 - Shadow maps are as on the desktop (cascades default to 2048², cube faces
   512²). On a weak GPU, lower `StrataLighting.shadow_map_size` and
   `cascade_count`. With fewer, smaller maps, keep `shadow_distance` close to

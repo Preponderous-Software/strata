@@ -330,8 +330,24 @@ work. `strata_set_ambient` (ABI 1.16) applies to the flat ambient too;
 - Cost: every lit fragment loops over every point and spot light set, so 64
   lights cost about twice what 32 did. A host with more lamps than that keeps
   the nearest ones (the web kit's tiers already pick point lights by
-  priority); per-tile light lists would be the next step if scenes need
-  hundreds.
+  priority), or turns on clustered culling (below).
+
+### Clustered light culling (ABI 1.21)
+
+`strata_set_light_culling(engine, STRATA_LIGHT_CULLING_CLUSTERED)` lifts both
+lists to `STRATA_MAX_CLUSTERED_LIGHTS` (4096) each. Each lit frame,
+`src/render/clusters.cpp` cuts the view frustum into 16 × 9 screen tiles ×
+24 depth slices (exponential in perspective, even for an orthographic
+camera), lists in every cluster the lights whose sphere of range touches its
+bounding box (at most `STRATA_MAX_LIGHTS_PER_CLUSTER`, 256), and packs lights,
+per-cluster headers and lists into one RGBA32F texture on unit 10 (a ring of
+three, so the upload never waits on a frame in flight). `pointLights()` in
+the lit shader branches on `uClusterGrid.w`: off, it runs the 1.20 loops
+untouched; on, it finds its cluster from `gl_FragCoord` and `vViewDepth` and
+evaluates only that list. Point lights are encoded as spot lights whose cone
+covers every direction, so one loop serves both. Culling off is the default
+and draws every earlier golden bit for bit. See
+[docs/LIGHTING.md](docs/LIGHTING.md) for the design, limits and timings.
 
 ### Orthographic cameras (ABI 1.20)
 

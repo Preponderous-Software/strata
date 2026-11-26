@@ -41,6 +41,9 @@
 namespace strata::rhi {
 namespace {
 
+// The client-side type of a colour texture's texels (RGBA32F since ABI 1.21).
+GLenum uploadType(TextureFormat format) { return format == TextureFormat::RGBA32F ? GL_FLOAT : GL_UNSIGNED_BYTE; }
+
 // A cube map array of up to this many cubes is emulated (STRATA_MAX_SHADOWED_POINT_LIGHTS).
 constexpr int kMaxEmulatedCubes = 4;
 // Cube 0 uses the unit the shader names; cubes 1.. use these. Strata's own
@@ -154,10 +157,11 @@ bool hasDepthClampExtension() {
 
 // Texture units Strata binds (0 unused, 1 cascades, 2 point shadows, 3 the
 // overlay font, 4 a mesh's texture, 5-7 the other point shadow cubes, and
-// since ABI 1.20 8 a mesh's emissive texture and 9 its normal map), saved
-// and restored for a host context.
+// since ABI 1.20 8 a mesh's emissive texture and 9 its normal map, since ABI
+// 1.21 10 the clustered light lists), saved and restored for a host context.
 constexpr int kMeshMaterialUnits = 2;
-constexpr int kHostTextureUnits = kFirstExtraCubeUnit + kMaxEmulatedCubes - 1 + kMeshMaterialUnits;
+constexpr int kClusterUnits = 1;
+constexpr int kHostTextureUnits = kFirstExtraCubeUnit + kMaxEmulatedCubes - 1 + kMeshMaterialUnits + kClusterUnits;
 // Textures are bound to a scratch unit while they are created, so no unit a
 // pass uses is disturbed; no shader samples it. It is the device's last
 // fragment unit, so a device needs only one more than Strata binds. It used
@@ -268,8 +272,9 @@ public:
         record.desc.initialData = nullptr;
         const bool cube = desc.cube && desc.layers > 0;
         const GLenum format = desc.format == TextureFormat::RGBA8 ? (desc.srgb ? GL_SRGB8_ALPHA8 : GL_RGBA8)
-                              : desc.format == TextureFormat::R8 ? GL_R8
-                                                                 : GL_DEPTH_COMPONENT32F;
+                              : desc.format == TextureFormat::R8      ? GL_R8
+                              : desc.format == TextureFormat::RGBA32F ? GL_RGBA32F
+                                                                      : GL_DEPTH_COMPONENT32F;
         const bool mipmaps = desc.mipmaps && desc.layers == 0 && desc.format == TextureFormat::RGBA8;
         GLsizei levels = 1;
         if (mipmaps) {
@@ -303,7 +308,7 @@ public:
                 const bool r8 = desc.format == TextureFormat::R8;
                 glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
                 glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, desc.width, desc.height, r8 ? GL_RED : GL_RGBA,
-                                GL_UNSIGNED_BYTE, desc.initialData);
+                                uploadType(desc.format), desc.initialData);
                 glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
             }
             if (mipmaps && desc.initialData) glGenerateMipmap(GL_TEXTURE_2D);
@@ -326,7 +331,7 @@ public:
         glActiveTexture(GL_TEXTURE0 + static_cast<GLenum>(scratchUnit_));
         glBindTexture(GL_TEXTURE_2D, record.name);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, r8 ? GL_RED : GL_RGBA, GL_UNSIGNED_BYTE, data);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, r8 ? GL_RED : GL_RGBA, uploadType(desc.format), data);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
         if (desc.mipmaps && desc.format == TextureFormat::RGBA8) glGenerateMipmap(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, 0);

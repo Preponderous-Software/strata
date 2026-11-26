@@ -81,6 +81,9 @@
 //                                 (ABI 1.20: the current mesh's normal map)
 //   mesh_double_sided             (ABI 1.20: STRATA_MATERIAL_DOUBLE_SIDED)
 //                                 (a mesh with any mesh_* material line gets strata_set_mesh_material once added)
+//   light_culling <none|clustered>
+//                                 (ABI 1.21: strata_set_light_culling, called before the lights are set,
+//                                  so a clustered scene may hold up to STRATA_MAX_CLUSTERED_LIGHTS of each)
 //   expect_depth <x> <y> <distance|inf>
 //                                 (ABI 1.9: strata_read_depth_f32 must read that planar distance at pixel
 //                                  (x, y) of the captured frame, top row first, within 0.1 %, or +infinity;
@@ -156,6 +159,7 @@ struct Scene {
     std::vector<Label> labels;
     std::vector<StrataPointLight> pointLights;
     std::vector<StrataSpotLight> spotLights;  // ABI 1.20
+    int32_t lightCulling = -1;                // ABI 1.21: STRATA_LIGHT_CULLING_*, or -1 for unset
     bool hasOutput = false;                   // ABI 1.20
     uint32_t outputFlags = 0;
     float outputExposure = 1.0f;

@@ -41,10 +41,11 @@ void validatePointLight(const StrataPointLight& l, size_t index) {
     }
 }
 
-void validatePointLights(const StrataPointLight* lights, size_t count, size_t otherCasters) {
-    if (count > STRATA_MAX_POINT_LIGHTS) {
-        fail(STRATA_ERROR_INVALID_ARGUMENT, "at most %d point lights (got %lu)", STRATA_MAX_POINT_LIGHTS,
-             static_cast<unsigned long>(count));
+void validatePointLights(const StrataPointLight* lights, size_t count, size_t otherCasters, size_t maxCount) {
+    if (count > maxCount) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "at most %lu point lights (got %lu)%s", static_cast<unsigned long>(maxCount),
+             static_cast<unsigned long>(count),
+             maxCount < STRATA_MAX_CLUSTERED_LIGHTS ? "; STRATA_LIGHT_CULLING_CLUSTERED (ABI 1.21) allows more" : "");
     }
     size_t casters = 0;
     for (size_t i = 0; i < count; ++i) {
@@ -102,10 +103,11 @@ void validateSpotLight(const StrataSpotLight& l, size_t index) {
     }
 }
 
-void validateSpotLights(const StrataSpotLight* lights, size_t count, size_t otherCasters) {
-    if (count > STRATA_MAX_SPOT_LIGHTS) {
-        fail(STRATA_ERROR_INVALID_ARGUMENT, "at most %d spot lights (got %lu)", STRATA_MAX_SPOT_LIGHTS,
-             static_cast<unsigned long>(count));
+void validateSpotLights(const StrataSpotLight* lights, size_t count, size_t otherCasters, size_t maxCount) {
+    if (count > maxCount) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "at most %lu spot lights (got %lu)%s", static_cast<unsigned long>(maxCount),
+             static_cast<unsigned long>(count),
+             maxCount < STRATA_MAX_CLUSTERED_LIGHTS ? "; STRATA_LIGHT_CULLING_CLUSTERED (ABI 1.21) allows more" : "");
     }
     for (size_t i = 0; i < count; ++i) validateSpotLight(lights[i], i);
     const size_t casters = countShadowCasters(lights, count);
