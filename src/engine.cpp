@@ -188,6 +188,8 @@ void Engine::setMeshMaterial(uint32_t id, const StrataMaterial* material) {
     impl_->renderer->setMeshMaterial(id, material);
 }
 void Engine::setColorOutput(uint32_t flags, float exposure) { impl_->renderer->setColorOutput(flags, exposure); }
+void Engine::setLightCulling(int32_t mode) { impl_->renderer->setLightCulling(mode); }
+const StrataLightStats& Engine::lightStats() const { return impl_->renderer->lightStats(); }
 void Engine::updateTextureRgba8(uint32_t id, int32_t x, int32_t y, int32_t width, int32_t height,
                                 const uint8_t* rgba) {
     impl_->renderer->updateTexture(id, x, y, width, height, rgba);

@@ -90,6 +90,10 @@ public:
     // ABI 1.20. Exposure, tonemap and sRGB encode of the lit scene; see
     // strata_set_color_output.
     void setColorOutput(uint32_t flags, float exposure);
+    // ABI 1.21. STRATA_LIGHT_CULLING_*; see strata_set_light_culling.
+    void setLightCulling(int32_t mode);
+    // ABI 1.21. The light culling's numbers for the most recent end_frame.
+    const StrataLightStats& lightStats() const;
     // Replaces the terrain tile (copied into a mesh); nullptr removes it.
     void setTerrain(const StrataTerrainTile* tile);
     // Adds a static mesh (copied); returns its id, never 0. Validates first;

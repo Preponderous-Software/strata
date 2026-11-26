@@ -304,6 +304,12 @@ TEST(scene_mesh_flat_and_hidden_directives) {
     CHECK(!s.meshes[2].flat && !s.meshes[2].hidden);
 }
 
+TEST(scene_abi_1_21_light_culling) {
+    CHECK(parsed("size 4 4\n").lightCulling == -1);  // unset: the engine's default stays
+    CHECK(parsed("light_culling clustered\n").lightCulling == STRATA_LIGHT_CULLING_CLUSTERED);
+    CHECK(parsed("light_culling none\n").lightCulling == STRATA_LIGHT_CULLING_NONE);
+}
+
 TEST(scene_abi_1_20_directives) {
     const Scene s = parsed(
         "camera_ortho 1 2 3  0 0 0  7.5 0.5 90\n"
@@ -655,6 +661,9 @@ TEST(scene_errors_name_the_line_and_what_was_wrong) {
         {"mesh_double_sided\n", 1, "'mesh_double_sided' before 'mesh'"},
         {"output\n", 1, "expected 'srgb', 'reinhard', 'aces' or 'exposure <e>' after 'output'"},
         {"output filmic\n", 1, "unknown output option 'filmic'"},
+        {"light_culling\n", 1, "expected 'none' or 'clustered' after 'light_culling'"},
+        {"light_culling tiled\n", 1, "unknown light culling 'tiled'"},
+        {"light_culling clustered now\n", 1, "unexpected 'now' at the end of the line"},
         {"light spot 0 0 0 1 0 -1 0 1 1 1 1 10 20 loud\n", 1, "expected 'shadow' or nothing after the cones"},
         {"light area 0 0 0\n", 1, "unknown light type 'area' (expected 'point' or 'spot')"},
         {"texture t discs 4 4 0 1 1 1 1\n", 1, "cells must be positive"},

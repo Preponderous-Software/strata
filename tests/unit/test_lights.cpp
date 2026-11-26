@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <vector>
 
 #include <glm/glm.hpp>
 
@@ -247,6 +248,36 @@ TEST(point_and_spot_shadow_casters_share_one_cap) {
         validatePointLights(points, 3, 2);
     } catch (const strata::Error& e) {
         threw = std::strstr(e.what(), "point and spot") != nullptr;
+    }
+    CHECK(threw);
+}
+
+// ABI 1.21: clustered culling lifts the caps to STRATA_MAX_CLUSTERED_LIGHTS.
+TEST(clustered_culling_lifts_the_light_caps_and_the_message_says_so) {
+    std::vector<StrataPointLight> points(STRATA_MAX_CLUSTERED_LIGHTS + 1, goodLight());
+    std::vector<StrataSpotLight> spots(STRATA_MAX_CLUSTERED_LIGHTS + 1, goodSpot());
+    bool hinted = false;
+    try {
+        validatePointLights(points.data(), STRATA_MAX_POINT_LIGHTS + 1);
+    } catch (const strata::Error& e) {
+        hinted = std::strstr(e.what(), "STRATA_LIGHT_CULLING_CLUSTERED") != nullptr;
+    }
+    CHECK(hinted);
+    validatePointLights(points.data(), STRATA_MAX_CLUSTERED_LIGHTS, 0, STRATA_MAX_CLUSTERED_LIGHTS);
+    validateSpotLights(spots.data(), STRATA_MAX_CLUSTERED_LIGHTS, 0, STRATA_MAX_CLUSTERED_LIGHTS);
+    bool threw = false;
+    try {
+        validatePointLights(points.data(), points.size(), 0, STRATA_MAX_CLUSTERED_LIGHTS);
+    } catch (const strata::Error& e) {
+        threw = e.status() == STRATA_ERROR_INVALID_ARGUMENT &&
+                std::strstr(e.what(), "STRATA_LIGHT_CULLING_CLUSTERED") == nullptr;  // no hint past the top cap
+    }
+    CHECK(threw);
+    threw = false;
+    try {
+        validateSpotLights(spots.data(), spots.size(), 0, STRATA_MAX_CLUSTERED_LIGHTS);
+    } catch (const strata::Error&) {
+        threw = true;
     }
     CHECK(threw);
 }

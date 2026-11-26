@@ -124,6 +124,15 @@ static_assert(STRATA_MATERIAL_DOUBLE_SIDED == 0x1u && STRATA_SPOT_LIGHT_CAST_SHA
 static_assert(STRATA_TEXTURE_SRGB == 0x10u && STRATA_MAX_SPOT_LIGHTS == 32, "");
 static_assert(STRATA_OUTPUT_SRGB == 0x1u && STRATA_OUTPUT_TONEMAP_REINHARD == 0x2u && STRATA_OUTPUT_TONEMAP_ACES == 0x4u,
               "");
+// ABI 1.21
+static_assert(sizeof(StrataLightStats) == 40, "");
+static_assert(offsetof(StrataLightStats, mode) == 0, "");
+static_assert(offsetof(StrataLightStats, lights_in_view) == 12, "");
+static_assert(offsetof(StrataLightStats, clusters_overflowed) == 32, "");
+static_assert(offsetof(StrataLightStats, cpu_ms_culling) == 36, "");
+static_assert(STRATA_STRUCT_LIGHT_STATS == 20, "");
+static_assert(STRATA_LIGHT_CULLING_NONE == 0 && STRATA_LIGHT_CULLING_CLUSTERED == 1, "");
+static_assert(STRATA_MAX_CLUSTERED_LIGHTS == 4096 && STRATA_MAX_LIGHTS_PER_CLUSTER == 256, "");
 static_assert(STRATA_ABI_VERSION == 1u, "ABI 1 callers must keep working: additions bump STRATA_ABI_MINOR");
 #if UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu
 static_assert(sizeof(StrataEngineDesc) == 48, "64-bit targets");
@@ -133,7 +142,22 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 20u);
+    CHECK(strata_abi_minor() >= 21u);
+}
+
+TEST(abi_1_21_light_culling_rejects_a_null_engine) {
+    StrataLightStats stats{};
+    CHECK(strata_set_light_culling(nullptr, STRATA_LIGHT_CULLING_CLUSTERED) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_get_light_stats(nullptr, &stats) == STRATA_ERROR_INVALID_ARGUMENT);
+    StrataEngine* engine = reinterpret_cast<StrataEngine*>(0x1);  // never dereferenced: pointers are checked first
+    CHECK(strata_get_light_stats(engine, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+}
+
+TEST(abi_1_21_light_stats_layout_is_queryable) {
+    CHECK(strata_struct_size(STRATA_STRUCT_LIGHT_STATS) == 40);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_LIGHT_STATS, 3) == 12);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_LIGHT_STATS, 9) == 36);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_LIGHT_STATS, 10) == -1);
 }
 
 TEST(abi_1_20_materials_spots_and_output_reject_a_null_engine) {
@@ -151,7 +175,7 @@ TEST(abi_1_20_material_and_spot_light_layouts_are_queryable) {
     CHECK(strata_struct_size(STRATA_STRUCT_SPOT_LIGHT) == 56);
     CHECK(strata_struct_field_offset(STRATA_STRUCT_SPOT_LIGHT, 2) == 16);
     CHECK(strata_struct_field_offset(STRATA_STRUCT_SPOT_LIGHT, 7) == 52);
-    CHECK(strata_struct_size(STRATA_STRUCT_SPOT_LIGHT + 1) == -1);
+    CHECK(strata_struct_size(STRATA_STRUCT_LIGHT_STATS + 1) == -1);
 }
 
 TEST(abi_1_20_camera_ortho_builds_an_orthographic_projection) {
@@ -275,7 +299,7 @@ TEST(abi_1_8_calls_reject_bad_arguments_without_a_context) {
     CHECK(strata_struct_field_offset(STRATA_STRUCT_RAY_HIT, 3) == 12);
     CHECK(strata_struct_field_offset(STRATA_STRUCT_RAY_HIT, 4) == 24);
     CHECK(strata_struct_field_offset(STRATA_STRUCT_RAY_HIT, 5) == -1);
-    CHECK(strata_struct_size(20) == -1);  // one past the last struct id (ABI 1.20)
+    CHECK(strata_struct_size(21) == -1);  // one past the last struct id (ABI 1.21)
     const uint8_t texel[4] = {255, 255, 255, 255};
     StrataEngine* engine = reinterpret_cast<StrataEngine*>(0x1);  // never dereferenced: pointers are checked first
     CHECK(strata_update_texture_rgba8(nullptr, 1, 0, 0, 1, 1, texel) == STRATA_ERROR_INVALID_ARGUMENT);

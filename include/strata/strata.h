@@ -106,9 +106,12 @@
  *        (STRATA_TEXTURE_SRGB), spot lights (StrataSpotLight,
  *        strata_set_spot_lights), an orthographic camera
  *        (strata_camera_ortho) and an optional tonemap and sRGB output
- *        encode (strata_set_color_output) */
+ *        encode (strata_set_color_output)
+ *   1.21 clustered light culling for many lights (strata_set_light_culling,
+ *        STRATA_LIGHT_CULLING_*, STRATA_MAX_CLUSTERED_LIGHTS, StrataLightStats,
+ *        strata_get_light_stats) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 20u
+#define STRATA_ABI_MINOR 21u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -296,6 +299,51 @@ typedef struct StrataPointLight {
     float intensity;   /* >= 0; at the light itself, 1 is about as bright as the noon sun */
     uint32_t flags;    /* STRATA_POINT_LIGHT_* (1.2); any other bit is rejected */
 } StrataPointLight;
+
+/* ------------------------------------------------------------ light culling */
+
+/* ABI 1.21. strata_set_light_culling modes: how lit fragments find the point
+ * and spot lights that reach them. */
+enum {
+    /* The default, and all a library before 1.21 does: every lit fragment
+     * evaluates every light set, and each list holds at most
+     * STRATA_MAX_POINT_LIGHTS / STRATA_MAX_SPOT_LIGHTS. */
+    STRATA_LIGHT_CULLING_NONE = 0,
+    /* Clustered forward shading: each frame the engine cuts the view frustum
+     * into a grid of clusters (screen tiles times depth slices) and lists, on
+     * the CPU, the lights whose range reaches each one; a lit fragment then
+     * evaluates only its own cluster's lights. Each list holds up to
+     * STRATA_MAX_CLUSTERED_LIGHTS, so a night scene can light every lamp it
+     * has, and a frame costs about what the lights near each pixel cost, not
+     * what every light in the scene does. A light reaches exactly what it
+     * reaches without culling; a cluster that more than
+     * STRATA_MAX_LIGHTS_PER_CLUSTER lights reach keeps the ones that light it
+     * most (StrataLightStats.clusters_overflowed counts those). Shadowed
+     * lights work as before (STRATA_MAX_SHADOWED_POINT_LIGHTS in all). */
+    STRATA_LIGHT_CULLING_CLUSTERED = 1
+};
+
+/* ABI 1.21. The most point lights, and separately spot lights, a list may
+ * hold under STRATA_LIGHT_CULLING_CLUSTERED. */
+#define STRATA_MAX_CLUSTERED_LIGHTS 4096
+/* ABI 1.21. The most lights one cluster lists. */
+#define STRATA_MAX_LIGHTS_PER_CLUSTER 256
+
+/* ABI 1.21. What the light culling did in the most recent strata_end_frame
+ * (strata_get_light_stats). Under STRATA_LIGHT_CULLING_NONE, or in a frame
+ * that lit nothing (LEGACY lighting), only mode and the two counts are set. */
+typedef struct StrataLightStats {
+    int32_t mode;                   /* STRATA_LIGHT_CULLING_* in force */
+    int32_t point_lights;           /* lights set */
+    int32_t spot_lights;
+    int32_t lights_in_view;         /* point and spot lights listed in at least one cluster */
+    int32_t clusters;               /* clusters in the grid */
+    int32_t clusters_lit;           /* clusters listing at least one light */
+    int32_t light_references;       /* list entries over all clusters */
+    int32_t max_lights_per_cluster; /* the longest list, before the STRATA_MAX_LIGHTS_PER_CLUSTER cut */
+    int32_t clusters_overflowed;    /* clusters that more than STRATA_MAX_LIGHTS_PER_CLUSTER lights reach */
+    float cpu_ms_culling;           /* CPU time spent listing lights and uploading the lists */
+} StrataLightStats;
 
 /* -------------------------------------------------------------- spot lights */
 
@@ -680,7 +728,8 @@ enum {
     STRATA_STRUCT_RECT = 16,           /* ABI 1.11 */
     STRATA_STRUCT_WIDE_LINE_VERTEX = 17, /* ABI 1.13 */
     STRATA_STRUCT_MATERIAL = 18,         /* ABI 1.20 */
-    STRATA_STRUCT_SPOT_LIGHT = 19        /* ABI 1.20 */
+    STRATA_STRUCT_SPOT_LIGHT = 19,       /* ABI 1.20 */
+    STRATA_STRUCT_LIGHT_STATS = 20       /* ABI 1.21 */
 };
 
 /* Field ids for strata_struct_field_offset(STRATA_STRUCT_RENDER_ITEM, ...). */
@@ -858,6 +907,21 @@ STRATA_API StrataStatus strata_set_point_lights(StrataEngine* engine, const Stra
  * refuse a list that would. Spot lights shade exactly where point lights do
  * (STRATA_LIGHTING_SUN and STRATA_LIGHTING_SPACE). */
 STRATA_API StrataStatus strata_set_spot_lights(StrataEngine* engine, const StrataSpotLight* lights, int32_t count);
+
+/* ABI 1.21. Selects how lit fragments find their lights
+ * (STRATA_LIGHT_CULLING_*); it stays until the next call. Switching to
+ * STRATA_LIGHT_CULLING_CLUSTERED changes nothing else. Switching back to
+ * STRATA_LIGHT_CULLING_NONE while either list holds more lights than it
+ * allows (STRATA_MAX_POINT_LIGHTS, STRATA_MAX_SPOT_LIGHTS) is
+ * STRATA_ERROR_INVALID_STATE and changes nothing: set fewer lights first. An
+ * unknown mode is STRATA_ERROR_INVALID_ARGUMENT. Under clustered culling
+ * strata_set_point_lights and strata_set_spot_lights accept up to
+ * STRATA_MAX_CLUSTERED_LIGHTS each. The same lights draw the same picture
+ * either way, to within rounding (the sum runs in another order). */
+STRATA_API StrataStatus strata_set_light_culling(StrataEngine* engine, int32_t mode);
+/* ABI 1.21. Fills *out with the light culling's numbers for the most recent
+ * strata_end_frame (see StrataLightStats). */
+STRATA_API StrataStatus strata_get_light_stats(const StrataEngine* engine, StrataLightStats* out);
 
 /* ABI 1.20. STRATA_OUTPUT_* flags for strata_set_color_output. */
 #define STRATA_OUTPUT_SRGB 0x1u             /* encode the result from linear to sRGB (see below) */

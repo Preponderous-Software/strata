@@ -31,7 +31,9 @@ using TextureHandle = Handle<struct TextureTag>;
 using TargetHandle = Handle<struct TargetTag>;
 using PipelineHandle = Handle<struct PipelineTag>;
 
-enum class TextureFormat { RGBA8, R8, Depth32F };
+// RGBA32F (ABI 1.21): four floats per texel, for data the shaders read with
+// texelFetch (clustered light lists); always nearest, never mipmapped.
+enum class TextureFormat { RGBA8, R8, Depth32F, RGBA32F };
 
 struct TextureDesc {
     int width = 0;

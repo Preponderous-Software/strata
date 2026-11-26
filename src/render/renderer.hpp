@@ -16,6 +16,7 @@
 
 #include "platform/surface.hpp"
 #include "render/cascades.hpp"
+#include "render/clusters.hpp"
 #include "render/overlay.hpp"
 #include "render/ray_pick.hpp"
 #include "render/sun.hpp"
@@ -45,6 +46,10 @@ public:
     void setPointLights(const StrataPointLight* lights, size_t count);
     void setSpotLights(const StrataSpotLight* lights, size_t count);  // ABI 1.20
     void setColorOutput(uint32_t flags, float exposure);              // ABI 1.20
+    // ABI 1.21: STRATA_LIGHT_CULLING_*. Back to NONE with more lights set
+    // than it allows throws INVALID_STATE.
+    void setLightCulling(int32_t mode);
+    const StrataLightStats& lightStats() const { return lightStats_; }  // ABI 1.21
     void setTerrain(const StrataTerrainTile* tile);
     uint32_t addMesh(const StrataMesh& mesh);
     uint32_t addTexturedMesh(const StrataTexturedMesh& mesh);  // ABI 1.7
@@ -96,7 +101,7 @@ private:
     void ensureShadowMaps(int size, int layers);
     void uploadInstances();
     void writeFrameUniforms(int width, int height, const Cascades* cascades);
-    void writePointLightUniforms();
+    void writePointLightUniforms(int width, int height);
     void drawPrimitives(bool forShadow);
     void drawTerrain();
     // Draws the terrain with terrainPipeline, then the static meshes, each
@@ -236,6 +241,25 @@ private:
     // Cube shadow slots: point lights' casters first, then spot lights'.
     void assignShadowSlots();
     std::vector<int> spotShadowSlot_;  // per spot light: slot or -1
+    // Clustered light culling (ABI 1.21; render/clusters.hpp). A cluster data
+    // texture holds the lights, a header per cluster and the lists (RGBA32F,
+    // kClusterDataWidth texels a row), rebuilt every lit frame into the next
+    // of a ring of three, so the upload never waits for a frame the GPU may
+    // still be drawing with the one before (llvmpipe stalls for that).
+    static constexpr int kClusterDataWidth = 1024;  // shaders.hpp clusterTexel: i & 1023, i >> 10
+    static constexpr size_t kClusterRing = 3;
+    int32_t lightCulling_ = STRATA_LIGHT_CULLING_NONE;
+    StrataLightStats lightStats_{};
+    std::array<rhi::TextureHandle, kClusterRing> clusterData_{};
+    std::array<int, kClusterRing> clusterDataRows_{};
+    size_t clusterCurrent_ = 0;  // the ring entry the lit passes bind
+    int clusterHeaderBase_ = 0, clusterIndexBase_ = 0;
+    std::vector<float> clusterUpload_;
+    size_t maxPointLights() const;
+    size_t maxSpotLights() const;
+    ClusterCamera clusterCamera() const;
+    void ensureClusterData(size_t slot, int rows);
+    void buildClusters();
     uint32_t outputFlags_ = 0;         // ABI 1.20: STRATA_OUTPUT_*
     float outputExposure_ = 1.0f;
     StrataFrameDesc frame_{};

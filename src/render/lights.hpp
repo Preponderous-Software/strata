@@ -23,9 +23,12 @@ float pointLightAttenuation(float distance, float range, float intensity);
 // or unknown flag bits.
 void validatePointLight(const StrataPointLight& light, size_t index);
 
-// Validates every light, the count and the number of shadow casters (with
-// otherCasters, the spot lights', ABI 1.20) before the caller changes anything.
-void validatePointLights(const StrataPointLight* lights, size_t count, size_t otherCasters = 0);
+// Validates every light, the count (at most maxCount: STRATA_MAX_POINT_LIGHTS,
+// or STRATA_MAX_CLUSTERED_LIGHTS under clustered culling, ABI 1.21) and the
+// number of shadow casters (with otherCasters, the spot lights', ABI 1.20)
+// before the caller changes anything.
+void validatePointLights(const StrataPointLight* lights, size_t count, size_t otherCasters = 0,
+                         size_t maxCount = STRATA_MAX_POINT_LIGHTS);
 
 // Spot lights (ABI 1.20) ----------------------------------------------------
 
@@ -40,10 +43,11 @@ float spotConeFactor(float cosAngle, float cosInner, float cosOuter);
 // or unknown flag bits.
 void validateSpotLight(const StrataSpotLight& light, size_t index);
 
-// Validates every light and the count. otherCasters is the number of shadow
-// casters in the point-light list; the two together may not exceed
-// STRATA_MAX_SHADOWED_POINT_LIGHTS.
-void validateSpotLights(const StrataSpotLight* lights, size_t count, size_t otherCasters);
+// Validates every light and the count (at most maxCount, as for point
+// lights). otherCasters is the number of shadow casters in the point-light
+// list; the two together may not exceed STRATA_MAX_SHADOWED_POINT_LIGHTS.
+void validateSpotLights(const StrataSpotLight* lights, size_t count, size_t otherCasters,
+                        size_t maxCount = STRATA_MAX_SPOT_LIGHTS);
 
 // Shadow-casting lights in a list.
 size_t countShadowCasters(const StrataPointLight* lights, size_t count);

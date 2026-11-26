@@ -42,6 +42,7 @@ from ._abi import (
     FrameStats,
     LineVertex,
     Lighting,
+    LightStats,
     LogFn,
     Material,
     Mesh,
@@ -368,6 +369,19 @@ class Engine:
         """ABI 1.20. Replaces the spot lights (the point lights are kept)."""
         arr, count = _array(SpotLight, lights)
         self._call("strata_set_spot_lights", arr, count)
+
+    def set_light_culling(self, mode: int) -> None:
+        """ABI 1.21. LIGHT_CULLING_NONE (the default: at most 32 point and 32
+        spot lights, every one evaluated per fragment) or
+        LIGHT_CULLING_CLUSTERED (up to MAX_CLUSTERED_LIGHTS of each, each
+        fragment evaluating only the lights listed for its cluster)."""
+        self._call("strata_set_light_culling", mode)
+
+    def light_stats(self) -> LightStats:
+        """ABI 1.21. The light culling's numbers for the most recent end_frame."""
+        stats = LightStats()
+        self._call("strata_get_light_stats", ctypes.byref(stats))
+        return stats
 
     def set_color_output(self, flags: int = 0, exposure: float = 1.0) -> None:
         """ABI 1.20. OUTPUT_* flags (at most one tonemap) and an exposure in

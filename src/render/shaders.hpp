@@ -61,6 +61,10 @@ namespace strata::render::shaders {
     "    vec4 uSpotColor[32];           // rgb colour * intensity, w shadow slot or -1\n" \
     "    vec4 uSpotDirection[32];       // xyz the way it shines (unit), w cos(outer cone)\n" \
     "    vec4 uSpotCone[32];            // x cos(inner cone)\n"                     \
+    "    ivec4 uClusterGrid;    // ABI 1.21: xy tiles, z slices, w 1 under clustered culling\n" \
+    "    ivec4 uClusterLayout;  // x first cluster header texel, y first light index texel\n" \
+    "    vec4 uClusterDepth;    // x near plane, y slice scale, z 1 for an orthographic camera\n" \
+    "    vec4 uClusterViewport; // xy 1 / viewport size in pixels\n" \
     "};\n"
 
 // Instanced primitives. The vertex maths is Beyond Nations'
@@ -133,7 +137,8 @@ inline const char* kSunFragment =
     "in vec3 vWorld;\n"
     "in float vViewDepth;\n" STRATA_FRAME_BLOCK STRATA_OUTPUT_FUNCTIONS
     "layout(binding = 1) uniform sampler2DArrayShadow uShadowMap;\n"
-    "layout(binding = 2) uniform samplerCubeArrayShadow uPointShadowMaps;\n" STRATA_POINT_LIGHT_BLOCK
+    "layout(binding = 2) uniform samplerCubeArrayShadow uPointShadowMaps;\n"
+    "layout(binding = 10) uniform sampler2D uClusterData;\n" STRATA_POINT_LIGHT_BLOCK
     "out vec4 fragColor;\n"
     "float sampleCascade(int cascade, vec3 world, vec3 normal) {\n"
     "    // Normal offset: push the lookup off the surface by a texel or so.\n"
@@ -186,8 +191,53 @@ inline const char* kSunFragment =
     "            sum += texture(uPointShadowMaps, vec4(n + (t * float(x) + b * float(y)) * spread, float(slot)), ref);\n"
     "    return sum / 9.0;\n"
     "}\n"
+    "// Clustered lights (ABI 1.21): only the lights render/clusters.cpp listed\n"
+    "// for this fragment's cluster, picked by the same formulas. uClusterData\n"
+    "// holds, 1024 texels a row: 3 texels per light (position and range; colour\n"
+    "// times intensity and shadow slot; direction times s and an offset, so the\n"
+    "// cone factor is clamp(dot(-l, xyz) + w) with s = 1 / (cos(inner) -\n"
+    "// cos(outer)), w = -cos(outer) * s; a point light is 0, 0, 0, 1), point\n"
+    "// lights first; then one texel per cluster (first list texel, count);\n"
+    "// then the lists, four light indices a texel, each list texel-aligned.\n"
+    "vec4 clusterTexel(int i) { return texelFetch(uClusterData, ivec2(i & 1023, i >> 10), 0); }\n"
+    "vec3 clusterLights(vec3 world, vec3 normal) {\n"
+    "    ivec2 tile = clamp(ivec2(floor(gl_FragCoord.xy * uClusterViewport.xy * vec2(uClusterGrid.xy))),\n"
+    "                       ivec2(0), uClusterGrid.xy - 1);\n"
+    "    float s = uClusterDepth.z > 0.5 ? (vViewDepth - uClusterDepth.x) * uClusterDepth.y\n"
+    "                                    : log(max(vViewDepth, uClusterDepth.x) / uClusterDepth.x) * uClusterDepth.y;\n"
+    "    int slice = s > 0.0 ? min(int(floor(s)), uClusterGrid.z - 1) : 0;\n"
+    "    vec4 header = clusterTexel(uClusterLayout.x + (slice * uClusterGrid.y + tile.y) * uClusterGrid.x + tile.x);\n"
+    "    int list = uClusterLayout.y + int(header.x);\n"
+    "    int count = int(header.y);\n"
+    "    vec3 sum = vec3(0.0);\n"
+    "    for (int j = 0; j < count; j += 4) {\n"
+    "        vec4 four = clusterTexel(list + (j >> 2));\n"
+    "        int n = min(count - j, 4);\n"
+    "        for (int c = 0; c < n; ++c) {\n"
+    "            int base = 3 * int(four[c]);\n"
+    "            vec4 positionRange = clusterTexel(base);\n"
+    "            vec4 colorSlot = clusterTexel(base + 1);\n"
+    "            vec4 cone = clusterTexel(base + 2);\n"
+    "            vec3 toPoint = positionRange.xyz - world;\n"
+    "            float d = length(toPoint);\n"
+    "            vec3 l = toPoint / max(d, 1e-4);\n"
+    "            float r = d / positionRange.w;\n"
+    "            float r2 = r * r;\n"
+    "            float window = clamp(1.0 - r2 * r2, 0.0, 1.0);\n"
+    "            float t = clamp(dot(-l, cone.xyz) + cone.w, 0.0, 1.0);\n"
+    "            float falloff = window * window / (1.0 + 16.0 * r2) * t * t;\n"
+    "            float ndl = max(dot(normal, l), 0.0);\n"
+    "            int slot = int(colorSlot.w);\n"
+    "            if (slot >= 0 && falloff * ndl > 0.0)\n"
+    "                ndl *= pointShadow(slot, world, normal, ndl, positionRange.xyz, positionRange.w);\n"
+    "            sum += colorSlot.rgb * (falloff * ndl);\n"
+    "        }\n"
+    "    }\n"
+    "    return sum;\n"
+    "}\n"
     "// Point lights: the falloff of render/lights.cpp, Lambert diffuse.\n"
     "vec3 pointLights(vec3 world, vec3 normal) {\n"
+    "    if (uClusterGrid.w != 0) return clusterLights(world, normal);\n"
     "    vec3 sum = vec3(0.0);\n"
     "    for (int i = 0; i < uPointInfo.x; ++i) {\n"
     "        vec3 toPoint = uPointPositionRange[i].xyz - world;\n"

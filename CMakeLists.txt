@@ -115,6 +115,7 @@ set(STRATA_ENGINE_SOURCES
     src/rhi/glsl_es.cpp
     src/render/primitive_mesh.cpp
     src/render/cascades.cpp
+    src/render/clusters.cpp
     src/render/sun.cpp
     src/render/lights.cpp
     src/render/terrain_mesh.cpp

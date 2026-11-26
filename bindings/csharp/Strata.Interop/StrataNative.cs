@@ -9,8 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles, 1.12 injected events, a shared frame clock and the drive channel, 1.13 wide lines, 1.14 world-to-screen projection and world-anchored text, 1.15 per-vertex RGBA mesh colours, 1.16 ambient and sun levels, 1.17 window fullscreen, 1.18 a host context whose GL state is not kept, 1.19 hidden meshes and engine-made flat normals, 1.20 mesh materials (alpha cutout, emission, normal maps, two-sided faces), sRGB textures, spot lights, an orthographic camera and a tonemapped sRGB output.</summary>
-        public const uint Minor = 20;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles, 1.12 injected events, a shared frame clock and the drive channel, 1.13 wide lines, 1.14 world-to-screen projection and world-anchored text, 1.15 per-vertex RGBA mesh colours, 1.16 ambient and sun levels, 1.17 window fullscreen, 1.18 a host context whose GL state is not kept, 1.19 hidden meshes and engine-made flat normals, 1.20 mesh materials (alpha cutout, emission, normal maps, two-sided faces), sRGB textures, spot lights, an orthographic camera and a tonemapped sRGB output, 1.21 clustered light culling for many lights and its stats.</summary>
+        public const uint Minor = 21;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3,
@@ -31,7 +31,8 @@ namespace Strata.Interop {
             StructRect = 16,           // ABI 1.11
             StructWideLineVertex = 17, // ABI 1.13
             StructMaterial = 18,       // ABI 1.20
-            StructSpotLight = 19;      // ABI 1.20
+            StructSpotLight = 19,      // ABI 1.20
+            StructLightStats = 20;     // ABI 1.21
         public const uint TextureMipmaps = 0x1u, TextureClampU = 0x2u, TextureClampV = 0x4u;  // ABI 1.7
         public const uint TextureNearest = 0x8u;  // ABI 1.10
         public const uint MeshUnlit = 0x1u;  // ABI 1.7
@@ -43,6 +44,8 @@ namespace Strata.Interop {
         public const int MaxSpotLights = 32;  // ABI 1.20
         public const uint SpotLightCastShadows = 0x1u;  // ABI 1.20
         public const uint OutputSrgb = 0x1u, OutputTonemapReinhard = 0x2u, OutputTonemapAces = 0x4u;  // ABI 1.20
+        public const int LightCullingNone = 0, LightCullingClustered = 1;  // ABI 1.21
+        public const int MaxClusteredLights = 4096, MaxLightsPerCluster = 256;  // ABI 1.21
 
         public const int MaxPointLights = 32;  // ABI 1.1
         public const uint PointLightCastShadows = 0x1u;  // ABI 1.2
@@ -273,6 +276,21 @@ namespace Strata.Interop {
         public uint flags;
     }
 
+    /// <summary>StrataLightStats (ABI 1.21): 40 bytes, the light culling of the last frame.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct StrataLightStats {
+        public int mode;
+        public int point_lights;
+        public int spot_lights;
+        public int lights_in_view;
+        public int clusters;
+        public int clusters_lit;
+        public int light_references;
+        public int max_lights_per_cluster;
+        public int clusters_overflowed;
+        public float cpu_ms_culling;
+    }
+
     public static unsafe class StrataNative {
         public const string Library = "strata";
 
@@ -362,6 +380,10 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_set_spot_lights(IntPtr engine, StrataSpotLight* lights, int count);
         /// <summary>ABI 1.20. Output* flags (at most one tonemap) and an exposure in (0, 64]; 0 and 1 are the default.</summary>
         [DllImport(Library)] public static extern int strata_set_color_output(IntPtr engine, uint flags, float exposure);
+        /// <summary>ABI 1.21. LightCullingNone (the default, at most 32 lights a list) or LightCullingClustered (up to MaxClusteredLights a list); back to None with more lights set is STRATA_ERROR_INVALID_STATE.</summary>
+        [DllImport(Library)] public static extern int strata_set_light_culling(IntPtr engine, int mode);
+        /// <summary>ABI 1.21. The light culling's numbers for the most recent end_frame.</summary>
+        [DllImport(Library)] public static extern int strata_get_light_stats(IntPtr engine, StrataLightStats* stats);
         /// <summary>ABI 1.3. tile null removes the terrain.</summary>
         [DllImport(Library)] public static extern int strata_set_terrain(IntPtr engine, StrataTerrainTile* tile);
         /// <summary>ABI 1.4. Writes the new mesh's id (never 0).</summary>

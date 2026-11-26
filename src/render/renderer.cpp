@@ -8,6 +8,7 @@
 
 #include "core/error.hpp"
 #include "core/log.hpp"
+#include "render/clusters.hpp"
 #include "render/depth_readback.hpp"
 #include "render/lights.hpp"
 #include "render/pass_list.hpp"
@@ -57,10 +58,14 @@ struct PointLightUniforms {
     glm::vec4 spotColor[STRATA_MAX_SPOT_LIGHTS];
     glm::vec4 spotDirection[STRATA_MAX_SPOT_LIGHTS];  // w: cos(outer)
     glm::vec4 spotCone[STRATA_MAX_SPOT_LIGHTS];       // x: cos(inner)
+    glm::ivec4 clusterGrid;      // ABI 1.21: xy tiles, z slices, w 1 under clustered culling
+    glm::ivec4 clusterLayout;    // x first header texel, y first index texel
+    glm::vec4 clusterDepth;      // x near, y slice scale, z 1 if orthographic
+    glm::vec4 clusterViewport;   // xy 1 / viewport size
 };
 static_assert(STRATA_MAX_POINT_LIGHTS == 32 && STRATA_MAX_SPOT_LIGHTS == 32,
               "the PointLights block in shaders.hpp has arrays of 32");
-static_assert(sizeof(PointLightUniforms) == 16 + 2 * 16 * STRATA_MAX_POINT_LIGHTS + 4 * 16 * STRATA_MAX_SPOT_LIGHTS,
+static_assert(sizeof(PointLightUniforms) == 16 + 2 * 16 * STRATA_MAX_POINT_LIGHTS + 4 * 16 * STRATA_MAX_SPOT_LIGHTS + 4 * 16,
               "PointLightUniforms must match the std140 PointLights block");
 
 constexpr uint32_t kInstanceStride = sizeof(StrataRenderItem);
@@ -160,6 +165,7 @@ Renderer::Renderer(rhi::GpuDevice& device, platform::Surface& surface) : device_
         desc.debugName = "strata.white";
         whiteTexture_ = device_.createTexture(desc);
     }
+    for (size_t i = 0; i < kClusterRing; ++i) ensureClusterData(i, 1);  // bound by every lit pass, even with culling off
 
     // BN's constants until the host says otherwise.
     lighting_.mode = STRATA_LIGHTING_LEGACY;
@@ -194,6 +200,7 @@ Renderer::~Renderer() {
     device_.destroy(shadowUniforms_);
     device_.destroy(pointLightUniforms_);
     device_.destroy(pointShadowUniforms_);
+    for (auto texture : clusterData_) device_.destroy(texture);
     for (auto target : pointShadowTargets_) device_.destroy(target);
     device_.destroy(pointShadowMaps_);
     device_.destroy(pointShadowPipeline_);
@@ -563,14 +570,39 @@ void Renderer::setLighting(const StrataLighting& lighting) {
     }
 }
 
+size_t Renderer::maxPointLights() const {
+    return lightCulling_ == STRATA_LIGHT_CULLING_CLUSTERED ? size_t{STRATA_MAX_CLUSTERED_LIGHTS}
+                                                           : size_t{STRATA_MAX_POINT_LIGHTS};
+}
+
+size_t Renderer::maxSpotLights() const {
+    return lightCulling_ == STRATA_LIGHT_CULLING_CLUSTERED ? size_t{STRATA_MAX_CLUSTERED_LIGHTS}
+                                                           : size_t{STRATA_MAX_SPOT_LIGHTS};
+}
+
+void Renderer::setLightCulling(int32_t mode) {
+    if (mode != STRATA_LIGHT_CULLING_NONE && mode != STRATA_LIGHT_CULLING_CLUSTERED) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "unknown light culling mode %d", mode);
+    }
+    if (mode == STRATA_LIGHT_CULLING_NONE &&
+        (pointLights_.size() > STRATA_MAX_POINT_LIGHTS || spotLights_.size() > STRATA_MAX_SPOT_LIGHTS)) {
+        fail(STRATA_ERROR_INVALID_STATE,
+             "light culling: %lu point and %lu spot lights are set; without culling at most %d point and %d "
+             "spot lights (set fewer lights first)",
+             static_cast<unsigned long>(pointLights_.size()), static_cast<unsigned long>(spotLights_.size()),
+             STRATA_MAX_POINT_LIGHTS, STRATA_MAX_SPOT_LIGHTS);
+    }
+    lightCulling_ = mode;
+}
+
 void Renderer::setPointLights(const StrataPointLight* lights, size_t count) {
-    validatePointLights(lights, count, countShadowCasters(spotLights_.data(), spotLights_.size()));
+    validatePointLights(lights, count, countShadowCasters(spotLights_.data(), spotLights_.size()), maxPointLights());
     pointLights_.assign(lights, lights + count);
     assignShadowSlots();
 }
 
 void Renderer::setSpotLights(const StrataSpotLight* lights, size_t count) {
-    validateSpotLights(lights, count, countShadowCasters(pointLights_.data(), pointLights_.size()));
+    validateSpotLights(lights, count, countShadowCasters(pointLights_.data(), pointLights_.size()), maxSpotLights());
     spotLights_.assign(lights, lights + count);
     for (auto& l : spotLights_) {
         const glm::vec3 d = glm::normalize(glm::vec3(l.direction[0], l.direction[1], l.direction[2]));
@@ -1148,8 +1180,20 @@ void Renderer::writeFrameUniforms(int width, int height, const Cascades* cascade
     device_.updateBuffer(frameUniforms_, 0, sizeof u, &u);
 }
 
-void Renderer::writePointLightUniforms() {
+void Renderer::writePointLightUniforms(int width, int height) {
     PointLightUniforms u{};
+    if (lightCulling_ == STRATA_LIGHT_CULLING_CLUSTERED) {
+        // ABI 1.21: the lights live in clusterData_ (buildClusters); the
+        // arrays stay empty and the shader reads its cluster's list instead.
+        const ClusterCamera camera = clusterCamera();
+        u.info = glm::ivec4(0, kPointShadowMapSize, 0, 0);
+        u.clusterGrid = glm::ivec4(kClusterTilesX, kClusterTilesY, kClusterSlices, 1);
+        u.clusterLayout = glm::ivec4(clusterHeaderBase_, clusterIndexBase_, 0, 0);
+        u.clusterDepth = glm::vec4(camera.nearPlane, clusterSliceScale(camera), camera.orthographic ? 1.0f : 0.0f, 0.0f);
+        u.clusterViewport = glm::vec4(1.0f / static_cast<float>(width), 1.0f / static_cast<float>(height), 0.0f, 0.0f);
+        device_.updateBuffer(pointLightUniforms_, 0, sizeof u, &u);
+        return;
+    }
     u.info = glm::ivec4(static_cast<int>(pointLights_.size()), 0, 0, 0);
     for (size_t i = 0; i < pointLights_.size(); ++i) {
         const StrataPointLight& l = pointLights_[i];
@@ -1169,6 +1213,109 @@ void Renderer::writePointLightUniforms() {
         u.spotCone[i] = glm::vec4(std::cos(glm::radians(l.inner_cone_degrees)), 0.0f, 0.0f, 0.0f);
     }
     device_.updateBuffer(pointLightUniforms_, 0, sizeof u, &u);
+}
+
+ClusterCamera Renderer::clusterCamera() const {
+    ClusterCamera c;
+    c.view = glm::make_mat4(camera_.view);
+    c.projection = glm::make_mat4(camera_.projection);
+    c.nearPlane = camera_.near_plane;
+    c.farPlane = camera_.far_plane;
+    c.orthographic = camera_.projection[11] == 0.0f && camera_.projection[15] == 1.0f;
+    return c;
+}
+
+void Renderer::ensureClusterData(size_t slot, int rows) {
+    if (clusterData_[slot] && rows <= clusterDataRows_[slot]) return;
+    int height = 1;
+    while (height < rows) height *= 2;
+    device_.destroy(clusterData_[slot]);
+    std::vector<float> zeros(static_cast<size_t>(kClusterDataWidth) * static_cast<size_t>(height) * 4, 0.0f);
+    rhi::TextureDesc desc;
+    desc.width = kClusterDataWidth;
+    desc.height = height;
+    desc.format = rhi::TextureFormat::RGBA32F;
+    desc.nearest = true;
+    desc.initialData = zeros.data();
+    desc.debugName = "strata.cluster-data";
+    clusterData_[slot] = device_.createTexture(desc);
+    clusterDataRows_[slot] = height;
+}
+
+void Renderer::buildClusters() {
+    const auto start = Clock::now();
+    const ClusterCamera camera = clusterCamera();
+    const size_t lightCount = pointLights_.size() + spotLights_.size();
+    std::vector<ClusterLight> lights;
+    lights.reserve(lightCount);
+    auto brightness = [](const float* color, float intensity) {
+        return intensity * std::max(color[0], std::max(color[1], color[2]));
+    };
+    for (const auto& l : pointLights_) {
+        lights.push_back({glm::make_vec3(l.position), l.range, brightness(l.color, l.intensity)});
+    }
+    for (const auto& l : spotLights_) {
+        lights.push_back({glm::make_vec3(l.position), l.range, brightness(l.color, l.intensity)});
+    }
+    const ClusterLists lists = assignLightsToClusters(camera, lights);
+
+    // One RGBA32F texture, kClusterDataWidth texels a row (see shaders.hpp,
+    // clusterLights): 3 texels per light, a header per cluster, then the
+    // lists, four indices a texel, each list starting on a texel of its own
+    // so the shader fetches one texel per four lights.
+    const size_t lightTexels = 3 * lightCount;
+    clusterHeaderBase_ = static_cast<int>(lightTexels);
+    clusterIndexBase_ = clusterHeaderBase_ + kClusterCount;
+    size_t listTexels = 0;
+    for (uint32_t count : lists.counts) listTexels += (count + 3) / 4;
+    const size_t total = static_cast<size_t>(clusterIndexBase_) + listTexels;
+    const int rows = static_cast<int>((total + kClusterDataWidth - 1) / kClusterDataWidth);
+    clusterCurrent_ = (clusterCurrent_ + 1) % kClusterRing;
+    ensureClusterData(clusterCurrent_, rows);
+    clusterUpload_.assign(static_cast<size_t>(rows) * kClusterDataWidth * 4, 0.0f);
+    float* texel = clusterUpload_.data();
+    for (size_t i = 0; i < pointLights_.size(); ++i, texel += 12) {
+        const StrataPointLight& l = pointLights_[i];
+        const float data[12] = {l.position[0], l.position[1], l.position[2], l.range,
+                                l.color[0] * l.intensity, l.color[1] * l.intensity, l.color[2] * l.intensity,
+                                static_cast<float>(pointShadowSlot_[i]),
+                                0.0f, 0.0f, 0.0f, 1.0f};  // a cone factor of 1 in every direction
+        std::memcpy(texel, data, sizeof data);
+    }
+    for (size_t i = 0; i < spotLights_.size(); ++i, texel += 12) {
+        const StrataSpotLight& l = spotLights_[i];
+        const float cosOuter = std::cos(glm::radians(l.outer_cone_degrees));
+        const float cosInner = std::cos(glm::radians(l.inner_cone_degrees));
+        const float scale = 1.0f / std::max(cosInner - cosOuter, 1e-4f);
+        const float data[12] = {l.position[0], l.position[1], l.position[2], l.range,
+                                l.color[0] * l.intensity, l.color[1] * l.intensity, l.color[2] * l.intensity,
+                                static_cast<float>(spotShadowSlot_[i]),
+                                l.direction[0] * scale, l.direction[1] * scale, l.direction[2] * scale,
+                                -cosOuter * scale};
+        std::memcpy(texel, data, sizeof data);
+    }
+    float* header = clusterUpload_.data() + static_cast<size_t>(clusterHeaderBase_) * 4;
+    float* list = clusterUpload_.data() + static_cast<size_t>(clusterIndexBase_) * 4;
+    size_t listTexel = 0;
+    for (int k = 0; k < kClusterCount; ++k, header += 4) {
+        const auto ku = static_cast<size_t>(k);
+        const uint32_t count = lists.counts[ku];
+        header[0] = static_cast<float>(listTexel);
+        header[1] = static_cast<float>(count);
+        for (uint32_t j = 0; j < count; ++j) {
+            list[listTexel * 4 + j] = static_cast<float>(lists.indices[lists.offsets[ku] + j]);
+        }
+        listTexel += (count + 3) / 4;
+    }
+    device_.updateTexture(clusterData_[clusterCurrent_], 0, 0, kClusterDataWidth, rows, clusterUpload_.data());
+
+    lightStats_.lights_in_view = lists.stats.lightsInView;
+    lightStats_.clusters = kClusterCount;
+    lightStats_.clusters_lit = lists.stats.clustersLit;
+    lightStats_.light_references = lists.stats.lightReferences;
+    lightStats_.max_lights_per_cluster = lists.stats.maxLightsPerCluster;
+    lightStats_.clusters_overflowed = lists.stats.clustersOverflowed;
+    lightStats_.cpu_ms_culling = msSince(start);
 }
 
 void Renderer::drawPrimitives(bool forShadow) {
@@ -1284,6 +1431,7 @@ void Renderer::opaquePass(int width, int height) {
     if (lighting_.mode != STRATA_LIGHTING_LEGACY) {
         device_.bindTexture(1, shadowMaps_);
         device_.bindTexture(2, pointShadowMaps_);
+        device_.bindTexture(10, clusterData_[clusterCurrent_]);  // ABI 1.21
         device_.bindUniformBuffer(2, pointLightUniforms_, 0, sizeof(PointLightUniforms));
     }
     drawPrimitives(false);
@@ -1319,6 +1467,7 @@ void Renderer::translucentPass(int width, int height) {
     if (!legacy) {
         device_.bindTexture(1, shadowMaps_);
         device_.bindTexture(2, pointShadowMaps_);
+        device_.bindTexture(10, clusterData_[clusterCurrent_]);  // ABI 1.21
         device_.bindUniformBuffer(2, pointLightUniforms_, 0, sizeof(PointLightUniforms));
     }
     rhi::PipelineHandle bound;
@@ -1425,7 +1574,12 @@ void Renderer::endFrame() {
     // Likewise a cube array, even with no shadowed point lights.
     if (lit) ensurePointShadowMaps(std::max(pointShadowCount_, 1));
     writeFrameUniforms(width, height, shadows ? &cascades : nullptr);
-    if (lit) writePointLightUniforms();
+    lightStats_ = StrataLightStats{};
+    lightStats_.mode = lightCulling_;
+    lightStats_.point_lights = static_cast<int32_t>(pointLights_.size());
+    lightStats_.spot_lights = static_cast<int32_t>(spotLights_.size());
+    if (lit && lightCulling_ == STRATA_LIGHT_CULLING_CLUSTERED) buildClusters();  // ABI 1.21
+    if (lit) writePointLightUniforms(width, height);
 
     auto t = Clock::now();
     if (shadows) shadowPass(cascades);
