@@ -30,7 +30,7 @@ from ctypes import (
 #: The major version this binding was written against (STRATA_ABI_VERSION).
 ABI_VERSION = 1
 #: The newest minor whose additions this binding declares (STRATA_ABI_MINOR).
-ABI_MINOR = 19
+ABI_MINOR = 20
 
 # ---------------------------------------------------------------- status
 
@@ -83,6 +83,13 @@ MESH_UNLIT = 0x1  # ABI 1.7
 MESH_TRANSLUCENT = 0x2  # ABI 1.11
 MESH_COLORS_RGBA = 0x4  # ABI 1.15
 MESH_FLAT_NORMALS = 0x8  # ABI 1.19
+TEXTURE_SRGB = 0x10  # ABI 1.20
+MATERIAL_DOUBLE_SIDED = 0x1  # ABI 1.20
+MAX_SPOT_LIGHTS = 32  # ABI 1.20
+SPOT_LIGHT_CAST_SHADOWS = 0x1  # ABI 1.20
+OUTPUT_SRGB = 0x1  # ABI 1.20
+OUTPUT_TONEMAP_REINHARD = 0x2  # ABI 1.20
+OUTPUT_TONEMAP_ACES = 0x4  # ABI 1.20
 
 POINT_SOFT = 0x1  # ABI 1.5
 POINT_ON_TOP = 0x2  # ABI 1.11
@@ -362,6 +369,40 @@ class WideLineVertex(Structure):
     ]
 
 
+class Material(Structure):
+    """ABI 1.20. 36 bytes: a mesh's alpha cutout, emission, normal map and
+    two-sided faces. All zero (the default) draws as before 1.20."""
+
+    STRUCT_ID = 18
+    ABI_MINOR = 20
+    _fields_ = [
+        ("alpha_cutoff", c_float),
+        ("emissive", float3),
+        ("emissive_strength", c_float),
+        ("emissive_texture", c_uint32),
+        ("normal_texture", c_uint32),
+        ("normal_scale", c_float),
+        ("flags", c_uint32),
+    ]
+
+
+class SpotLight(Structure):
+    """ABI 1.20. 56 bytes: a point light confined to a cone."""
+
+    STRUCT_ID = 19
+    ABI_MINOR = 20
+    _fields_ = [
+        ("position", float3),
+        ("range", c_float),
+        ("direction", float3),
+        ("intensity", c_float),
+        ("color", float3),
+        ("inner_cone_degrees", c_float),
+        ("outer_cone_degrees", c_float),
+        ("flags", c_uint32),
+    ]
+
+
 #: Every boundary struct, in STRATA_STRUCT_* id order.
 STRUCTS = (
     RenderItem,
@@ -382,6 +423,8 @@ STRUCTS = (
     RayHit,
     Rect,
     WideLineVertex,
+    Material,
+    SpotLight,
 )
 
 # ---------------------------------------------------------------- functions
@@ -417,6 +460,11 @@ FUNCTIONS = {
         _status,
         [_p(c_float), _p(c_float), _p(c_float), c_float, c_float, c_float, c_float, _p(Camera)],
     ),
+    "strata_camera_ortho": (
+        20,
+        _status,
+        [_p(c_float), _p(c_float), _p(c_float), c_float, c_float, c_float, c_float, _p(Camera)],
+    ),
     "strata_lighting_defaults": (0, _status, [c_int32, _p(Lighting)]),
     "strata_set_lighting": (0, _status, [_engine, _p(Lighting)]),
     "strata_solar_position": (6, _status, [c_double, c_double, c_double, _p(SolarPosition)]),
@@ -424,6 +472,8 @@ FUNCTIONS = {
     "strata_set_ambient": (16, _status, [_engine, _p(c_float), _p(c_float)]),
     "strata_set_sun_intensity": (16, _status, [_engine, c_float, _p(c_float)]),
     "strata_set_point_lights": (1, _status, [_engine, _p(PointLight), c_int32]),
+    "strata_set_spot_lights": (20, _status, [_engine, _p(SpotLight), c_int32]),
+    "strata_set_color_output": (20, _status, [_engine, c_uint32, c_float]),
     "strata_set_terrain": (3, _status, [_engine, _p(TerrainTile)]),
     "strata_add_mesh": (4, _status, [_engine, _p(Mesh), _p(c_uint32)]),
     "strata_remove_mesh": (4, _status, [_engine, c_uint32]),
@@ -442,6 +492,7 @@ FUNCTIONS = {
     "strata_add_textured_mesh": (7, _status, [_engine, _p(TexturedMesh), _p(c_uint32)]),
     "strata_set_mesh_transform": (7, _status, [_engine, c_uint32, _p(c_float)]),
     "strata_set_mesh_visible": (19, _status, [_engine, c_uint32, c_int32]),
+    "strata_set_mesh_material": (20, _status, [_engine, c_uint32, _p(Material)]),
     "strata_raycast_meshes": (8, _status, [_engine, _p(c_float), _p(c_float), c_float, _p(RayHit)]),
     "strata_set_relative_mouse_mode": (8, _status, [_engine, c_int32]),
     "strata_set_fullscreen": (17, _status, [_engine, c_int32]),

@@ -99,6 +99,41 @@ void fillGlobe(Scene::Texture& t) {
     }
 }
 
+// ABI 1.20 test assets, one feature per cell of a cu x cv grid. discs: a
+// round blob of colour c whose alpha falls from 1 inside to 0 across its
+// edge (so an alpha cutoff of 0.5 cuts a circle), on fully transparent
+// texels. bumps: a tangent-space normal map of one dome per cell (red +X
+// along +u, green +Y towards the first row), flat between the domes.
+void fillCells(Scene::Texture& t, int cu, int cv, bool bumps, const float c[3]) {
+    for (int y = 0; y < t.height; ++y) {
+        for (int x = 0; x < t.width; ++x) {
+            const float u = (static_cast<float>(x) + 0.5f) / static_cast<float>(t.width) * static_cast<float>(cu);
+            const float v = (static_cast<float>(y) + 0.5f) / static_cast<float>(t.height) * static_cast<float>(cv);
+            const float du = (u - std::floor(u)) * 2.0f - 1.0f;  // -1..1 across the cell
+            const float dv = (v - std::floor(v)) * 2.0f - 1.0f;
+            const float r = std::sqrt(du * du + dv * dv);
+            uint8_t* px = &t.rgba[(static_cast<size_t>(y) * static_cast<size_t>(t.width) + static_cast<size_t>(x)) * 4];
+            if (bumps) {
+                // A dome of radius 0.8: its normal is (du, -dv, h) / 0.8 inside,
+                // with h the height of the sphere there; up elsewhere.
+                float n[3] = {0.0f, 0.0f, 1.0f};
+                if (r < 0.8f) {
+                    const float h = std::sqrt(0.64f - r * r);
+                    n[0] = du / 0.8f;
+                    n[1] = -dv / 0.8f;  // green points towards the first row (v decreasing)
+                    n[2] = h / 0.8f;
+                }
+                for (int i = 0; i < 3; ++i) px[i] = toByte(n[i] * 0.5f + 0.5f);
+                px[3] = 255;
+            } else {
+                const float alpha = std::fmin(std::fmax((0.85f - r) / 0.1f + 0.5f, 0.0f), 1.0f);
+                for (int i = 0; i < 3; ++i) px[i] = toByte(c[i]);
+                px[3] = toByte(alpha);
+            }
+        }
+    }
+}
+
 // Column-major 4x4 product a * b.
 void multiply(const float* a, const float* b, float* out) {
     float r[16];
@@ -145,6 +180,48 @@ void parse(const std::string& path, Scene& scene, int depth) {
             read(in, scene.fovY, where, "fov");
             read(in, scene.nearPlane, where, "near");
             read(in, scene.farPlane, where, "far");
+        } else if (word == "camera_ortho") {
+            for (float& v : scene.eye) read(in, v, where, "eye");
+            for (float& v : scene.target) read(in, v, where, "target");
+            read(in, scene.orthoHalfHeight, where, "half height");
+            read(in, scene.nearPlane, where, "near");
+            read(in, scene.farPlane, where, "far");
+            scene.ortho = true;
+        } else if (word == "output") {
+            std::string option;
+            bool any = false;
+            while (in >> option) {
+                any = true;
+                if (option == "srgb") scene.outputFlags |= STRATA_OUTPUT_SRGB;
+                else if (option == "reinhard") scene.outputFlags |= STRATA_OUTPUT_TONEMAP_REINHARD;
+                else if (option == "aces") scene.outputFlags |= STRATA_OUTPUT_TONEMAP_ACES;
+                else if (option == "exposure") read(in, scene.outputExposure, where, "exposure");
+                else bad(where, "unknown output option '" + option + "'");
+            }
+            if (!any) bad(where, "expected 'srgb', 'reinhard', 'aces' or 'exposure <e>' after 'output'");
+            scene.hasOutput = true;
+        } else if (word == "mesh_cutoff") {
+            if (scene.meshes.empty()) bad(where, "'mesh_cutoff' before 'mesh'");
+            read(in, scene.meshes.back().material.alpha_cutoff, where, "alpha cutoff");
+            scene.meshes.back().hasMaterial = true;
+        } else if (word == "mesh_emissive") {
+            if (scene.meshes.empty()) bad(where, "'mesh_emissive' before 'mesh'");
+            SceneMesh& mesh = scene.meshes.back();
+            for (float& v : mesh.material.emissive) read(in, v, where, "emissive colour");
+            read(in, mesh.material.emissive_strength, where, "emissive strength");
+            std::string texture;
+            if (in >> texture) mesh.emissiveTexture = texture;
+            mesh.hasMaterial = true;
+        } else if (word == "mesh_normal_map") {
+            if (scene.meshes.empty()) bad(where, "'mesh_normal_map' before 'mesh'");
+            SceneMesh& mesh = scene.meshes.back();
+            read(in, mesh.normalTexture, where, "texture name");
+            read(in, mesh.material.normal_scale, where, "normal scale");
+            mesh.hasMaterial = true;
+        } else if (word == "mesh_double_sided") {
+            if (scene.meshes.empty()) bad(where, "'mesh_double_sided' before 'mesh'");
+            scene.meshes.back().material.flags |= STRATA_MATERIAL_DOUBLE_SIDED;
+            scene.meshes.back().hasMaterial = true;
         } else if (word == "lighting") {
             std::string mode;
             read(in, mode, where, "lighting mode");
@@ -208,7 +285,25 @@ void parse(const std::string& path, Scene& scene, int depth) {
         } else if (word == "light") {
             std::string type;
             read(in, type, where, "light type");
-            if (type != "point") bad(where, "unknown light type '" + type + "' (expected 'point')");
+            if (type == "spot") {
+                StrataSpotLight spot{};
+                for (float& v : spot.position) read(in, v, where, "position");
+                read(in, spot.range, where, "range");
+                for (float& v : spot.direction) read(in, v, where, "direction");
+                for (float& v : spot.color) read(in, v, where, "colour");
+                read(in, spot.intensity, where, "intensity");
+                read(in, spot.inner_cone_degrees, where, "inner cone degrees");
+                read(in, spot.outer_cone_degrees, where, "outer cone degrees");
+                std::string option;
+                if (in >> option) {
+                    if (option != "shadow") bad(where, "expected 'shadow' or nothing after the cones");
+                    spot.flags |= STRATA_SPOT_LIGHT_CAST_SHADOWS;
+                }
+                scene.spotLights.push_back(spot);
+                expectEnd(in, where);
+                continue;
+            }
+            if (type != "point") bad(where, "unknown light type '" + type + "' (expected 'point' or 'spot')");
             StrataPointLight light{};
             for (float& v : light.position) read(in, v, where, "position");
             read(in, light.range, where, "range");
@@ -280,6 +375,16 @@ void parse(const std::string& path, Scene& scene, int depth) {
             } else if (kind == "globe") {
                 fillGlobe(t);
                 t.flags |= STRATA_TEXTURE_CLAMP_V;
+            } else if (kind == "discs" || kind == "bumps") {
+                int cu = 0, cv = 0;
+                float c[3] = {0.5f, 0.5f, 1.0f};
+                read(in, cu, where, "cells u");
+                read(in, cv, where, "cells v");
+                if (kind == "discs") {
+                    for (float& v : c) read(in, v, where, "colour");
+                }
+                if (cu < 1 || cv < 1) bad(where, "cells must be positive");
+                fillCells(t, cu, cv, kind == "bumps", c);
             } else {
                 bad(where, "unknown texture kind '" + kind + "'");
             }
@@ -288,6 +393,7 @@ void parse(const std::string& path, Scene& scene, int depth) {
                 if (option == "mipmaps") t.flags |= STRATA_TEXTURE_MIPMAPS;
                 else if (option == "clamp_v") t.flags |= STRATA_TEXTURE_CLAMP_V;
                 else if (option == "nearest") t.flags |= STRATA_TEXTURE_NEAREST;
+                else if (option == "srgb") t.flags |= STRATA_TEXTURE_SRGB;
                 else bad(where, "unknown texture option '" + option + "'");
             }
             scene.textures.push_back(std::move(t));

@@ -156,6 +156,12 @@ normals): each addition is compatible, and every ABI
 | Light levels *(ABI 1.16)* | `strata_set_ambient` (ambient × tint + lift, SUN and SPACE) and `strata_set_sun_intensity` (the sun or moon scaled and tinted, direction and shadows kept), staying across `strata_set_lighting`; the defaults draw the same pixels as 1.12 | `sun_levels_overcast` (beside `l2_csm_morning`) |
 | Window fullscreen *(ABI 1.17)* | `strata_set_fullscreen` (borderless at the desktop's resolution, or back to a window at its earlier size; the browser's Fullscreen API on the web) and `strata_is_fullscreen`; window surface only, so headless and host-context engines return `STRATA_ERROR_UNSUPPORTED` | none: unit, C# and Python tests check the null-engine and headless refusals |
 | Hidden meshes and flat normals *(ABI 1.19)* | `strata_set_mesh_visible` (a hidden mesh keeps its buffers but is not drawn, shadowed or picked) and `STRATA_MESH_FLAT_NORMALS` (the engine shades each triangle with its face normal and accepts degenerate ones); `set_mesh_visible` and `MESH_FLAT_NORMALS` in Python | `mesh_flat_hidden` (its scene also checks a ray passes the hidden mesh) |
+| Materials, spot lights, ortho camera, output *(ABI 1.20, unreleased)* | `strata_set_mesh_material`: alpha cutout in every pass (shadows included), emission (colour × strength × optional texture), tangent-space normal maps with no mesh tangents, two-sided faces; `STRATA_TEXTURE_SRGB`; `strata_set_spot_lights` (32 cone lights, shadowed ones sharing the four cube maps); `strata_camera_ortho` with shadow cascades fitted to the orthographic box; `strata_set_color_output` (exposure, Reinhard or ACES tonemap, sRGB encode) | `mat_cutout_shadows`, `mat_emissive_night`, `mat_normal_map`, `light_spot_cones`, `cam_ortho_shadows`, `output_srgb_aces` |
+
+<p align="center">
+  <img src="docs/media/materials-goldens.png" width="640" alt="The six ABI 1.20 goldens in a captioned grid: alpha cutout with holey shadows, emissive windows at night, normal maps, spot-light cones, an orthographic camera over pillars, and sRGB output with the ACES tonemap.">
+  <br><em>The ABI 1.20 goldens: cutout shadows, emission, normal maps, spot cones, orthographic shadows and sRGB + ACES output. See <a href="docs/MATERIALS.md">docs/MATERIALS.md</a> for each, and a before/after of the tonemap.</em>
+</p>
 
 Next come streaming and larger terrain (T2–T4), and meshes and materials
 (M1–M4). The optional OpenUSD modules (`modules/usd`, `modules/save`) are

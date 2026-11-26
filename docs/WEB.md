@@ -50,8 +50,9 @@ and against the desktop golden, both at the default tolerance.
 
 Limits that matter in a browser:
 
-- Strata needs 9 fragment texture units: it binds units 1 to 7 and uses the
-  device's last unit as a scratch unit while creating textures. WebGL 2's
+- Strata needs 11 fragment texture units (9 before ABI 1.20): it binds
+  units 1 to 9 (8 and 9 for a mesh's emissive texture and normal map) and
+  uses the device's last unit as a scratch unit while creating textures. WebGL 2's
   minimum is 16, but some phone browsers report fewer (13 has been seen), so
   the scratch unit is not fixed at 15.
 - Shadow maps are as on the desktop (cascades default to 2048², cube faces

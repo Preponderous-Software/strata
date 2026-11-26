@@ -1,0 +1,90 @@
+# Emission (ABI 1.20) at night: a dark street with fog and no sky. Two
+# blocks carry an emissive texture (a checker of warm lit and dark window
+# cells) times an emissive colour, so their windows glow with no light on
+# them; the block on the right is the same with STRATA_TEXTURE_SRGB windows,
+# decoded to linear on sampling, so its lit cells are a deeper orange and its
+# dark ones darker. A lit sign (a quad with a constant cyan emission, strength 2, over
+# a dark albedo) and an unlit pole cap (STRATA_MESH_UNLIT plus emission) glow
+# too. One warm point light shows that emission lights nothing around it:
+# the ground is lit by the lamp alone.
+size 480 270
+camera 0 6 18  0 3 0  50 0.3 200
+lighting sun 0.0 35  4 2048 60 0.6 1
+clear 0.02 0.02 0.04 1
+item cube 0 -0.5 0  60 1 60  0.35 0.35 0.38
+light point 0 3.5 4  10  1.0 0.8 0.55  2.5
+texture windows checker 64 64 4 4 1 0.8 0.45 0.05 0.05 0.07 nearest
+texture windows_srgb checker 64 64 4 4 1 0.8 0.45 0.05 0.05 0.07 nearest srgb
+
+# Left block: emissive windows.
+mesh 0.3 0.28 0.26
+vertices -7 0 2  -2 0 2  -2 7 2  -7 7 2
+vertices -2 0 -3  -7 0 -3  -7 7 -3  -2 7 -3
+vertices -2 0 2  -2 0 -3  -2 7 -3  -2 7 2
+vertices -7 0 -3  -7 0 2  -7 7 2  -7 7 -3
+vertices -7 7 2  -2 7 2  -2 7 -3  -7 7 -3
+vertices -7 0 -3  -2 0 -3  -2 0 2  -7 0 2
+uvs 0 3  2 3  2 0  0 0
+uvs 0 3  2 3  2 0  0 0
+uvs 0 3  2 3  2 0  0 0
+uvs 0 3  2 3  2 0  0 0
+uvs 0 0  0 0  0 0  0 0
+uvs 0 0  0 0  0 0  0 0
+triangles 0 1 2  0 2 3  4 5 6  4 6 7  8 9 10  8 10 11  12 13 14  12 14 15  16 17 18  16 18 19  20 21 22  20 22 23
+mesh_emissive 1 1 1 1.2 windows
+
+# Right block: the same windows, sRGB-decoded.
+mesh 0.3 0.28 0.26
+vertices 2 0 2  7 0 2  7 7 2  2 7 2
+vertices 7 0 -3  2 0 -3  2 7 -3  7 7 -3
+vertices 7 0 2  7 0 -3  7 7 -3  7 7 2
+vertices 2 0 -3  2 0 2  2 7 2  2 7 -3
+vertices 2 7 2  7 7 2  7 7 -3  2 7 -3
+vertices 2 0 -3  7 0 -3  7 0 2  2 0 2
+uvs 0 3  2 3  2 0  0 0
+uvs 0 3  2 3  2 0  0 0
+uvs 0 3  2 3  2 0  0 0
+uvs 0 3  2 3  2 0  0 0
+uvs 0 0  0 0  0 0  0 0
+uvs 0 0  0 0  0 0  0 0
+triangles 0 1 2  0 2 3  4 5 6  4 6 7  8 9 10  8 10 11  12 13 14  12 14 15  16 17 18  16 18 19  20 21 22  20 22 23
+mesh_emissive 1 1 1 1.2 windows_srgb
+
+# A sign on a post: a quad facing the camera with a constant emission.
+mesh 0.05 0.05 0.05
+vertices -1.6 3.2 3.01  1.6 3.2 3.01  1.6 4.4 3.01  -1.6 4.4 3.01
+uvs 0 1  1 1  1 0  0 0
+triangles 0 1 2  0 2 3
+mesh_emissive 0.1 0.8 1.0 2
+mesh 0.2 0.2 0.2
+vertices -0.12 0 3  0.12 0 3  0.12 3.2 3  -0.12 3.2 3
+vertices 0.12 0 2.8  -0.12 0 2.8  -0.12 3.2 2.8  0.12 3.2 2.8
+vertices 0.12 0 3  0.12 0 2.8  0.12 3.2 2.8  0.12 3.2 3
+vertices -0.12 0 2.8  -0.12 0 3  -0.12 3.2 3  -0.12 3.2 2.8
+vertices -0.12 3.2 3  0.12 3.2 3  0.12 3.2 2.8  -0.12 3.2 2.8
+vertices -0.12 0 2.8  0.12 0 2.8  0.12 0 3  -0.12 0 3
+uvs 0 1  1 1  1 0  0 0
+uvs 0 1  1 1  1 0  0 0
+uvs 0 1  1 1  1 0  0 0
+uvs 0 1  1 1  1 0  0 0
+uvs 0 0  0 0  0 0  0 0
+uvs 0 0  0 0  0 0  0 0
+triangles 0 1 2  0 2 3  4 5 6  4 6 7  8 9 10  8 10 11  12 13 14  12 14 15  16 17 18  16 18 19  20 21 22  20 22 23
+
+# An unlit cap on the post's top with an added red emission.
+mesh 0.2 0.05 0.05
+vertices -0.3 4.4 3.05  0.3 4.4 3.05  0.3 4.7 3.05  -0.3 4.7 3.05
+vertices 0.3 4.4 2.75  -0.3 4.4 2.75  -0.3 4.7 2.75  0.3 4.7 2.75
+vertices 0.3 4.4 3.05  0.3 4.4 2.75  0.3 4.7 2.75  0.3 4.7 3.05
+vertices -0.3 4.4 2.75  -0.3 4.4 3.05  -0.3 4.7 3.05  -0.3 4.7 2.75
+vertices -0.3 4.7 3.05  0.3 4.7 3.05  0.3 4.7 2.75  -0.3 4.7 2.75
+vertices -0.3 4.4 2.75  0.3 4.4 2.75  0.3 4.4 3.05  -0.3 4.4 3.05
+uvs 0 1  1 1  1 0  0 0
+uvs 0 1  1 1  1 0  0 0
+uvs 0 1  1 1  1 0  0 0
+uvs 0 1  1 1  1 0  0 0
+uvs 0 0  0 0  0 0  0 0
+uvs 0 0  0 0  0 0  0 0
+triangles 0 1 2  0 2 3  4 5 6  4 6 7  8 9 10  8 10 11  12 13 14  12 14 15  16 17 18  16 18 19  20 21 22  20 22 23
+mesh_unlit
+mesh_emissive 0.8 0.1 0.1 1

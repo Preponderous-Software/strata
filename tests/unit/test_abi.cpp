@@ -102,6 +102,28 @@ static_assert(offsetof(StrataWideLineVertex, width_pixels) == 28, "");
 static_assert(offsetof(StrataWideLineVertex, world_width) == 32, "");
 static_assert(STRATA_STRUCT_WIDE_LINE_VERTEX == 17, "");
 static_assert(STRATA_LINES_ROUND_CAPS == 0x2u, "");
+// ABI 1.20
+static_assert(sizeof(StrataMaterial) == 36, "");
+static_assert(offsetof(StrataMaterial, alpha_cutoff) == 0, "");
+static_assert(offsetof(StrataMaterial, emissive) == 4, "");
+static_assert(offsetof(StrataMaterial, emissive_strength) == 16, "");
+static_assert(offsetof(StrataMaterial, emissive_texture) == 20, "");
+static_assert(offsetof(StrataMaterial, normal_texture) == 24, "");
+static_assert(offsetof(StrataMaterial, normal_scale) == 28, "");
+static_assert(offsetof(StrataMaterial, flags) == 32, "");
+static_assert(sizeof(StrataSpotLight) == 56, "");
+static_assert(offsetof(StrataSpotLight, flags) == 52, "");
+static_assert(offsetof(StrataSpotLight, range) == 12, "");
+static_assert(offsetof(StrataSpotLight, direction) == 16, "");
+static_assert(offsetof(StrataSpotLight, intensity) == 28, "");
+static_assert(offsetof(StrataSpotLight, color) == 32, "");
+static_assert(offsetof(StrataSpotLight, inner_cone_degrees) == 44, "");
+static_assert(offsetof(StrataSpotLight, outer_cone_degrees) == 48, "");
+static_assert(STRATA_STRUCT_MATERIAL == 18 && STRATA_STRUCT_SPOT_LIGHT == 19, "");
+static_assert(STRATA_MATERIAL_DOUBLE_SIDED == 0x1u && STRATA_SPOT_LIGHT_CAST_SHADOWS == 0x1u, "");
+static_assert(STRATA_TEXTURE_SRGB == 0x10u && STRATA_MAX_SPOT_LIGHTS == 32, "");
+static_assert(STRATA_OUTPUT_SRGB == 0x1u && STRATA_OUTPUT_TONEMAP_REINHARD == 0x2u && STRATA_OUTPUT_TONEMAP_ACES == 0x4u,
+              "");
 static_assert(STRATA_ABI_VERSION == 1u, "ABI 1 callers must keep working: additions bump STRATA_ABI_MINOR");
 #if UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu
 static_assert(sizeof(StrataEngineDesc) == 48, "64-bit targets");
@@ -111,7 +133,42 @@ TEST(abi_version_is_reported) {
     CHECK(strata_abi_version() == STRATA_ABI_VERSION);
     CHECK(std::strlen(strata_version_string()) > 0);
     CHECK(strata_abi_minor() == STRATA_ABI_MINOR);
-    CHECK(strata_abi_minor() >= 19u);
+    CHECK(strata_abi_minor() >= 20u);
+}
+
+TEST(abi_1_20_materials_spots_and_output_reject_a_null_engine) {
+    const StrataMaterial material{};
+    CHECK(strata_set_mesh_material(nullptr, 1, &material) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_set_mesh_material(nullptr, 1, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_set_spot_lights(nullptr, nullptr, 0) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_set_color_output(nullptr, 0, 1.0f) == STRATA_ERROR_INVALID_ARGUMENT);
+}
+
+TEST(abi_1_20_material_and_spot_light_layouts_are_queryable) {
+    CHECK(strata_struct_size(STRATA_STRUCT_MATERIAL) == 36);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_MATERIAL, 6) == 32);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_MATERIAL, 7) == -1);
+    CHECK(strata_struct_size(STRATA_STRUCT_SPOT_LIGHT) == 56);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_SPOT_LIGHT, 2) == 16);
+    CHECK(strata_struct_field_offset(STRATA_STRUCT_SPOT_LIGHT, 7) == 52);
+    CHECK(strata_struct_size(STRATA_STRUCT_SPOT_LIGHT + 1) == -1);
+}
+
+TEST(abi_1_20_camera_ortho_builds_an_orthographic_projection) {
+    const float eye[3] = {0, 0, 10}, target[3] = {0, 0, 0}, up[3] = {0, 1, 0};
+    StrataCamera c{};
+    CHECK(strata_camera_ortho(eye, target, up, 5.0f, 2.0f, 1.0f, 21.0f, &c) == STRATA_OK);
+    CHECK(std::fabs(c.projection[0] - 1.0f / 10.0f) < 1e-6f);  // half width 10
+    CHECK(std::fabs(c.projection[5] - 1.0f / 5.0f) < 1e-6f);   // half height 5
+    CHECK(c.projection[3] == 0.0f && c.projection[7] == 0.0f && c.projection[11] == 0.0f);
+    CHECK(c.projection[15] == 1.0f);
+    CHECK(c.near_plane == 1.0f && c.far_plane == 21.0f);
+    // A view point 11 units in front lands at depth 0 (the middle of -1..1).
+    const float z = -11.0f;
+    CHECK(std::fabs(c.projection[10] * z + c.projection[14]) < 1e-6f);
+    CHECK(strata_camera_ortho(eye, target, up, 0.0f, 1.0f, 1.0f, 2.0f, &c) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_camera_ortho(eye, target, up, 1.0f, 1.0f, 2.0f, 2.0f, &c) == STRATA_ERROR_INVALID_ARGUMENT);
+    CHECK(strata_camera_ortho(eye, target, up, 1.0f, 1.0f, 1.0f, 2.0f, nullptr) == STRATA_ERROR_INVALID_ARGUMENT);
 }
 
 TEST(abi_1_19_mesh_visibility_rejects_a_null_engine) {
@@ -218,7 +275,7 @@ TEST(abi_1_8_calls_reject_bad_arguments_without_a_context) {
     CHECK(strata_struct_field_offset(STRATA_STRUCT_RAY_HIT, 3) == 12);
     CHECK(strata_struct_field_offset(STRATA_STRUCT_RAY_HIT, 4) == 24);
     CHECK(strata_struct_field_offset(STRATA_STRUCT_RAY_HIT, 5) == -1);
-    CHECK(strata_struct_size(18) == -1);  // one past the last struct id (ABI 1.13)
+    CHECK(strata_struct_size(20) == -1);  // one past the last struct id (ABI 1.20)
     const uint8_t texel[4] = {255, 255, 255, 255};
     StrataEngine* engine = reinterpret_cast<StrataEngine*>(0x1);  // never dereferenced: pointers are checked first
     CHECK(strata_update_texture_rgba8(nullptr, 1, 0, 0, 1, 1, texel) == STRATA_ERROR_INVALID_ARGUMENT);

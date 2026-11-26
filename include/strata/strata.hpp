@@ -83,6 +83,13 @@ public:
     // Replaces the point lights (copied). count 0 removes them; at most
     // STRATA_MAX_POINT_LIGHTS. Validates every light before changing any.
     void setPointLights(const StrataPointLight* lights, size_t count);
+    // ABI 1.20. Replaces the spot lights (copied), as setPointLights does;
+    // at most STRATA_MAX_SPOT_LIGHTS, and shadow casters of both lists
+    // together at most STRATA_MAX_SHADOWED_POINT_LIGHTS.
+    void setSpotLights(const StrataSpotLight* lights, size_t count);
+    // ABI 1.20. Exposure, tonemap and sRGB encode of the lit scene; see
+    // strata_set_color_output.
+    void setColorOutput(uint32_t flags, float exposure);
     // Replaces the terrain tile (copied into a mesh); nullptr removes it.
     void setTerrain(const StrataTerrainTile* tile);
     // Adds a static mesh (copied); returns its id, never 0. Validates first;
@@ -101,6 +108,9 @@ public:
     // ABI 1.19. Hides a mesh (skipped when drawing, casting shadows and
     // picking) or shows it again, keeping its GPU buffers.
     void setMeshVisible(uint32_t id, bool visible);
+    // ABI 1.20. A mesh's material (copied; nullptr restores the default):
+    // alpha cutout, emission, normal map, two-sided faces.
+    void setMeshMaterial(uint32_t id, const StrataMaterial* material);
     // ABI 1.8. Replaces a width x height rectangle at (x, y) of a texture
     // (RGBA8, rows top to bottom, copied); rebuilds its mip chain if it has
     // one. Throws INVALID_ARGUMENT for an unknown id or a rectangle outside
@@ -169,5 +179,10 @@ StrataSolarPosition solarPosition(double unixSecondsUtc, double latitudeDegrees,
 // Right-handed look-at view and an OpenGL (depth -1..1) perspective.
 StrataCamera cameraLookAt(const float eye[3], const float target[3], const float up[3], float fovYDegrees,
                           float aspect, float nearPlane, float farPlane);
+
+// ABI 1.20. The same view and an OpenGL (depth -1..1) orthographic projection
+// halfHeight world units tall above the view axis, halfHeight * aspect wide.
+StrataCamera cameraOrtho(const float eye[3], const float target[3], const float up[3], float halfHeight,
+                         float aspect, float nearPlane, float farPlane);
 
 }  // namespace strata

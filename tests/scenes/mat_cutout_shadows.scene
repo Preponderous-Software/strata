@@ -1,0 +1,57 @@
+# Alpha cutout and two-sided faces (ABI 1.20), in the morning sun with four
+# cascades, fog and sky. Three cards, each a single quad textured with a grid
+# of round green blobs on fully transparent texels:
+#  - left: alpha_cutoff 0.5 and STRATA_MATERIAL_DOUBLE_SIDED, turned so the
+#    camera sees its back face, which is lit with its normal flipped. Only the
+#    blobs draw, and only the blobs' shadows fall on the ground.
+#  - middle: two cutout cards crossed at right angles, the usual foliage
+#    billboard; blobs of each show through the holes of the other.
+#  - right: the same texture with no cutoff, for comparison: an opaque
+#    rectangle (its transparent texels keep the blob colour) whose
+#    shadow is a solid rectangle. Being one-sided, it is culled from behind.
+size 480 270
+camera 0 5 14  0 1.6 0  50 0.3 200
+lighting sun 0.32 35  4 2048 40 0.6 1
+clear 0 0 0 1 sky
+item cube 0 -0.5 0  40 1 40  0.62 0.6 0.55
+texture blobs discs 128 128 3 3 0.3 0.65 0.22 mipmaps
+
+# Left: a two-sided cutout card, turned 200 degrees so its back faces the camera.
+mesh 1 1 1
+vertices -1.5 0 0  1.5 0 0  1.5 3 0  -1.5 3 0
+uvs 0 1  1 1  1 0  0 0
+triangles 0 1 2  0 2 3
+mesh_texture blobs
+mesh_cutoff 0.5
+mesh_double_sided
+mesh_transform -4.2 0 0  0 1 0  0 200 1
+
+# Middle: two crossed cutout cards.
+mesh 1 1 1
+vertices -1.5 0 0  1.5 0 0  1.5 3 0  -1.5 3 0
+uvs 0 1  1 1  1 0  0 0
+triangles 0 1 2  0 2 3
+mesh_texture blobs
+mesh_cutoff 0.5
+mesh_double_sided
+mesh_transform 0 0 0  0 1 0  0 45 1
+mesh 1 1 1
+vertices -1.5 0 0  1.5 0 0  1.5 3 0  -1.5 3 0
+uvs 0 1  1 1  1 0  0 0
+triangles 0 1 2  0 2 3
+mesh_texture blobs
+mesh_cutoff 0.5
+mesh_double_sided
+mesh_transform 0 0 0  0 1 0  0 -45 1
+
+# Right: the same texture without a cutoff.
+mesh 1 1 1
+vertices -1.5 0 0  1.5 0 0  1.5 3 0  -1.5 3 0
+uvs 0 1  1 1  1 0  0 0
+triangles 0 1 2  0 2 3
+mesh_texture blobs
+mesh_transform 4.2 0 0  0 1 0  0 -20 1
+
+# A ray through the middle of a hole of the left card (between blobs) still
+# hits the card: picking sees geometry, not texels.
+expect_ray -4.2 1.5 6  0 0 -1  20 0

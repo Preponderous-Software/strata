@@ -153,9 +153,11 @@ bool hasDepthClampExtension() {
 }
 
 // Texture units Strata binds (0 unused, 1 cascades, 2 point shadows, 3 the
-// overlay font, 4 a mesh's texture, 5-7 the other point shadow cubes), saved
+// overlay font, 4 a mesh's texture, 5-7 the other point shadow cubes, and
+// since ABI 1.20 8 a mesh's emissive texture and 9 its normal map), saved
 // and restored for a host context.
-constexpr int kHostTextureUnits = kFirstExtraCubeUnit + kMaxEmulatedCubes - 1;
+constexpr int kMeshMaterialUnits = 2;
+constexpr int kHostTextureUnits = kFirstExtraCubeUnit + kMaxEmulatedCubes - 1 + kMeshMaterialUnits;
 // Textures are bound to a scratch unit while they are created, so no unit a
 // pass uses is disturbed; no shader samples it. It is the device's last
 // fragment unit, so a device needs only one more than Strata binds. It used
@@ -265,7 +267,7 @@ public:
         record.desc = desc;
         record.desc.initialData = nullptr;
         const bool cube = desc.cube && desc.layers > 0;
-        const GLenum format = desc.format == TextureFormat::RGBA8 ? GL_RGBA8
+        const GLenum format = desc.format == TextureFormat::RGBA8 ? (desc.srgb ? GL_SRGB8_ALPHA8 : GL_RGBA8)
                               : desc.format == TextureFormat::R8 ? GL_R8
                                                                  : GL_DEPTH_COMPONENT32F;
         const bool mipmaps = desc.mipmaps && desc.layers == 0 && desc.format == TextureFormat::RGBA8;

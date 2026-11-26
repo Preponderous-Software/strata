@@ -62,6 +62,25 @@
 //   expect_ray <ox oy oz> <dx dy dz> <max_distance> <mesh_index|none> [distance]
 //                                 (ABI 1.8: strata_raycast_meshes must hit that mesh, counted from 0 in
 //                                  file order, at that distance within 0.001, or hit nothing)
+//   camera_ortho <eye x y z> <target x y z> <half_height> <near> <far>
+//                                 (ABI 1.20: strata_camera_ortho instead of the perspective camera)
+//   light spot <px py pz> <range> <dx dy dz> <r g b> <intensity> <inner_deg> <outer_deg> [shadow]
+//                                 (ABI 1.20: strata_set_spot_lights; shadow is STRATA_SPOT_LIGHT_CAST_SHADOWS)
+//   output [srgb] [reinhard|aces] [exposure <e>]
+//                                 (ABI 1.20: strata_set_color_output; at least one option)
+//   texture <name> discs <w> <h> <cells_u> <cells_v> <r g b> [options]
+//                                 (ABI 1.20 test asset: a round blob per cell, opaque inside and fully
+//                                  transparent between, for alpha cutout; texture options as above, plus
+//                                  srgb for STRATA_TEXTURE_SRGB)
+//   texture <name> bumps <w> <h> <cells_u> <cells_v> [options]
+//                                 (ABI 1.20 test asset: a tangent-space normal map of one dome per cell)
+//   mesh_cutoff <alpha>           (ABI 1.20: the current mesh's material alpha_cutoff)
+//   mesh_emissive <r g b> <strength> [<texture>]
+//                                 (ABI 1.20: the current mesh's emission, optionally times a texture)
+//   mesh_normal_map <texture> <scale>
+//                                 (ABI 1.20: the current mesh's normal map)
+//   mesh_double_sided             (ABI 1.20: STRATA_MATERIAL_DOUBLE_SIDED)
+//                                 (a mesh with any mesh_* material line gets strata_set_mesh_material once added)
 //   expect_depth <x> <y> <distance|inf>
 //                                 (ABI 1.9: strata_read_depth_f32 must read that planar distance at pixel
 //                                  (x, y) of the captured frame, top row first, within 0.1 %, or +infinity;
@@ -86,6 +105,9 @@ struct SceneMesh {
     bool translucent = false;  // ABI 1.11; the alpha is color[3]
     bool flat = false;         // ABI 1.19: STRATA_MESH_FLAT_NORMALS
     bool hidden = false;       // ABI 1.19: strata_set_mesh_visible(.., 0) after it is added
+    bool hasMaterial = false;  // ABI 1.20: strata_set_mesh_material after it is added
+    StrataMaterial material{};  // textures are filled in by name when it is added
+    std::string emissiveTexture, normalTexture;
     bool hasTransform = false;
     float transform[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
     bool textured() const { return !uvs.empty() || !texture.empty() || unlit || translucent || flat; }
@@ -100,6 +122,8 @@ struct Scene {
     float eye[3] = {0, 10, 20};
     float target[3] = {0, 0, 0};
     float fovY = 60.0f;
+    bool ortho = false;  // ABI 1.20: camera_ortho
+    float orthoHalfHeight = 1.0f;
     float nearPlane = 0.1f;
     float farPlane = 300.0f;
     StrataLighting lighting{};
@@ -131,6 +155,10 @@ struct Scene {
     };
     std::vector<Label> labels;
     std::vector<StrataPointLight> pointLights;
+    std::vector<StrataSpotLight> spotLights;  // ABI 1.20
+    bool hasOutput = false;                   // ABI 1.20
+    uint32_t outputFlags = 0;
+    float outputExposure = 1.0f;
     bool hasTerrain = false;
     StrataTerrainTile terrain{};  // heights/colors point into the vectors below once loaded
     std::vector<float> terrainHeights;

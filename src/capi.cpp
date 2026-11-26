@@ -3,6 +3,7 @@
 // Every entry point validates its pointers, catches every exception and turns
 // it into a status code plus thread-local error text. Nothing throws across
 // this boundary and nothing here holds on to a caller's pointer.
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <exception>
@@ -137,6 +138,18 @@ const int32_t kWideLineVertexFields[] = {
     STRATA_OFFSET(StrataWideLineVertex, position), STRATA_OFFSET(StrataWideLineVertex, color),
     STRATA_OFFSET(StrataWideLineVertex, width_pixels), STRATA_OFFSET(StrataWideLineVertex, world_width)};
 
+const int32_t kMaterialFields[] = {
+    STRATA_OFFSET(StrataMaterial, alpha_cutoff),     STRATA_OFFSET(StrataMaterial, emissive),
+    STRATA_OFFSET(StrataMaterial, emissive_strength), STRATA_OFFSET(StrataMaterial, emissive_texture),
+    STRATA_OFFSET(StrataMaterial, normal_texture),   STRATA_OFFSET(StrataMaterial, normal_scale),
+    STRATA_OFFSET(StrataMaterial, flags)};
+
+const int32_t kSpotLightFields[] = {
+    STRATA_OFFSET(StrataSpotLight, position),           STRATA_OFFSET(StrataSpotLight, range),
+    STRATA_OFFSET(StrataSpotLight, direction),          STRATA_OFFSET(StrataSpotLight, intensity),
+    STRATA_OFFSET(StrataSpotLight, color),              STRATA_OFFSET(StrataSpotLight, inner_cone_degrees),
+    STRATA_OFFSET(StrataSpotLight, outer_cone_degrees), STRATA_OFFSET(StrataSpotLight, flags)};
+
 #define STRATA_TABLE(type, fields) \
     FieldTable { static_cast<int32_t>(sizeof(type)), fields, static_cast<int32_t>(sizeof(fields) / sizeof(fields[0])) }
 
@@ -150,7 +163,8 @@ const FieldTable* fieldTable(int32_t structId) {
         STRATA_TABLE(StrataLineVertex, kLineVertexFields), STRATA_TABLE(StrataPoint, kPointFields),
         STRATA_TABLE(StrataText, kTextFields),             STRATA_TABLE(StrataSolarPosition, kSolarPositionFields),
         STRATA_TABLE(StrataTexturedMesh, kTexturedMeshFields), STRATA_TABLE(StrataRayHit, kRayHitFields),
-        STRATA_TABLE(StrataRect, kRectFields),             STRATA_TABLE(StrataWideLineVertex, kWideLineVertexFields)};
+        STRATA_TABLE(StrataRect, kRectFields),             STRATA_TABLE(StrataWideLineVertex, kWideLineVertexFields),
+        STRATA_TABLE(StrataMaterial, kMaterialFields),     STRATA_TABLE(StrataSpotLight, kSpotLightFields)};
     if (structId < 0 || structId >= static_cast<int32_t>(sizeof tables / sizeof tables[0])) return nullptr;
     return &tables[structId];
 }
@@ -286,6 +300,16 @@ StrataStatus strata_camera_look_at(const float eye[3], const float target[3], co
     return guard([&] { *out = strata::cameraLookAt(eye, target, up, fov_y_degrees, aspect, near_plane, far_plane); });
 }
 
+StrataStatus strata_camera_ortho(const float eye[3], const float target[3], const float up[3], float half_height,
+                                 float aspect, float near_plane, float far_plane, StrataCamera* out) {
+    if (!eye || !target || !up || !out) return invalid("eye, target, up and out must not be NULL");
+    if (!(half_height > 0.0f) || !std::isfinite(half_height) || !(aspect > 0.0f) || !std::isfinite(aspect) ||
+        !(near_plane > 0.0f) || !(far_plane > near_plane) || !std::isfinite(far_plane)) {
+        return invalid("need half_height > 0, aspect > 0 and 0 < near < far, all finite");
+    }
+    return guard([&] { *out = strata::cameraOrtho(eye, target, up, half_height, aspect, near_plane, far_plane); });
+}
+
 StrataStatus strata_lighting_defaults(int32_t mode, StrataLighting* out) {
     if (!out) return invalid("out is NULL");
     if (mode != STRATA_LIGHTING_LEGACY && mode != STRATA_LIGHTING_SUN && mode != STRATA_LIGHTING_SPACE) {
@@ -350,6 +374,23 @@ StrataStatus strata_set_mesh_transform(StrataEngine* engine, uint32_t id, const 
 StrataStatus strata_set_mesh_visible(StrataEngine* engine, uint32_t id, int32_t visible) {
     if (!engine) return invalid("engine must not be NULL");
     return guard([&] { engine->engine->setMeshVisible(id, visible != 0); });
+}
+
+StrataStatus strata_set_mesh_material(StrataEngine* engine, uint32_t id, const StrataMaterial* material) {
+    if (!engine) return invalid("engine must not be NULL");
+    return guard([&] { engine->engine->setMeshMaterial(id, material); });
+}
+
+StrataStatus strata_set_spot_lights(StrataEngine* engine, const StrataSpotLight* lights, int32_t count) {
+    if (!engine) return invalid("engine is NULL");
+    if (count < 0) return invalid("count is negative");
+    if (count > 0 && !lights) return invalid("lights is NULL with a non-zero count");
+    return guard([&] { engine->engine->setSpotLights(lights, static_cast<size_t>(count)); });
+}
+
+StrataStatus strata_set_color_output(StrataEngine* engine, uint32_t flags, float exposure) {
+    if (!engine) return invalid("engine is NULL");
+    return guard([&] { engine->engine->setColorOutput(flags, exposure); });
 }
 
 StrataStatus strata_create_texture_rgba8(StrataEngine* engine, int32_t width, int32_t height, const uint8_t* rgba,

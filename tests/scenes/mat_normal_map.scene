@@ -1,0 +1,51 @@
+# Normal maps (ABI 1.20) under a low morning sun, no fog. Three panels lie
+# on the ground with the same 4 x 4 grid of domes in a tangent-space normal
+# map, the tangent frame derived per pixel (no tangents in the mesh):
+#  - left: scale 1, uvs as usual: each dome is lit on its sun side (+X,
+#    towards the right of the frame) and dark on the far side.
+#  - middle: scale 1 with the uvs mirrored in u, which a derived frame
+#    handles: the domes still light on the sun side.
+#  - right: scale 0, which flattens the map away: an even, flat panel.
+# Behind them a box wears the map on its four sides (two domes across each),
+# showing the frame follows each face; the panel's shadow falls behind it.
+size 480 270
+camera 0 7 8  0 0 -2  50 0.3 200
+lighting sun 0.3 55  4 2048 40 0.6 0
+clear 0.5 0.6 0.75 1
+item cube 0 -0.5 0  40 1 40  0.5 0.5 0.5
+texture domes bumps 128 128 4 4
+
+mesh 0.8 0.75 0.7
+vertices -6.5 0.01 1  -2.5 0.01 1  -2.5 0.01 -3  -6.5 0.01 -3
+uvs 0 1  1 1  1 0  0 0
+triangles 0 1 2  0 2 3
+mesh_normal_map domes 1
+
+mesh 0.8 0.75 0.7
+vertices -2 0.01 1  2 0.01 1  2 0.01 -3  -2 0.01 -3
+uvs 1 1  0 1  0 0  1 0
+triangles 0 1 2  0 2 3
+mesh_normal_map domes 1
+
+mesh 0.8 0.75 0.7
+vertices 2.5 0.01 1  6.5 0.01 1  6.5 0.01 -3  2.5 0.01 -3
+uvs 0 1  1 1  1 0  0 0
+triangles 0 1 2  0 2 3
+mesh_normal_map domes 0
+
+mesh 0.7 0.72 0.8
+vertices -1.5 0 -4.5  1.5 0 -4.5  1.5 3 -4.5  -1.5 3 -4.5
+vertices 1.5 0 -7.5  -1.5 0 -7.5  -1.5 3 -7.5  1.5 3 -7.5
+vertices 1.5 0 -4.5  1.5 0 -7.5  1.5 3 -7.5  1.5 3 -4.5
+vertices -1.5 0 -7.5  -1.5 0 -4.5  -1.5 3 -4.5  -1.5 3 -7.5
+vertices -1.5 3 -4.5  1.5 3 -4.5  1.5 3 -7.5  -1.5 3 -7.5
+vertices -1.5 0 -7.5  1.5 0 -7.5  1.5 0 -4.5  -1.5 0 -4.5
+uvs 0 2  2 2  2 0  0 0
+uvs 0 2  2 2  2 0  0 0
+uvs 0 2  2 2  2 0  0 0
+uvs 0 2  2 2  2 0  0 0
+uvs 0 0  0 0  0 0  0 0
+uvs 0 0  0 0  0 0  0 0
+triangles 0 1 2  0 2 3  4 5 6  4 6 7  8 9 10  8 10 11  12 13 14  12 14 15  16 17 18  16 18 19  20 21 22  20 22 23
+mesh_normal_map domes 1
+mesh_transform 0 0 0  0 1 0  0 30 1

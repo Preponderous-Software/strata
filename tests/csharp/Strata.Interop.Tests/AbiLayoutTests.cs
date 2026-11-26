@@ -144,6 +144,29 @@ namespace Strata.Interop.Tests {
         }
 
         [Fact]
+        public unsafe void Abi120StructsMatchNativeAndCallsRejectANullEngine() {
+            Assert.Equal(36, Unsafe.SizeOf<StrataMaterial>());
+            AssertLayout<StrataMaterial>(StrataAbi.StructMaterial, "alpha_cutoff", "emissive", "emissive_strength",
+                                         "emissive_texture", "normal_texture", "normal_scale", "flags");
+            Assert.Equal(56, Unsafe.SizeOf<StrataSpotLight>());
+            AssertLayout<StrataSpotLight>(StrataAbi.StructSpotLight, "position", "range", "direction", "intensity",
+                                          "color", "inner_cone_degrees", "outer_cone_degrees", "flags");
+            var material = new StrataMaterial();
+            var spot = new StrataSpotLight();
+            Assert.Equal(1, StrataNative.strata_set_mesh_material(IntPtr.Zero, 1, &material));  // STRATA_ERROR_INVALID_ARGUMENT
+            Assert.Equal(1, StrataNative.strata_set_spot_lights(IntPtr.Zero, &spot, 1));
+            Assert.Equal(1, StrataNative.strata_set_color_output(IntPtr.Zero, StrataAbi.OutputSrgb, 1.0f));
+            float* eye = stackalloc float[3] { 0, 0, 5 };
+            float* target = stackalloc float[3] { 0, 0, 0 };
+            float* up = stackalloc float[3] { 0, 1, 0 };
+            var camera = new StrataCamera();
+            Assert.Equal(0, StrataNative.strata_camera_ortho(eye, target, up, 4.0f, 2.0f, 1.0f, 20.0f, &camera));
+            Assert.Equal(1.0f / 8.0f, camera.projection[0], 6);
+            Assert.Equal(0.0f, camera.projection[11]);
+            Assert.Equal(1.0f, camera.projection[15]);
+        }
+
+        [Fact]
         public unsafe void WideLineVertexMatchesNativeAndAbi113CallRejectsANullEngine() {
             Assert.Equal(36, Unsafe.SizeOf<StrataWideLineVertex>());
             AssertLayout<StrataWideLineVertex>(StrataAbi.StructWideLineVertex, "position", "color", "width_pixels", "world_width");

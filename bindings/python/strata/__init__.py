@@ -43,6 +43,7 @@ from ._abi import (
     LineVertex,
     Lighting,
     LogFn,
+    Material,
     Mesh,
     Point,
     PointLight,
@@ -50,6 +51,7 @@ from ._abi import (
     Rect,
     RenderItem,
     SolarPosition,
+    SpotLight,
     StrataAbiError,
     StrataError,
     TerrainTile,
@@ -164,6 +166,28 @@ class Library:
                 ctypes.byref(camera),
             ),
             "strata_camera_look_at",
+        )
+        return camera
+
+    def ortho(
+        self,
+        eye: Sequence[float],
+        target: Sequence[float],
+        up: Sequence[float] = (0.0, 1.0, 0.0),
+        half_height: float = 10.0,
+        aspect: float = 16.0 / 9.0,
+        near_plane: float = 0.1,
+        far_plane: float = 300.0,
+    ) -> Camera:
+        """ABI 1.20. strata_camera_ortho: the same view as look_at with an
+        orthographic projection half_height world units above the view axis."""
+        camera = Camera()
+        self.check(
+            self.require("strata_camera_ortho")(
+                _floats(eye, 3), _floats(target, 3), _floats(up, 3), half_height, aspect, near_plane, far_plane,
+                ctypes.byref(camera),
+            ),
+            "strata_camera_ortho",
         )
         return camera
 
@@ -340,6 +364,16 @@ class Engine:
         arr, count = _array(PointLight, lights)
         self._call("strata_set_point_lights", arr, count)
 
+    def set_spot_lights(self, lights: Iterable[SpotLight]) -> None:
+        """ABI 1.20. Replaces the spot lights (the point lights are kept)."""
+        arr, count = _array(SpotLight, lights)
+        self._call("strata_set_spot_lights", arr, count)
+
+    def set_color_output(self, flags: int = 0, exposure: float = 1.0) -> None:
+        """ABI 1.20. OUTPUT_* flags (at most one tonemap) and an exposure in
+        (0, 64]; the defaults are the unencoded output of earlier libraries."""
+        self._call("strata_set_color_output", flags, exposure)
+
     def set_terrain(self, tile: Optional[TerrainTile]) -> None:
         """ABI 1.3. None removes the terrain."""
         self._call("strata_set_terrain", ctypes.byref(tile) if tile is not None else None)
@@ -434,6 +468,11 @@ class Engine:
         raycast_meshes skips it) or shows it again, keeping its GPU buffers,
         so swapping between large meshes re-uploads nothing."""
         self._call("strata_set_mesh_visible", mesh_id, 1 if visible else 0)
+
+    def set_mesh_material(self, mesh_id: int, material: Optional[Material]) -> None:
+        """ABI 1.20. Alpha cutout, emission, normal map and two-sided faces;
+        None restores the default (all zero)."""
+        self._call("strata_set_mesh_material", mesh_id, ctypes.byref(material) if material is not None else None)
 
     def create_texture_rgba8(self, width: int, height: int, rgba: bytes, flags: int = 0) -> int:
         """ABI 1.7. rgba is width * height * 4 bytes, top row first. Returns the texture id.
