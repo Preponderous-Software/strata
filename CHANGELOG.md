@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.12.0
+
+Meshes get materials (alpha cutout that shadows honour, emission, normal maps
+without mesh tangents, two-sided faces), lights get cones, the camera gets an
+orthographic projection with fitted cascades, and the lit scene can be
+tonemapped and sRGB-encoded (ABI 1.20). Clustered light culling lets a scene
+hold thousands of point and spot lights, each fragment evaluating only the
+lights that reach it, on the desktop and in WebGL 2 alike (ABI 1.21). A new
+optional module loads glTF 2.0 scenes through the C ABI, with
+`strata-gltf-view` and `libstrata_gltf` for bindings. Every addition is
+compatible (`STRATA_ABI_VERSION` stays 1), and with the defaults every
+earlier golden is drawn bit for bit.
+
 - Mesh materials, spot lights, an orthographic camera and an optional
   tonemapped sRGB output (ABI 1.20; C#, Python; compatible,
   `STRATA_ABI_VERSION` stays 1; the defaults draw the same pixels as 1.19):

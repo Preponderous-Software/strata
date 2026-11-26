@@ -101,8 +101,11 @@ taken from the project itself.
 
 ## Status
 
-`v0.11.0` lets a host hide a mesh without freeing it and shade a mesh flat
-(ABI 1.19: `strata_set_mesh_visible`, `STRATA_MESH_FLAT_NORMALS`), and splits
+`v0.12.0` adds mesh materials, spot lights, an orthographic camera and a
+tonemapped sRGB output (ABI 1.20), clustered light culling for thousands of
+lights (ABI 1.21), and a glTF 2.0 loader module (`modules/gltf`,
+`strata-gltf-view`). `v0.11.0` let a host hide a mesh without freeing it and shade a mesh flat
+(ABI 1.19: `strata_set_mesh_visible`, `STRATA_MESH_FLAT_NORMALS`), and split
 the drive channel and `strata-golden` into a core and ports with no change a
 host can see. `v0.10.0` made the browser grid view much lighter on phones (ABI 1.18:
 `STRATA_FLAG_NO_HOST_STATE`; adaptive quality that steps back up; streamed
@@ -128,8 +131,8 @@ texture updates and relative mouse mode (ABI 1.8); `v0.3.0` static meshes
 (ABI 1.4), unlit overlays and space lighting (**O1**, ABI 1.5) and
 `modules/sim`; `v0.2.0` point lights (**L3**), point-light shadows (**L4**)
 and a terrain tile (**T1**); and `v0.1.0` the skeleton and lighting
-**L1–L2**. The C ABI is 1.19 (`v0.11.0`: hidden meshes and engine-made flat
-normals): each addition is compatible, and every ABI
+**L1–L2**. The C ABI is 1.21 (`v0.12.0`: materials, spot lights, an
+orthographic camera, colour output and clustered light culling): each addition is compatible, and every ABI
 1.0 host still works.
 
 | Milestone | What it is | Golden images |
@@ -156,8 +159,8 @@ normals): each addition is compatible, and every ABI
 | Light levels *(ABI 1.16)* | `strata_set_ambient` (ambient × tint + lift, SUN and SPACE) and `strata_set_sun_intensity` (the sun or moon scaled and tinted, direction and shadows kept), staying across `strata_set_lighting`; the defaults draw the same pixels as 1.12 | `sun_levels_overcast` (beside `l2_csm_morning`) |
 | Window fullscreen *(ABI 1.17)* | `strata_set_fullscreen` (borderless at the desktop's resolution, or back to a window at its earlier size; the browser's Fullscreen API on the web) and `strata_is_fullscreen`; window surface only, so headless and host-context engines return `STRATA_ERROR_UNSUPPORTED` | none: unit, C# and Python tests check the null-engine and headless refusals |
 | Hidden meshes and flat normals *(ABI 1.19)* | `strata_set_mesh_visible` (a hidden mesh keeps its buffers but is not drawn, shadowed or picked) and `STRATA_MESH_FLAT_NORMALS` (the engine shades each triangle with its face normal and accepts degenerate ones); `set_mesh_visible` and `MESH_FLAT_NORMALS` in Python | `mesh_flat_hidden` (its scene also checks a ray passes the hidden mesh) |
-| Materials, spot lights, ortho camera, output *(ABI 1.20, unreleased)* | `strata_set_mesh_material`: alpha cutout in every pass (shadows included), emission (colour × strength × optional texture), tangent-space normal maps with no mesh tangents, two-sided faces; `STRATA_TEXTURE_SRGB`; `strata_set_spot_lights` (32 cone lights, shadowed ones sharing the four cube maps); `strata_camera_ortho` with shadow cascades fitted to the orthographic box; `strata_set_color_output` (exposure, Reinhard or ACES tonemap, sRGB encode) | `mat_cutout_shadows`, `mat_emissive_night`, `mat_normal_map`, `light_spot_cones`, `cam_ortho_shadows`, `output_srgb_aces` |
-| Clustered light culling *(ABI 1.21, unreleased)* | `strata_set_light_culling(engine, STRATA_LIGHT_CULLING_CLUSTERED)`: up to 4096 point and 4096 spot lights, listed per cluster of a 16 × 9 × 24 view-frustum grid on the CPU each frame, so each fragment evaluates only the lights that reach it (WebGL 2 friendly: the lists are a float texture); off by default, where the 32 + 32 cap and its exact pixels stay; `strata_get_light_stats` | `light_clustered_street_night` (240 point and 16 spot lights) |
+| Materials, spot lights, ortho camera, output *(ABI 1.20)* | `strata_set_mesh_material`: alpha cutout in every pass (shadows included), emission (colour × strength × optional texture), tangent-space normal maps with no mesh tangents, two-sided faces; `STRATA_TEXTURE_SRGB`; `strata_set_spot_lights` (32 cone lights, shadowed ones sharing the four cube maps); `strata_camera_ortho` with shadow cascades fitted to the orthographic box; `strata_set_color_output` (exposure, Reinhard or ACES tonemap, sRGB encode) | `mat_cutout_shadows`, `mat_emissive_night`, `mat_normal_map`, `light_spot_cones`, `cam_ortho_shadows`, `output_srgb_aces` |
+| Clustered light culling *(ABI 1.21)* | `strata_set_light_culling(engine, STRATA_LIGHT_CULLING_CLUSTERED)`: up to 4096 point and 4096 spot lights, listed per cluster of a 16 × 9 × 24 view-frustum grid on the CPU each frame, so each fragment evaluates only the lights that reach it (WebGL 2 friendly: the lists are a float texture); off by default, where the 32 + 32 cap and its exact pixels stay; `strata_get_light_stats` | `light_clustered_street_night` (240 point and 16 spot lights) |
 
 <p align="center">
   <img src="docs/media/materials-goldens.png" width="640" alt="The six ABI 1.20 goldens in a captioned grid: alpha cutout with holey shadows, emissive windows at night, normal maps, spot-light cones, an orthographic camera over pillars, and sRGB output with the ACES tonemap.">
