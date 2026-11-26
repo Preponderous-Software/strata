@@ -111,3 +111,53 @@ TEST(shadow_distance_is_clamped_to_the_far_plane) {
     const Cascades c = computeCascades(in);
     CHECK_NEAR(c.splitFar[c.count - 1], 60.0, 1e-4);
 }
+
+// ABI 1.20: orthographic cameras.
+
+TEST(orthographic_extents_are_read_from_the_projection) {
+    const glm::mat4 ortho = glm::ortho(-8.0f, 12.0f, -3.0f, 5.0f, 1.0f, 100.0f);
+    float hw = 0, hh = 0, cx = 0, cy = 0;
+    CHECK(orthographicExtents(&ortho[0][0], hw, hh, cx, cy));
+    CHECK_NEAR(hw, 10.0, 1e-5);
+    CHECK_NEAR(hh, 4.0, 1e-5);
+    CHECK_NEAR(cx, 2.0, 1e-5);
+    CHECK_NEAR(cy, 1.0, 1e-5);
+    const glm::mat4 perspective = glm::perspective(glm::radians(60.0f), 1.5f, 0.1f, 100.0f);
+    CHECK(!orthographicExtents(&perspective[0][0], hw, hh, cx, cy));
+}
+
+TEST(orthographic_cascades_cover_their_box_slices) {
+    CascadeInput in = baseInput();
+    in.orthographic = true;
+    in.halfWidth = 30.0f;
+    in.halfHeight = 17.0f;
+    in.centreX = 2.0f;
+    in.centreY = -1.0f;
+    in.nearPlane = 1.0f;
+    const Cascades cascades = computeCascades(in);
+    const glm::mat4 inverseView = glm::inverse(in.view);
+    float sliceNear = in.nearPlane;
+    for (int i = 0; i < cascades.count; ++i) {
+        const float sliceFar = cascades.splitFar[i];
+        for (float z : {sliceNear, sliceFar}) {
+            for (float sx : {-1.0f, 1.0f}) {
+                for (float sy : {-1.0f, 1.0f}) {
+                    // An orthographic slice's corners do not spread with depth.
+                    const glm::vec4 viewCorner(in.centreX + sx * in.halfWidth, in.centreY + sy * in.halfHeight, -z, 1);
+                    const glm::vec4 clip = cascades.viewProj[i] * (inverseView * viewCorner);
+                    CHECK(std::fabs(clip.x) <= 1.0f + 1e-3f);
+                    CHECK(std::fabs(clip.y) <= 1.0f + 1e-3f);
+                    CHECK(clip.z >= -1.0f - 1e-3f && clip.z <= 1.0f + 1e-3f);
+                }
+            }
+        }
+        sliceNear = sliceFar;
+    }
+}
+
+TEST(orthographic_slice_sphere_is_the_box_diagonal) {
+    float centre = 0, radius = 0;
+    orthoSliceBoundingSphere(3.0f, 4.0f, 10.0f, 34.0f, centre, radius);
+    CHECK_NEAR(centre, 22.0, 1e-5);
+    CHECK_NEAR(radius, 13.0, 1e-4);  // sqrt(3^2 + 4^2 + 12^2)
+}

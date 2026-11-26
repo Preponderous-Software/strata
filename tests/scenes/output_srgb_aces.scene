@@ -1,0 +1,14 @@
+# The colour output (ABI 1.20, strata_set_color_output): the scene of
+# mesh_static_morning drawn with STRATA_OUTPUT_SRGB and the ACES filmic
+# tonemap at exposure 1.4. Lit surfaces come out brighter in the mid-tones
+# and the brightest roll off instead of clipping; the sky and fog colours
+# are decoded first, so the sky keeps its look apart from the tonemap. A
+# golden of the default output is mesh_static_morning itself.
+size 640 360
+camera -36 22 38  2 0 -2  60 0.3 400
+lighting sun 0.32 35  4 2048 150 0.6 1
+clear 0 0 0 1 sky
+output srgb aces exposure 1.4
+include _mesh_town.scene
+item cylinder -15 0.7 -2  0.6 1.5 0.6  0.45 0.30 0.15
+item sphere -15 3.6 -2  3.2 3.2 3.2  0.12 0.40 0.12

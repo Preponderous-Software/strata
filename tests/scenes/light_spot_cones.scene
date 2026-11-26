@@ -1,0 +1,31 @@
+# Spot lights (ABI 1.20) at midnight, fog off. Along the back, three spot
+# lights point straight down onto the floor: a warm one with a hard edge
+# (inner = outer = 20 degrees), a white one with a soft edge (inner 10,
+# outer 35) and a narrow green one (5 to 12). In front, a blue spot light
+# tilted down towards the camera casts shadows (from the cube shadow maps
+# point lights use) past a level, two-sided alpha-cutout card: light falls
+# through the holes between its blobs, so the blobs alone throw round
+# shadows into the pool, and the blobs are lit on the side facing the lamp. A cube beside
+# the card shadows a wedge of the pool. A dim point light at the left keeps
+# working beside them.
+size 480 270
+camera 0 11 15  0 0 0  55 0.3 200
+lighting sun 0.0 35  4 2048 60 0.6 0
+clear 0.02 0.02 0.04 1
+item cube 0 -0.5 0  40 1 40  0.8 0.8 0.8
+item cube 0 2 -7  30 4 0.5  0.7 0.7 0.7
+light spot -6 4 -4  8  0 -1 0  1.0 0.7 0.4  4  20 20
+light spot 0 4 -4  8  0 -1 0  1.0 1.0 1.0  4  10 35
+light spot 6 4 -4  8  0 -1 0  0.4 1.0 0.4  4  5 12
+light spot 0 4.5 -1  14  0 -1 1.6  0.5 0.65 1.0  5  25 40 shadow
+light point -10 1.5 4  7  0.8 0.3 0.6  2
+item cube 3 0.6 2.2  1.2 1.2 1.2  0.85 0.85 0.85
+texture blobs discs 128 128 3 3 0.9 0.9 0.9 mipmaps
+mesh 1 1 1
+vertices -1.5 0 0  1.5 0 0  1.5 3 0  -1.5 3 0
+uvs 0 1  1 1  1 0  0 0
+triangles 0 1 2  0 2 3
+mesh_texture blobs
+mesh_cutoff 0.5
+mesh_double_sided
+mesh_transform 0 2.2 0.5  1 0 0  -90 0 0.6

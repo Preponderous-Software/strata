@@ -44,16 +44,23 @@ struct FrameUniforms {
     glm::vec4 cascadeSplits;
     glm::vec4 cascadeTexel;
     glm::ivec4 shadowInfo;
+    glm::vec4 output;  // ABI 1.20: x exposure, y STRATA_OUTPUT_* flags
 };
-static_assert(sizeof(FrameUniforms) == 640, "FrameUniforms must match the std140 Frame block");
+static_assert(sizeof(FrameUniforms) == 656, "FrameUniforms must match the std140 Frame block");
 
 // std140 mirror of the PointLights block in shaders.hpp.
 struct PointLightUniforms {
-    glm::ivec4 info;
+    glm::ivec4 info;  // x point lights, y cube map size, z spot lights (ABI 1.20)
     glm::vec4 positionRange[STRATA_MAX_POINT_LIGHTS];
     glm::vec4 color[STRATA_MAX_POINT_LIGHTS];
+    glm::vec4 spotPositionRange[STRATA_MAX_SPOT_LIGHTS];
+    glm::vec4 spotColor[STRATA_MAX_SPOT_LIGHTS];
+    glm::vec4 spotDirection[STRATA_MAX_SPOT_LIGHTS];  // w: cos(outer)
+    glm::vec4 spotCone[STRATA_MAX_SPOT_LIGHTS];       // x: cos(inner)
 };
-static_assert(sizeof(PointLightUniforms) == 16 + 2 * 16 * STRATA_MAX_POINT_LIGHTS,
+static_assert(STRATA_MAX_POINT_LIGHTS == 32 && STRATA_MAX_SPOT_LIGHTS == 32,
+              "the PointLights block in shaders.hpp has arrays of 32");
+static_assert(sizeof(PointLightUniforms) == 16 + 2 * 16 * STRATA_MAX_POINT_LIGHTS + 4 * 16 * STRATA_MAX_SPOT_LIGHTS,
               "PointLightUniforms must match the std140 PointLights block");
 
 constexpr uint32_t kInstanceStride = sizeof(StrataRenderItem);
@@ -63,31 +70,52 @@ struct MeshUniforms {
     glm::mat4 model;
     glm::mat4 normalMatrix;  // inverse transpose of model's upper 3x3, in a mat4
     glm::vec4 params;        // x: alpha of a STRATA_MESH_TRANSLUCENT mesh (ABI 1.11)
+    glm::vec4 material;      // ABI 1.20: x cutoff, y normal scale, z double-sided, w normal map bound
+    glm::vec4 emissive;      // ABI 1.20: rgb emissive * strength, w emissive texture bound
 };
 static_assert(kInstanceStride == 44, "StrataRenderItem must stay 44 bytes (Beyond Nations' RenderItem)");
 
 bool finite(float v) { return std::isfinite(v); }
 
+void replaceOnce(std::string& s, const std::string& from, const std::string& to) {
+    const auto at = s.find(from);
+    if (at == std::string::npos || s.find(from, at + 1) != std::string::npos) {
+        fail(STRATA_ERROR_INTERNAL, "mesh shader: '%s' must occur exactly once", from.c_str());
+    }
+    s.replace(at, from.size(), to);
+}
+
 // A lit fragment shader for static meshes: the same shader with its vColor
 // input renamed and replaced by the vertex colour times the mesh's texture
-// (unit 4), so lighting, shadows and fog stay one piece of GLSL.
-std::string withAlbedo(const char* fragment, bool translucent = false) {
+// (unit 4), so lighting, shadows and fog stay one piece of GLSL. ABI 1.20
+// splices in the material: the normal (two-sided faces, normal map), the
+// emission (added before fog) and, in the cutout variant, the discard.
+std::string withAlbedo(const char* fragment, bool translucent, bool cutout) {
     std::string s = fragment;
-    auto replaceOnce = [&s](const std::string& from, const std::string& to) {
-        const auto at = s.find(from);
-        if (at == std::string::npos || s.find(from, at + 1) != std::string::npos) {
-            fail(STRATA_ERROR_INTERNAL, "mesh shader: '%s' must occur exactly once", from.c_str());
-        }
-        s.replace(at, from.size(), to);
-    };
-    replaceOnce("in vec4 vColor;\n",
+    replaceOnce(s, "in vec4 vColor;\n",
                 std::string("in vec4 vColorIn;\nin vec2 vUv;\nlayout(binding = 4) uniform sampler2D uAlbedo;\n") +
-                    (translucent ? shaders::kMeshBlock : "") + "vec4 vColor;\n");
+                    shaders::kMeshBlock + "vec4 vColor;\n");
+    replaceOnce(s, "out vec4 fragColor;\n", std::string(shaders::kMeshMaterialFunctions) + "out vec4 fragColor;\n");
     // Opaque meshes ignore alpha. Translucent ones (ABI 1.11) carry the
     // texel's alpha times the mesh's, which the lit shaders pass through.
-    replaceOnce("void main() {\n",
-                translucent ? "void main() {\n    vColor = vColorIn * texture(uAlbedo, vUv) * vec4(1.0, 1.0, 1.0, uMeshParams.x);\n"
-                            : "void main() {\n    vColor = vColorIn * vec4(texture(uAlbedo, vUv).rgb, 1.0);\n");
+    std::string prologue = "void main() {\n    vec4 texel = texture(uAlbedo, vUv);\n";
+    if (cutout) prologue += shaders::kCutoutDiscard;
+    prologue += translucent ? "    vColor = vColorIn * texel * vec4(1.0, 1.0, 1.0, uMeshParams.x);\n"
+                            : "    vColor = vColorIn * vec4(texel.rgb, 1.0);\n";
+    replaceOnce(s, "void main() {\n", prologue);
+    replaceOnce(s, "    vec3 normal = normalize(vNormal);\n", "    vec3 normal = strataMeshNormal();\n");
+    if (s.find("    if (uSkyAmbient.w > 0.5) {\n") != std::string::npos) {
+        replaceOnce(s, "    if (uSkyAmbient.w > 0.5) {\n", "    color += strataMeshEmission();\n    if (uSkyAmbient.w > 0.5) {\n");
+    } else {
+        replaceOnce(s, "strataOutput(vColor.rgb * light)", "strataOutput(vColor.rgb * light + strataMeshEmission())");
+    }
+    return s;
+}
+
+// The unlit mesh shaders with or without the cutout discard (ABI 1.20).
+std::string unlitFragment(const char* fragment, bool cutout) {
+    std::string s = fragment;
+    replaceOnce(s, shaders::kCutoutMarker, cutout ? shaders::kCutoutDiscard : "");
     return s;
 }
 
@@ -180,14 +208,8 @@ Renderer::~Renderer() {
     device_.destroy(terrainSunPipeline_);
     device_.destroy(terrainShadowPipeline_);
     device_.destroy(terrainPointShadowPipeline_);
-    device_.destroy(meshLegacyPipeline_);
-    device_.destroy(meshSunPipeline_);
-    device_.destroy(meshUnlitPipeline_);
-    device_.destroy(meshLegacyTranslucentPipeline_);
-    device_.destroy(meshSunTranslucentPipeline_);
-    device_.destroy(meshUnlitTranslucentPipeline_);
-    device_.destroy(meshShadowPipeline_);
-    device_.destroy(meshPointShadowPipeline_);
+    for (auto& entry : meshPipelines_) device_.destroy(entry.second.handle);
+    meshPipelines_.clear();
     for (auto target : shadowTargets_) device_.destroy(target);
     device_.destroy(shadowMaps_);
     device_.destroy(offscreenTarget_);
@@ -294,50 +316,18 @@ void Renderer::buildPipelines() {
     terrain.fragmentSource = shaders::kSunFragment;
     terrainSunPipeline_ = device_.createPipeline(terrain);
 
-    // Static meshes: the terrain's attributes plus a uv, a model matrix and a
-    // texture, through the same fragment shaders with the colour multiplied
-    // by the texture first.
-    const std::vector<VertexBufferLayout> meshBuffers = {{0, StaticMesh::kFloatsPerVertex * sizeof(float), false}};
-    const std::vector<VertexAttribute> meshAttributes = {
-        {0, 0, 3, AttribType::Float, 0},
-        {1, 0, 3, AttribType::Float, 3 * sizeof(float)},
-        {5, 0, 3, AttribType::Float, 6 * sizeof(float)},
-        {6, 0, 2, AttribType::Float, 9 * sizeof(float)},
-    };
-    meshLegacyFragment_ = withAlbedo(shaders::kLegacyFragment);
-    meshSunFragment_ = withAlbedo(shaders::kSunFragment);
-    PipelineDesc mesh = terrain;
-    mesh.name = "opaque.mesh.legacy";
-    mesh.vertexSource = shaders::kMeshVertex;
-    mesh.fragmentSource = meshLegacyFragment_.c_str();
-    mesh.buffers = meshBuffers;
-    mesh.attributes = meshAttributes;
-    meshLegacyPipeline_ = device_.createPipeline(mesh);
-    mesh.name = "opaque.mesh.sun";
-    mesh.fragmentSource = meshSunFragment_.c_str();
-    meshSunPipeline_ = device_.createPipeline(mesh);
-    mesh.name = "opaque.mesh.unlit";
-    mesh.fragmentSource = shaders::kMeshUnlitFragment;
-    meshUnlitPipeline_ = device_.createPipeline(mesh);
-
-    // ABI 1.11: translucent meshes, alpha blended over the opaque scene and
-    // the sky, depth-tested without writing depth, both faces drawn.
-    meshLegacyTranslucentFragment_ = withAlbedo(shaders::kLegacyFragment, true);
-    meshSunTranslucentFragment_ = withAlbedo(shaders::kSunFragment, true);
-    PipelineDesc translucent = mesh;
-    translucent.depthTest = DepthTest::Less;
-    translucent.depthWrite = false;
-    translucent.cull = CullMode::None;
-    translucent.blend = BlendMode::Alpha;
-    translucent.name = "translucent.mesh.legacy";
-    translucent.fragmentSource = meshLegacyTranslucentFragment_.c_str();
-    meshLegacyTranslucentPipeline_ = device_.createPipeline(translucent);
-    translucent.name = "translucent.mesh.sun";
-    translucent.fragmentSource = meshSunTranslucentFragment_.c_str();
-    meshSunTranslucentPipeline_ = device_.createPipeline(translucent);
-    translucent.name = "translucent.mesh.unlit";
-    translucent.fragmentSource = shaders::kMeshUnlitTranslucentFragment;
-    meshUnlitTranslucentPipeline_ = device_.createPipeline(translucent);
+    // Static meshes: made on first use by meshPipeline(), one per variant
+    // (pass, shading, two-sided, cutout; ABI 1.20). The variants every
+    // scene with meshes needs are made now, as they always were.
+    for (int pass = 0; pass < 4; ++pass) {
+        for (int shading = 0; shading < 3; ++shading) {
+            if (pass >= 2 && shading > 0) break;  // shadow passes have one shading
+            MeshVariant v;
+            v.pass = static_cast<uint8_t>(pass);
+            v.shading = static_cast<uint8_t>(shading);
+            meshPipeline(v);
+        }
+    }
 
     PipelineDesc terrainShadow = shadow;
     terrainShadow.name = "shadow.terrain";
@@ -352,17 +342,6 @@ void Renderer::buildPipelines() {
     terrainPointShadow.buffers = terrainBuffers;
     terrainPointShadow.attributes = {terrainAttributes[0]};
     terrainPointShadowPipeline_ = device_.createPipeline(terrainPointShadow);
-
-    PipelineDesc meshShadow = terrainShadow;
-    meshShadow.name = "shadow.mesh";
-    meshShadow.vertexSource = shaders::kMeshShadowVertex;
-    meshShadow.buffers = meshBuffers;
-    meshShadowPipeline_ = device_.createPipeline(meshShadow);
-    PipelineDesc meshPointShadow = terrainPointShadow;
-    meshPointShadow.name = "point_shadow.mesh";
-    meshPointShadow.vertexSource = shaders::kMeshPointShadowVertex;
-    meshPointShadow.buffers = meshBuffers;
-    meshPointShadowPipeline_ = device_.createPipeline(meshPointShadow);
 
     PipelineDesc sky;
     sky.name = "sky";
@@ -381,6 +360,81 @@ void Renderer::buildPipelines() {
     depthPack.depthWrite = false;
     depthPack.cull = CullMode::None;
     depthPackPipeline_ = device_.createPipeline(depthPack);
+}
+
+rhi::PipelineDesc Renderer::meshPipelineDesc(const MeshVariant& v, std::string& vertex, std::string& fragment) const {
+    using namespace rhi;
+    const std::vector<VertexBufferLayout> meshBuffers = {{0, StaticMesh::kFloatsPerVertex * sizeof(float), false}};
+    const VertexAttribute position{0, 0, 3, AttribType::Float, 0};
+    const VertexAttribute normal{1, 0, 3, AttribType::Float, 3 * sizeof(float)};
+    const VertexAttribute color{5, 0, 3, AttribType::Float, 6 * sizeof(float)};
+    const VertexAttribute uv{6, 0, 2, AttribType::Float, 9 * sizeof(float)};
+    PipelineDesc d;
+    d.buffers = meshBuffers;
+    d.depthTest = DepthTest::Less;
+    const bool cutout = v.cutout != 0;
+    if (v.pass == kMeshOpaque || v.pass == kMeshTranslucent) {
+        const bool translucent = v.pass == kMeshTranslucent;
+        d.attributes = {position, normal, color, uv};
+        vertex = shaders::kMeshVertex;
+        if (v.shading == kShadingUnlit) {
+            fragment = unlitFragment(translucent ? shaders::kMeshUnlitTranslucentFragment : shaders::kMeshUnlitFragment,
+                                     cutout);
+        } else {
+            fragment = withAlbedo(v.shading == kShadingLegacy ? shaders::kLegacyFragment : shaders::kSunFragment,
+                                  translucent, cutout);
+        }
+        static const char* const kNames[2][3] = {{"opaque.mesh.legacy", "opaque.mesh.sun", "opaque.mesh.unlit"},
+                                                 {"translucent.mesh.legacy", "translucent.mesh.sun",
+                                                  "translucent.mesh.unlit"}};
+        d.name = kNames[translucent ? 1 : 0][v.shading];
+        // Back faces culled, unless two-sided (ABI 1.20). ABI 1.11:
+        // translucent meshes are alpha blended over the opaque scene and the
+        // sky, depth-tested without writing depth, both faces drawn.
+        d.cull = (translucent || v.doubleSided) ? CullMode::None : CullMode::Back;
+        if (translucent) {
+            d.depthWrite = false;
+            d.blend = BlendMode::Alpha;
+        }
+    } else {
+        // Depth only; both faces, as for every caster. The cascades use
+        // polygon offset and depth clamp; the cube maps store distance /
+        // range from the fragment shader, which turns polygon offset off.
+        const bool cube = v.pass == kMeshPointShadow;
+        d.name = cube ? (cutout ? "point_shadow.mesh.cutout" : "point_shadow.mesh")
+                      : (cutout ? "shadow.mesh.cutout" : "shadow.mesh");
+        d.attributes = cutout ? std::vector<VertexAttribute>{position, uv} : std::vector<VertexAttribute>{position};
+        if (cube) {
+            vertex = cutout ? shaders::kMeshPointShadowCutoutVertex : shaders::kMeshPointShadowVertex;
+            fragment = cutout ? shaders::kMeshPointShadowCutoutFragment : shaders::kPointShadowFragment;
+        } else {
+            vertex = cutout ? shaders::kMeshShadowCutoutVertex : shaders::kMeshShadowVertex;
+            fragment = cutout ? shaders::kMeshShadowCutoutFragment : shaders::kShadowFragment;
+            d.depthBiasConstant = 2.0f;
+            d.depthBiasSlope = 2.0f;
+            d.depthClamp = true;
+        }
+        d.colorWrite = false;
+        d.cull = CullMode::None;
+    }
+    d.vertexSource = vertex.c_str();
+    d.fragmentSource = fragment.c_str();
+    return d;
+}
+
+rhi::PipelineHandle Renderer::meshPipeline(const MeshVariant& v) {
+    const uint32_t key = v.key();
+    const auto found = meshPipelines_.find(key);
+    if (found != meshPipelines_.end()) return found->second.handle;
+    CachedPipeline& cached = meshPipelines_[key];
+    rhi::PipelineDesc desc = meshPipelineDesc(v, cached.vertex, cached.fragment);
+    try {
+        cached.handle = device_.createPipeline(desc);
+    } catch (...) {
+        meshPipelines_.erase(key);
+        throw;
+    }
+    return cached.handle;
 }
 
 void Renderer::validateCamera(const StrataCamera& c) {
@@ -510,13 +564,47 @@ void Renderer::setLighting(const StrataLighting& lighting) {
 }
 
 void Renderer::setPointLights(const StrataPointLight* lights, size_t count) {
-    validatePointLights(lights, count);
+    validatePointLights(lights, count, countShadowCasters(spotLights_.data(), spotLights_.size()));
     pointLights_.assign(lights, lights + count);
-    pointShadowSlot_.assign(count, -1);
+    assignShadowSlots();
+}
+
+void Renderer::setSpotLights(const StrataSpotLight* lights, size_t count) {
+    validateSpotLights(lights, count, countShadowCasters(pointLights_.data(), pointLights_.size()));
+    spotLights_.assign(lights, lights + count);
+    for (auto& l : spotLights_) {
+        const glm::vec3 d = glm::normalize(glm::vec3(l.direction[0], l.direction[1], l.direction[2]));
+        l.direction[0] = d.x;
+        l.direction[1] = d.y;
+        l.direction[2] = d.z;
+    }
+    assignShadowSlots();
+}
+
+void Renderer::assignShadowSlots() {
+    pointShadowSlot_.assign(pointLights_.size(), -1);
+    spotShadowSlot_.assign(spotLights_.size(), -1);
     pointShadowCount_ = 0;
-    for (size_t i = 0; i < count; ++i) {
+    for (size_t i = 0; i < pointLights_.size(); ++i) {
         if (pointLights_[i].flags & STRATA_POINT_LIGHT_CAST_SHADOWS) pointShadowSlot_[i] = pointShadowCount_++;
     }
+    for (size_t i = 0; i < spotLights_.size(); ++i) {
+        if (spotLights_[i].flags & STRATA_SPOT_LIGHT_CAST_SHADOWS) spotShadowSlot_[i] = pointShadowCount_++;
+    }
+}
+
+void Renderer::setColorOutput(uint32_t flags, float exposure) {
+    const uint32_t known = STRATA_OUTPUT_SRGB | STRATA_OUTPUT_TONEMAP_REINHARD | STRATA_OUTPUT_TONEMAP_ACES;
+    if (flags & ~known) fail(STRATA_ERROR_INVALID_ARGUMENT, "color output: unknown flags 0x%x", flags & ~known);
+    if ((flags & STRATA_OUTPUT_TONEMAP_REINHARD) && (flags & STRATA_OUTPUT_TONEMAP_ACES)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "color output: at most one STRATA_OUTPUT_TONEMAP_* flag");
+    }
+    if (!(exposure > 0.0f && exposure <= 64.0f)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "color output: exposure must be in (0, 64] (got %g)",
+             static_cast<double>(exposure));
+    }
+    outputFlags_ = flags;
+    outputExposure_ = exposure;
 }
 
 void Renderer::setTerrain(const StrataTerrainTile* tile) {
@@ -611,6 +699,58 @@ void Renderer::setMeshVisible(uint32_t id, bool visible) {
     fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: no mesh with id %u", id);
 }
 
+void Renderer::validateMaterial(const StrataMaterial& m) const {
+    if (!(m.alpha_cutoff >= 0.0f && m.alpha_cutoff <= 1.0f)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "material: alpha_cutoff must be in [0, 1] (got %g)",
+             static_cast<double>(m.alpha_cutoff));
+    }
+    for (float v : m.emissive) {
+        if (!(v >= 0.0f) || !std::isfinite(v)) {
+            fail(STRATA_ERROR_INVALID_ARGUMENT, "material: emissive components must be finite and >= 0");
+        }
+    }
+    if (!(m.emissive_strength >= 0.0f) || !std::isfinite(m.emissive_strength)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "material: emissive_strength must be finite and >= 0 (got %g)",
+             static_cast<double>(m.emissive_strength));
+    }
+    if (!std::isfinite(m.normal_scale)) fail(STRATA_ERROR_INVALID_ARGUMENT, "material: normal_scale is not finite");
+    if (m.emissive_texture != 0 && !textureFor(m.emissive_texture)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "material: no emissive texture with id %u", m.emissive_texture);
+    }
+    if (m.normal_texture != 0 && !textureFor(m.normal_texture)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "material: no normal texture with id %u", m.normal_texture);
+    }
+    if (m.flags & ~static_cast<uint32_t>(STRATA_MATERIAL_DOUBLE_SIDED)) {
+        fail(STRATA_ERROR_INVALID_ARGUMENT, "material: unknown flags 0x%x",
+             m.flags & ~static_cast<uint32_t>(STRATA_MATERIAL_DOUBLE_SIDED));
+    }
+}
+
+void Renderer::setMeshMaterial(uint32_t id, const StrataMaterial* material) {
+    for (auto& entry : meshes_) {
+        if (entry.id != id) continue;
+        if (material == nullptr) {
+            entry.material = StrataMaterial{};
+            return;
+        }
+        validateMaterial(*material);
+        entry.material = *material;
+        return;
+    }
+    fail(STRATA_ERROR_INVALID_ARGUMENT, "mesh: no mesh with id %u", id);
+}
+
+void Renderer::bindMeshTextures(const MeshEntry& entry) {
+    const rhi::TextureHandle albedo = textureFor(entry.texture);
+    device_.bindTexture(4, albedo ? albedo : whiteTexture_);
+    const rhi::TextureHandle emissive = entry.material.emissive_texture ? textureFor(entry.material.emissive_texture)
+                                                                        : rhi::TextureHandle{};
+    device_.bindTexture(8, emissive ? emissive : whiteTexture_);
+    const rhi::TextureHandle normal = entry.material.normal_texture ? textureFor(entry.material.normal_texture)
+                                                                    : rhi::TextureHandle{};
+    device_.bindTexture(9, normal ? normal : whiteTexture_);
+}
+
 rhi::TextureHandle Renderer::textureFor(uint32_t id) const {
     for (const auto& t : textures_) {
         if (t.id == id) return t.handle;
@@ -620,7 +760,8 @@ rhi::TextureHandle Renderer::textureFor(uint32_t id) const {
 
 uint32_t Renderer::createTexture(int32_t width, int32_t height, const uint8_t* rgba, uint32_t flags) {
     const uint32_t known =
-        STRATA_TEXTURE_MIPMAPS | STRATA_TEXTURE_CLAMP_U | STRATA_TEXTURE_CLAMP_V | STRATA_TEXTURE_NEAREST;
+        STRATA_TEXTURE_MIPMAPS | STRATA_TEXTURE_CLAMP_U | STRATA_TEXTURE_CLAMP_V | STRATA_TEXTURE_NEAREST |
+        STRATA_TEXTURE_SRGB;
     if (flags & ~known) fail(STRATA_ERROR_INVALID_ARGUMENT, "texture: unknown flags 0x%x", flags);
     if (width < 1 || height < 1 || width > STRATA_MAX_TEXTURE_SIZE || height > STRATA_MAX_TEXTURE_SIZE) {
         fail(STRATA_ERROR_INVALID_ARGUMENT, "texture: width and height must be 1..%d (got %d x %d)",
@@ -640,6 +781,7 @@ uint32_t Renderer::createTexture(int32_t width, int32_t height, const uint8_t* r
     desc.repeatU = (flags & STRATA_TEXTURE_CLAMP_U) == 0;
     desc.repeatV = (flags & STRATA_TEXTURE_CLAMP_V) == 0;
     desc.nearest = (flags & STRATA_TEXTURE_NEAREST) != 0;  // ABI 1.10
+    desc.srgb = (flags & STRATA_TEXTURE_SRGB) != 0;        // ABI 1.20
     desc.debugName = "strata.mesh-texture";
     const rhi::TextureHandle texture = device_.createTexture(desc);
     const uint32_t id = nextTextureId_++;
@@ -729,6 +871,15 @@ void Renderer::writeMeshUniforms() {
         u.model = meshes_[i].model;
         u.normalMatrix = glm::mat4(glm::transpose(glm::inverse(glm::mat3(meshes_[i].model))));
         u.params = glm::vec4(meshes_[i].alpha, 0.0f, 0.0f, 0.0f);
+        // ABI 1.20: the material. A texture destroyed since it was set turns
+        // its part off, as for the albedo texture.
+        const StrataMaterial& m = meshes_[i].material;
+        const bool normalMap = m.normal_texture != 0 && textureFor(m.normal_texture);
+        const bool emissiveMap = m.emissive_texture != 0 && textureFor(m.emissive_texture);
+        u.material = glm::vec4(m.alpha_cutoff, m.normal_scale,
+                               (m.flags & STRATA_MATERIAL_DOUBLE_SIDED) ? 1.0f : 0.0f, normalMap ? 1.0f : 0.0f);
+        u.emissive = glm::vec4(glm::vec3(m.emissive[0], m.emissive[1], m.emissive[2]) * m.emissive_strength,
+                               emissiveMap ? 1.0f : 0.0f);
         std::memcpy(bytes.data() + i * meshUniformStride_, &u, sizeof u);
     }
     device_.updateBuffer(meshUniforms_, 0, bytes.size(), bytes.data());
@@ -782,15 +933,28 @@ void Renderer::pointShadowPass() {
         glm::mat4 viewProjection;
         glm::vec4 lightPositionRange;
     };
+    // Point lights' casters, then spot lights' (ABI 1.20), each into its slot.
+    std::vector<std::pair<int, glm::vec4>> casters;
     for (size_t i = 0; i < pointLights_.size(); ++i) {
-        const int slot = pointShadowSlot_[i];
-        if (slot < 0) continue;
         const StrataPointLight& l = pointLights_[i];
-        const glm::vec3 position(l.position[0], l.position[1], l.position[2]);
-        const auto faces = cubeFaceViewProjections(position, l.range);
+        if (pointShadowSlot_[i] >= 0) {
+            casters.emplace_back(pointShadowSlot_[i], glm::vec4(l.position[0], l.position[1], l.position[2], l.range));
+        }
+    }
+    for (size_t i = 0; i < spotLights_.size(); ++i) {
+        const StrataSpotLight& l = spotLights_[i];
+        if (spotShadowSlot_[i] >= 0) {
+            casters.emplace_back(spotShadowSlot_[i], glm::vec4(l.position[0], l.position[1], l.position[2], l.range));
+        }
+    }
+    for (const auto& caster : casters) {
+        const int slot = caster.first;
+        const glm::vec3 position(caster.second);
+        const float range = caster.second.w;
+        const auto faces = cubeFaceViewProjections(position, range);
         for (size_t face = 0; face < 6; ++face) {
             const size_t layer = static_cast<size_t>(slot) * 6 + face;
-            const FaceUniforms u{faces[face], glm::vec4(position, l.range)};
+            const FaceUniforms u{faces[face], glm::vec4(position, range)};
             device_.updateBuffer(pointShadowUniforms_, layer * pointShadowUniformStride_, sizeof u, &u);
             rhi::PassDesc pass;
             pass.name = "point_shadow";
@@ -802,7 +966,7 @@ void Renderer::pointShadowPass() {
             device_.bindPipeline(pointShadowPipeline_);
             device_.bindUniformBuffer(1, pointShadowUniforms_, layer * pointShadowUniformStride_, sizeof u);
             drawPrimitives(true);
-            drawWorldMeshes(terrainPointShadowPipeline_, meshPointShadowPipeline_, MeshPass::Shadow);
+            drawWorldMeshes(terrainPointShadowPipeline_, MeshPass::PointShadow);
             device_.endPass();
         }
     }
@@ -948,6 +1112,7 @@ void Renderer::writeFrameUniforms(int width, int height, const Cascades* cascade
     u.eye = glm::vec4(camera_.eye[0], camera_.eye[1], camera_.eye[2], camera_.far_plane);
     (void)width;
     (void)height;
+    u.output = glm::vec4(outputExposure_, static_cast<float>(outputFlags_), 0.0f, 0.0f);  // ABI 1.20
 
     if (lighting_.mode == STRATA_LIGHTING_LEGACY) {
         u.light = glm::vec4(lighting_.legacy_direction[0], lighting_.legacy_direction[1],
@@ -993,6 +1158,16 @@ void Renderer::writePointLightUniforms() {
                                static_cast<float>(pointShadowSlot_[i]));
     }
     u.info.y = kPointShadowMapSize;
+    u.info.z = static_cast<int>(spotLights_.size());  // ABI 1.20
+    for (size_t i = 0; i < spotLights_.size(); ++i) {
+        const StrataSpotLight& l = spotLights_[i];
+        u.spotPositionRange[i] = glm::vec4(l.position[0], l.position[1], l.position[2], l.range);
+        u.spotColor[i] = glm::vec4(glm::vec3(l.color[0], l.color[1], l.color[2]) * l.intensity,
+                                   static_cast<float>(spotShadowSlot_[i]));
+        u.spotDirection[i] = glm::vec4(l.direction[0], l.direction[1], l.direction[2],
+                                       std::cos(glm::radians(l.outer_cone_degrees)));
+        u.spotCone[i] = glm::vec4(std::cos(glm::radians(l.inner_cone_degrees)), 0.0f, 0.0f, 0.0f);
+    }
     device_.updateBuffer(pointLightUniforms_, 0, sizeof u, &u);
 }
 
@@ -1025,28 +1200,41 @@ void Renderer::drawTerrain() {
     ++stats_.draw_calls;
 }
 
-void Renderer::drawWorldMeshes(rhi::PipelineHandle terrainPipeline, rhi::PipelineHandle meshPipeline, MeshPass pass,
-                               rhi::PipelineHandle unlitPipeline) {
+void Renderer::drawWorldMeshes(rhi::PipelineHandle terrainPipeline, MeshPass pass) {
     if (terrainIndexCount_ > 0) {
         device_.bindPipeline(terrainPipeline);
         drawTerrain();
     }
     if (meshes_.empty()) return;
+    const bool opaque = pass == MeshPass::Opaque;
+    const uint8_t litShading = lighting_.mode == STRATA_LIGHTING_LEGACY ? kShadingLegacy : kShadingSun;
+    rhi::PipelineHandle bound;
     // Lit meshes first, then (opaque pass only) unlit ones; shadows skip unlit.
     for (int unlit = 0; unlit < 2; ++unlit) {
-        if (unlit && pass == MeshPass::Shadow) break;
-        bool bound = false;
+        if (unlit && !opaque) break;
         for (size_t i = 0; i < meshes_.size(); ++i) {
             const MeshEntry& entry = meshes_[i];
             if (!entry.visible) continue;                          // ABI 1.19
             if (entry.flags & STRATA_MESH_TRANSLUCENT) continue;  // the translucent pass draws these
             if (((entry.flags & STRATA_MESH_UNLIT) != 0) != (unlit != 0)) continue;
-            if (!bound) {
-                device_.bindPipeline(unlit ? unlitPipeline : meshPipeline);
-                bound = true;
+            MeshVariant variant;
+            variant.cutout = entry.material.alpha_cutoff > 0.0f ? 1 : 0;  // ABI 1.20
+            if (opaque) {
+                variant.pass = kMeshOpaque;
+                variant.shading = unlit ? kShadingUnlit : litShading;
+                variant.doubleSided = (entry.material.flags & STRATA_MATERIAL_DOUBLE_SIDED) ? 1 : 0;
+            } else {
+                variant.pass = pass == MeshPass::Shadow ? kMeshShadow : kMeshPointShadow;
+            }
+            const rhi::PipelineHandle pipeline = meshPipeline(variant);
+            if (pipeline != bound) {
+                device_.bindPipeline(pipeline);
+                bound = pipeline;
             }
             device_.bindUniformBuffer(3, meshUniforms_, i * meshUniformStride_, sizeof(MeshUniforms));
-            if (pass == MeshPass::Opaque) {
+            if (opaque) {
+                bindMeshTextures(entry);
+            } else if (variant.cutout) {
                 const rhi::TextureHandle texture = textureFor(entry.texture);
                 device_.bindTexture(4, texture ? texture : whiteTexture_);
             }
@@ -1075,7 +1263,7 @@ void Renderer::shadowPass(const Cascades& cascades) {
         device_.bindPipeline(shadowPipeline_);
         device_.bindUniformBuffer(1, shadowUniforms_, index * shadowUniformStride_, sizeof(glm::mat4));
         drawPrimitives(true);
-        drawWorldMeshes(terrainShadowPipeline_, meshShadowPipeline_, MeshPass::Shadow);
+        drawWorldMeshes(terrainShadowPipeline_, MeshPass::Shadow);
         device_.endPass();
     }
     stats_.shadow_cascades = cascades.count;
@@ -1100,8 +1288,7 @@ void Renderer::opaquePass(int width, int height) {
     }
     drawPrimitives(false);
     const bool legacy = lighting_.mode == STRATA_LIGHTING_LEGACY;
-    drawWorldMeshes(legacy ? terrainLegacyPipeline_ : terrainSunPipeline_, legacy ? meshLegacyPipeline_ : meshSunPipeline_,
-                    MeshPass::Opaque, meshUnlitPipeline_);
+    drawWorldMeshes(legacy ? terrainLegacyPipeline_ : terrainSunPipeline_, MeshPass::Opaque);
     device_.endPass();
 }
 
@@ -1137,16 +1324,17 @@ void Renderer::translucentPass(int width, int height) {
     rhi::PipelineHandle bound;
     for (const auto& item : order) {
         const MeshEntry& entry = meshes_[item.second];
-        const rhi::PipelineHandle pipeline = (entry.flags & STRATA_MESH_UNLIT) ? meshUnlitTranslucentPipeline_
-                                             : legacy ? meshLegacyTranslucentPipeline_
-                                                      : meshSunTranslucentPipeline_;
+        MeshVariant variant;
+        variant.pass = kMeshTranslucent;
+        variant.shading = (entry.flags & STRATA_MESH_UNLIT) ? kShadingUnlit : legacy ? kShadingLegacy : kShadingSun;
+        variant.cutout = entry.material.alpha_cutoff > 0.0f ? 1 : 0;  // ABI 1.20
+        const rhi::PipelineHandle pipeline = meshPipeline(variant);
         if (pipeline != bound) {
             device_.bindPipeline(pipeline);
             bound = pipeline;
         }
         device_.bindUniformBuffer(3, meshUniforms_, item.second * meshUniformStride_, sizeof(MeshUniforms));
-        const rhi::TextureHandle texture = textureFor(entry.texture);
-        device_.bindTexture(4, texture ? texture : whiteTexture_);
+        bindMeshTextures(entry);
         device_.bindVertexBuffer(0, entry.vertices, 0);
         device_.bindIndexBuffer(entry.indices);
         rhi::DrawIndexed draw;
@@ -1217,6 +1405,9 @@ void Renderer::endFrame() {
             input.view = glm::make_mat4(camera_.view);
             input.tanHalfFovY = 1.0f / camera_.projection[5];
             input.aspect = camera_.projection[5] / camera_.projection[0];
+            // ABI 1.20: an orthographic camera's slices are boxes.
+            input.orthographic = orthographicExtents(camera_.projection, input.halfWidth, input.halfHeight,
+                                                     input.centreX, input.centreY);
             input.nearPlane = camera_.near_plane;
             input.farPlane = camera_.far_plane;
             input.shadowDistance = lighting_.shadow_distance;

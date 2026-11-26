@@ -304,6 +304,50 @@ TEST(scene_mesh_flat_and_hidden_directives) {
     CHECK(!s.meshes[2].flat && !s.meshes[2].hidden);
 }
 
+TEST(scene_abi_1_20_directives) {
+    const Scene s = parsed(
+        "camera_ortho 1 2 3  0 0 0  7.5 0.5 90\n"
+        "light spot 1 4 2  9  0 -1 0  1 0.5 0.25  3  10 25 shadow\n"
+        "light spot 0 0 0  1  1 0 0  1 1 1  1  0 90\n"
+        "output srgb aces exposure 1.5\n"
+        "texture blob discs 8 8 2 2 0.1 0.2 0.3 srgb\n"
+        "texture dome bumps 8 8 1 1 mipmaps\n"
+        "mesh 1 1 1\nmesh_cutoff 0.4\nmesh_double_sided\n"
+        "mesh 1 1 1\nmesh_emissive 1 0.5 0 2 blob\nmesh_normal_map dome 0.75\n"
+        "mesh 1 1 1\nmesh_emissive 0 1 0 1\n"
+        "mesh 1 1 1\n");
+    CHECK(s.ortho);
+    CHECK_NEAR(s.orthoHalfHeight, 7.5, kEps);
+    CHECK_NEAR(s.nearPlane, 0.5, kEps);
+    CHECK_NEAR(s.farPlane, 90.0, kEps);
+    REQUIRE(s.spotLights.size() == 2);
+    CHECK_NEAR(s.spotLights[0].direction[1], -1.0, kEps);
+    CHECK_NEAR(s.spotLights[0].intensity, 3.0, kEps);
+    CHECK_NEAR(s.spotLights[0].inner_cone_degrees, 10.0, kEps);
+    CHECK_NEAR(s.spotLights[0].outer_cone_degrees, 25.0, kEps);
+    CHECK(s.spotLights[0].flags == STRATA_SPOT_LIGHT_CAST_SHADOWS);
+    CHECK(s.spotLights[1].flags == 0u);
+    CHECK(s.hasOutput);
+    CHECK(s.outputFlags == (STRATA_OUTPUT_SRGB | STRATA_OUTPUT_TONEMAP_ACES));
+    CHECK_NEAR(s.outputExposure, 1.5, kEps);
+    REQUIRE(s.textures.size() == 2);
+    CHECK(s.textures[0].flags == STRATA_TEXTURE_SRGB);
+    CHECK(s.textures[0].rgba[3] == 0);  // a corner, between the blobs: transparent
+    const size_t centre = (static_cast<size_t>(2) * 8 + 2) * 4;  // texel (2, 2), the middle of a blob
+    CHECK(s.textures[0].rgba[centre + 3] == 255);
+    CHECK(s.textures[1].rgba[0] == 128 && s.textures[1].rgba[1] == 128 && s.textures[1].rgba[2] == 255);
+    REQUIRE(s.meshes.size() == 4);
+    CHECK(s.meshes[0].hasMaterial);
+    CHECK_NEAR(s.meshes[0].material.alpha_cutoff, 0.4, kEps);
+    CHECK(s.meshes[0].material.flags == STRATA_MATERIAL_DOUBLE_SIDED);
+    CHECK(s.meshes[1].emissiveTexture == "blob");
+    CHECK(s.meshes[1].normalTexture == "dome");
+    CHECK_NEAR(s.meshes[1].material.emissive_strength, 2.0, kEps);
+    CHECK_NEAR(s.meshes[1].material.normal_scale, 0.75, kEps);
+    CHECK(s.meshes[2].hasMaterial && s.meshes[2].emissiveTexture.empty());
+    CHECK(!s.meshes[3].hasMaterial);
+}
+
 TEST(scene_mesh_transform_is_translate_tilt_spin_scale) {
     // Spin +X to -Z about +Y, then tilt about +Z (the axis need not be unit
     // length), so +X stays at -Z. The other order would leave +X at +Y.
@@ -591,7 +635,6 @@ TEST(scene_errors_name_the_line_and_what_was_wrong) {
         {"sun date 2026-01-01 24:00 0 0 0\n", 1, "bad time '24:00'"},
         {"sun date 2026-01-01 12:60 0 0 0\n", 1, "bad time '12:60'"},
         {"clear 0 0 0 1 dusk\n", 1, "expected 'sky' or nothing after the clear colour"},
-        {"light spot 0 0 0\n", 1, "unknown light type 'spot' (expected 'point')"},
         {"light point 0 0 0 1 1 1 1 1 dim\n", 1, "expected 'shadow' or nothing after the intensity"},
         {"heights 1 2\n", 1, "'heights' before 'terrain'"},
         {"colors 1 2 3\n", 1, "'colors' before 'terrain'"},
@@ -606,6 +649,15 @@ TEST(scene_errors_name_the_line_and_what_was_wrong) {
         {"mesh_translucent 0.5\n", 1, "'mesh_translucent' before 'mesh'"},
         {"mesh_flat\n", 1, "'mesh_flat' before 'mesh'"},
         {"mesh_hidden\n", 1, "'mesh_hidden' before 'mesh'"},
+        {"mesh_cutoff 0.5\n", 1, "'mesh_cutoff' before 'mesh'"},
+        {"mesh_emissive 1 1 1 1\n", 1, "'mesh_emissive' before 'mesh'"},
+        {"mesh_normal_map t 1\n", 1, "'mesh_normal_map' before 'mesh'"},
+        {"mesh_double_sided\n", 1, "'mesh_double_sided' before 'mesh'"},
+        {"output\n", 1, "expected 'srgb', 'reinhard', 'aces' or 'exposure <e>' after 'output'"},
+        {"output filmic\n", 1, "unknown output option 'filmic'"},
+        {"light spot 0 0 0 1 0 -1 0 1 1 1 1 10 20 loud\n", 1, "expected 'shadow' or nothing after the cones"},
+        {"light area 0 0 0\n", 1, "unknown light type 'area' (expected 'point' or 'spot')"},
+        {"texture t discs 4 4 0 1 1 1 1\n", 1, "cells must be positive"},
         {"mesh 1 1 1\nmesh_flat extra\n", 2, "unexpected 'extra' at the end of the line"},
         {"mesh_transform 0 0 0 0 1 0 0 0 1\n", 1, "'mesh_transform' before 'mesh'"},
         {"mesh 1 1 1\nvertices a\n", 2, "expected numbers after 'vertices'"},

@@ -29,6 +29,12 @@ struct CascadeInput {
     float lambda = 0.6f;
     int mapSize = 2048;
     glm::vec3 toLight{0, 1, 0};  // unit vector towards the light
+    // ABI 1.20: an orthographic camera. Each slice is then a box the view
+    // volume's width and height, centred on (centreX, centreY) in view space,
+    // instead of a frustum slice; tanHalfFovY and aspect are ignored.
+    bool orthographic = false;
+    float halfWidth = 1.0f, halfHeight = 1.0f;
+    float centreX = 0.0f, centreY = 0.0f;
 };
 
 struct Cascades {
@@ -49,6 +55,18 @@ std::array<float, kMaxCascades + 1> practicalSplits(float nearPlane, float farPl
 // view-space distance of its centre along the view axis plus its radius.
 void sliceBoundingSphere(float tanHalfFovY, float aspect, float sliceNear, float sliceFar, float& centreDistance,
                          float& radius);
+
+// ABI 1.20. Bounding sphere of an orthographic slice [sliceNear, sliceFar]: a
+// box halfWidth x halfHeight across, centred on the view axis at the slice's
+// middle depth.
+void orthoSliceBoundingSphere(float halfWidth, float halfHeight, float sliceNear, float sliceFar,
+                              float& centreDistance, float& radius);
+
+// ABI 1.20. Reads a StrataCamera projection (column-major): true for an
+// orthographic one (elements 3, 7 and 11 zero, 15 one), and then the
+// view-space half extents and centre of its view volume.
+bool orthographicExtents(const float projection[16], float& halfWidth, float& halfHeight, float& centreX,
+                         float& centreY);
 
 Cascades computeCascades(const CascadeInput& input);
 

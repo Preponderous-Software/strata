@@ -1,0 +1,62 @@
+# An orthographic camera (ABI 1.20, strata_camera_ortho) looking down at 45
+# degrees from the south-east, as an isometric game or a map view does, over
+# a 7 x 7 grid of pillars in the afternoon sun with four cascades. The
+# cascades are fitted to the box the camera sees rather than to a perspective
+# frustum, so every pillar, near the bottom of the frame or far at the top,
+# casts a crisp shadow; the far rows sit in later cascades. The sky has no
+# perspective to show and is one colour. Pillars do not shrink with distance.
+size 480 270
+camera_ortho 30 30 30  0 0 0  13 1 200
+lighting sun 0.62 35  4 2048 120 0.6 1
+clear 0 0 0 1 sky
+item cube 0 -0.5 0  60 1 60  0.55 0.62 0.45
+item cube -12 2 -12  1.4 4 1.4  0.82 0.78 0.70
+item cube -12 3 -8  1.4 6 1.4  0.82 0.78 0.70
+item cube -12 1 -4  1.4 2 1.4  0.82 0.78 0.70
+item cube -12 2 0  1.4 4 1.4  0.82 0.78 0.70
+item cube -12 3 4  1.4 6 1.4  0.82 0.78 0.70
+item cube -12 1 8  1.4 2 1.4  0.82 0.78 0.70
+item cube -12 2 12  1.4 4 1.4  0.82 0.78 0.70
+item cube -8 3 -12  1.4 6 1.4  0.82 0.78 0.70
+item cube -8 1 -8  1.4 2 1.4  0.82 0.78 0.70
+item cube -8 2 -4  1.4 4 1.4  0.82 0.78 0.70
+item cube -8 3 0  1.4 6 1.4  0.82 0.78 0.70
+item cube -8 1 4  1.4 2 1.4  0.82 0.78 0.70
+item cube -8 2 8  1.4 4 1.4  0.82 0.78 0.70
+item cube -8 3 12  1.4 6 1.4  0.82 0.78 0.70
+item cube -4 1 -12  1.4 2 1.4  0.82 0.78 0.70
+item cube -4 2 -8  1.4 4 1.4  0.82 0.78 0.70
+item cube -4 3 -4  1.4 6 1.4  0.82 0.78 0.70
+item cube -4 1 0  1.4 2 1.4  0.82 0.78 0.70
+item cube -4 2 4  1.4 4 1.4  0.82 0.78 0.70
+item cube -4 3 8  1.4 6 1.4  0.82 0.78 0.70
+item cube -4 1 12  1.4 2 1.4  0.82 0.78 0.70
+item cube 0 2 -12  1.4 4 1.4  0.82 0.78 0.70
+item cube 0 3 -8  1.4 6 1.4  0.82 0.78 0.70
+item cube 0 1 -4  1.4 2 1.4  0.82 0.78 0.70
+item cube 0 2 0  1.4 4 1.4  0.82 0.78 0.70
+item cube 0 3 4  1.4 6 1.4  0.82 0.78 0.70
+item cube 0 1 8  1.4 2 1.4  0.82 0.78 0.70
+item cube 0 2 12  1.4 4 1.4  0.82 0.78 0.70
+item cube 4 3 -12  1.4 6 1.4  0.82 0.78 0.70
+item cube 4 1 -8  1.4 2 1.4  0.82 0.78 0.70
+item cube 4 2 -4  1.4 4 1.4  0.82 0.78 0.70
+item cube 4 3 0  1.4 6 1.4  0.82 0.78 0.70
+item cube 4 1 4  1.4 2 1.4  0.82 0.78 0.70
+item cube 4 2 8  1.4 4 1.4  0.82 0.78 0.70
+item cube 4 3 12  1.4 6 1.4  0.82 0.78 0.70
+item cube 8 1 -12  1.4 2 1.4  0.82 0.78 0.70
+item cube 8 2 -8  1.4 4 1.4  0.82 0.78 0.70
+item cube 8 3 -4  1.4 6 1.4  0.82 0.78 0.70
+item cube 8 1 0  1.4 2 1.4  0.82 0.78 0.70
+item cube 8 2 4  1.4 4 1.4  0.82 0.78 0.70
+item cube 8 3 8  1.4 6 1.4  0.82 0.78 0.70
+item cube 8 1 12  1.4 2 1.4  0.82 0.78 0.70
+item cube 12 2 -12  1.4 4 1.4  0.82 0.78 0.70
+item cube 12 3 -8  1.4 6 1.4  0.82 0.78 0.70
+item cube 12 1 -4  1.4 2 1.4  0.82 0.78 0.70
+item cube 12 2 0  1.4 4 1.4  0.82 0.78 0.70
+item cube 12 3 4  1.4 6 1.4  0.82 0.78 0.70
+item cube 12 1 8  1.4 2 1.4  0.82 0.78 0.70
+item cube 12 2 12  1.4 4 1.4  0.82 0.78 0.70
+item sphere -2 1 -2  2 2 2  0.85 0.3 0.25

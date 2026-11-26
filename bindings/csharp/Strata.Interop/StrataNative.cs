@@ -9,8 +9,8 @@ namespace Strata.Interop {
 
     public static class StrataAbi {
         public const uint Version = 1;
-        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles, 1.12 injected events, a shared frame clock and the drive channel, 1.13 wide lines, 1.14 world-to-screen projection and world-anchored text, 1.15 per-vertex RGBA mesh colours, 1.16 ambient and sun levels, 1.17 window fullscreen, 1.18 a host context whose GL state is not kept, 1.19 hidden meshes and engine-made flat normals.</summary>
-        public const uint Minor = 19;
+        /// <summary>The minor version these declarations cover (strata_abi_minor). 1.1 added point lights, 1.2 their shadows, 1.3 a terrain tile, 1.4 static meshes, 1.5 overlays and space lighting, 1.6 a sun placed by date, time and place, 1.7 textures and textured, transformable meshes, 1.8 texture sub-region updates, mesh ray picking and relative mouse mode, 1.9 depth readback, 1.10 nearest-texel texture filtering, 1.11 translucent meshes, overlays on top of the scene and filled screen rectangles, 1.12 injected events, a shared frame clock and the drive channel, 1.13 wide lines, 1.14 world-to-screen projection and world-anchored text, 1.15 per-vertex RGBA mesh colours, 1.16 ambient and sun levels, 1.17 window fullscreen, 1.18 a host context whose GL state is not kept, 1.19 hidden meshes and engine-made flat normals, 1.20 mesh materials (alpha cutout, emission, normal maps, two-sided faces), sRGB textures, spot lights, an orthographic camera and a tonemapped sRGB output.</summary>
+        public const uint Minor = 20;
 
         public const int SurfaceWindow = 0, SurfaceHeadless = 1, SurfaceHostContext = 2;
         public const uint FlagVsync = 1u << 0, FlagDebugContext = 1u << 1, FlagHiddenWindow = 1u << 2, FlagGpuTiming = 1u << 3,
@@ -29,13 +29,20 @@ namespace Strata.Interop {
             StructTexturedMesh = 14,   // ABI 1.7
             StructRayHit = 15,         // ABI 1.8
             StructRect = 16,           // ABI 1.11
-            StructWideLineVertex = 17; // ABI 1.13
+            StructWideLineVertex = 17, // ABI 1.13
+            StructMaterial = 18,       // ABI 1.20
+            StructSpotLight = 19;      // ABI 1.20
         public const uint TextureMipmaps = 0x1u, TextureClampU = 0x2u, TextureClampV = 0x4u;  // ABI 1.7
         public const uint TextureNearest = 0x8u;  // ABI 1.10
         public const uint MeshUnlit = 0x1u;  // ABI 1.7
         public const uint MeshTranslucent = 0x2u;  // ABI 1.11
         public const uint MeshColorsRgba = 0x4u;  // ABI 1.15
         public const uint MeshFlatNormals = 0x8u;  // ABI 1.19
+        public const uint TextureSrgb = 0x10u;  // ABI 1.20
+        public const uint MaterialDoubleSided = 0x1u;  // ABI 1.20
+        public const int MaxSpotLights = 32;  // ABI 1.20
+        public const uint SpotLightCastShadows = 0x1u;  // ABI 1.20
+        public const uint OutputSrgb = 0x1u, OutputTonemapReinhard = 0x2u, OutputTonemapAces = 0x4u;  // ABI 1.20
 
         public const int MaxPointLights = 32;  // ABI 1.1
         public const uint PointLightCastShadows = 0x1u;  // ABI 1.2
@@ -241,6 +248,31 @@ namespace Strata.Interop {
         public float world_width;   // >= 0: width in world units
     }
 
+    /// <summary>StrataMaterial (ABI 1.20): 36 bytes. All zero is the default material.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct StrataMaterial {
+        public float alpha_cutoff;        // 0 (off) or (0, 1]
+        public fixed float emissive[3];   // linear RGB, >= 0
+        public float emissive_strength;   // >= 0
+        public uint emissive_texture;     // 0 or a texture id
+        public uint normal_texture;       // 0 or a texture id (tangent-space normal map)
+        public float normal_scale;        // 1 as stored
+        public uint flags;                // MaterialDoubleSided
+    }
+
+    /// <summary>StrataSpotLight (ABI 1.20): 56 bytes.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct StrataSpotLight {
+        public fixed float position[3];
+        public float range;
+        public fixed float direction[3];
+        public float intensity;
+        public fixed float color[3];
+        public float inner_cone_degrees;
+        public float outer_cone_degrees;
+        public uint flags;
+    }
+
     public static unsafe class StrataNative {
         public const string Library = "strata";
 
@@ -310,6 +342,8 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_set_camera(IntPtr engine, StrataCamera* camera);
         /// <summary>Fills *camera with a right-handed look-at view and an OpenGL (depth -1..1) perspective projection. Needs no engine.</summary>
         [DllImport(Library)] public static extern int strata_camera_look_at(float* eye, float* target, float* up, float fovYDegrees, float aspect, float nearPlane, float farPlane, StrataCamera* camera);
+        /// <summary>ABI 1.20. The same view with an orthographic projection halfHeight tall above the view axis.</summary>
+        [DllImport(Library)] public static extern int strata_camera_ortho(float* eye, float* target, float* up, float halfHeight, float aspect, float nearPlane, float farPlane, StrataCamera* camera);
         [DllImport(Library)] public static extern int strata_lighting_defaults(int mode, StrataLighting* lighting);
         [DllImport(Library)] public static extern int strata_set_lighting(IntPtr engine, StrataLighting* lighting);
         /// <summary>ABI 1.6. Seconds since 1970-01-01 UTC; degrees, north and east positive. Needs no engine.</summary>
@@ -322,6 +356,10 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_set_sun_intensity(IntPtr engine, float intensity, float* tint);
         /// <summary>ABI 1.1.</summary>
         [DllImport(Library)] public static extern int strata_set_point_lights(IntPtr engine, StrataPointLight* lights, int count);
+        /// <summary>ABI 1.20. Replaces the spot lights; at most MaxSpotLights, and shadow casters of both lists together at most MaxShadowedPointLights.</summary>
+        [DllImport(Library)] public static extern int strata_set_spot_lights(IntPtr engine, StrataSpotLight* lights, int count);
+        /// <summary>ABI 1.20. Output* flags (at most one tonemap) and an exposure in (0, 64]; 0 and 1 are the default.</summary>
+        [DllImport(Library)] public static extern int strata_set_color_output(IntPtr engine, uint flags, float exposure);
         /// <summary>ABI 1.3. tile null removes the terrain.</summary>
         [DllImport(Library)] public static extern int strata_set_terrain(IntPtr engine, StrataTerrainTile* tile);
         /// <summary>ABI 1.4. Writes the new mesh's id (never 0).</summary>
@@ -340,6 +378,8 @@ namespace Strata.Interop {
         [DllImport(Library)] public static extern int strata_set_mesh_transform(IntPtr engine, uint id, float* model);
         /// <summary>ABI 1.19. 0 hides the mesh (no pass draws it and picking skips it, its buffers kept), non-zero shows it again.</summary>
         [DllImport(Library)] public static extern int strata_set_mesh_visible(IntPtr engine, uint id, int visible);
+        /// <summary>ABI 1.20. A mesh's material (copied); null restores the default.</summary>
+        [DllImport(Library)] public static extern int strata_set_mesh_material(IntPtr engine, uint id, StrataMaterial* material);
         /// <summary>ABI 1.8. Replaces a width x height rectangle at (x, y) of a texture; rgba is width * height * 4 bytes, top row first.</summary>
         [DllImport(Library)] public static extern int strata_update_texture_rgba8(IntPtr engine, uint id, int x, int y, int width, int height, byte* rgba);
         /// <summary>ABI 1.8. origin and direction point at three floats each; writes the nearest mesh hit (mesh_id 0 for none).</summary>

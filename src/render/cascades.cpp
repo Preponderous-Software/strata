@@ -34,6 +34,24 @@ void sliceBoundingSphere(float tanHalfFovY, float aspect, float a, float b, floa
     radius = std::sqrt((b - c) * (b - c) + b * b * k2);
 }
 
+void orthoSliceBoundingSphere(float halfWidth, float halfHeight, float a, float b, float& centreDistance,
+                              float& radius) {
+    const float halfDepth = 0.5f * (b - a);
+    centreDistance = 0.5f * (a + b);
+    radius = std::sqrt(halfWidth * halfWidth + halfHeight * halfHeight + halfDepth * halfDepth);
+}
+
+bool orthographicExtents(const float p[16], float& halfWidth, float& halfHeight, float& centreX, float& centreY) {
+    if (p[3] != 0.0f || p[7] != 0.0f || p[11] != 0.0f || p[15] != 1.0f) return false;
+    if (p[0] == 0.0f || p[5] == 0.0f) return false;
+    // x_ndc = p[0] x + p[12]: the volume spans x = (+-1 - p[12]) / p[0].
+    halfWidth = std::fabs(1.0f / p[0]);
+    halfHeight = std::fabs(1.0f / p[5]);
+    centreX = -p[12] / p[0];
+    centreY = -p[13] / p[5];
+    return true;
+}
+
 glm::mat4 lightRotation(const glm::vec3& toLight) {
     const glm::vec3 forward = -glm::normalize(toLight);
     const glm::vec3 up = std::fabs(forward.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
@@ -50,12 +68,18 @@ Cascades computeCascades(const CascadeInput& in) {
 
     for (int i = 0; i < out.count; ++i) {
         float centreDistance = 0.0f, radius = 0.0f;
-        sliceBoundingSphere(in.tanHalfFovY, in.aspect, splits[i], splits[i + 1], centreDistance, radius);
+        if (in.orthographic) {
+            orthoSliceBoundingSphere(in.halfWidth, in.halfHeight, splits[i], splits[i + 1], centreDistance, radius);
+        } else {
+            sliceBoundingSphere(in.tanHalfFovY, in.aspect, splits[i], splits[i + 1], centreDistance, radius);
+        }
         // Quantise the radius so floating-point noise cannot change the
         // projection's scale from one frame to the next.
         radius = std::ceil(radius * 16.0f) / 16.0f;
 
-        const glm::vec3 centre = glm::vec3(inverseView * glm::vec4(0.0f, 0.0f, -centreDistance, 1.0f));
+        const glm::vec2 offAxis = in.orthographic ? glm::vec2(in.centreX, in.centreY) : glm::vec2(0.0f);
+        const glm::vec3 centre =
+            glm::vec3(inverseView * glm::vec4(offAxis.x, offAxis.y, -centreDistance, 1.0f));
         const float texel = 2.0f * radius / static_cast<float>(in.mapSize);
 
         // Snap the centre to whole texels in light space.

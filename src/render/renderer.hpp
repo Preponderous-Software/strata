@@ -5,6 +5,7 @@
 
 #include <array>
 #include <chrono>
+#include <map>
 #include <memory>
 #include <string>
 #include <utility>
@@ -42,11 +43,14 @@ public:
     void setAmbient(const float* tint, const float* lift);
     void setSunIntensity(float intensity, const float* tint);
     void setPointLights(const StrataPointLight* lights, size_t count);
+    void setSpotLights(const StrataSpotLight* lights, size_t count);  // ABI 1.20
+    void setColorOutput(uint32_t flags, float exposure);              // ABI 1.20
     void setTerrain(const StrataTerrainTile* tile);
     uint32_t addMesh(const StrataMesh& mesh);
     uint32_t addTexturedMesh(const StrataTexturedMesh& mesh);  // ABI 1.7
     void setMeshTransform(uint32_t id, const float* model);    // ABI 1.7; nullptr = identity
     void setMeshVisible(uint32_t id, bool visible);            // ABI 1.19
+    void setMeshMaterial(uint32_t id, const StrataMaterial* material);  // ABI 1.20; nullptr = default
     void removeMesh(uint32_t id);
     void clearMeshes();
     // ABI 1.7.
@@ -95,12 +99,12 @@ private:
     void writePointLightUniforms();
     void drawPrimitives(bool forShadow);
     void drawTerrain();
-    // Draws the terrain with one pipeline and the static meshes with another
-    // (nothing is bound when there are none). Shadow passes skip unlit meshes;
-    // the opaque pass draws them with unlitPipeline.
-    enum class MeshPass { Shadow, Opaque };
-    void drawWorldMeshes(rhi::PipelineHandle terrainPipeline, rhi::PipelineHandle meshPipeline, MeshPass pass,
-                         rhi::PipelineHandle unlitPipeline = {});
+    // Draws the terrain with terrainPipeline, then the static meshes, each
+    // with the variant of the mesh pipeline its flags and material ask for.
+    // Shadow passes skip unlit meshes; the opaque pass draws them last.
+    enum class MeshPass { Shadow, PointShadow, Opaque };
+    void drawWorldMeshes(rhi::PipelineHandle terrainPipeline, MeshPass pass);
+
     void writeMeshUniforms();
     void translucentPass(int width, int height);  // ABI 1.11
     uint32_t addMeshEntry(const StrataMesh& mesh, const float* uvs, uint32_t texture, uint32_t flags);
@@ -134,6 +138,28 @@ private:
     rhi::PipelineHandle terrainLegacyPipeline_, terrainSunPipeline_, terrainShadowPipeline_,
         terrainPointShadowPipeline_;
 
+    // Static mesh pipelines (ABI 1.20 made them variants): which pass, which
+    // shading, two-sided faces (opaque pass only) and alpha cutout.
+    static constexpr uint8_t kMeshOpaque = 0, kMeshTranslucent = 1, kMeshShadow = 2, kMeshPointShadow = 3;
+    static constexpr uint8_t kShadingLegacy = 0, kShadingSun = 1, kShadingUnlit = 2;
+    struct MeshVariant {
+        uint8_t pass = kMeshOpaque;
+        uint8_t shading = kShadingLegacy;  // 0 in the shadow passes
+        uint8_t doubleSided = 0;           // opaque pass only
+        uint8_t cutout = 0;
+        uint32_t key() const {
+            return static_cast<uint32_t>(pass) | (static_cast<uint32_t>(shading) << 8) |
+                   (static_cast<uint32_t>(doubleSided) << 16) | (static_cast<uint32_t>(cutout) << 24);
+        }
+    };
+    struct CachedPipeline {
+        rhi::PipelineHandle handle;
+        std::string vertex, fragment;  // kept alive for the pipeline description
+    };
+    std::map<uint32_t, CachedPipeline> meshPipelines_;
+    rhi::PipelineDesc meshPipelineDesc(const MeshVariant& variant, std::string& vertex, std::string& fragment) const;
+    rhi::PipelineHandle meshPipeline(const MeshVariant& variant);
+
     // Static meshes (ABI 1.4; textures, model matrices and unlit in 1.7).
     struct MeshEntry {
         uint32_t id = 0;
@@ -144,18 +170,18 @@ private:
         uint32_t flags = 0;    // STRATA_MESH_*
         float alpha = 1.0f;    // STRATA_MESH_TRANSLUCENT (ABI 1.11): color[3]
         bool visible = true;   // ABI 1.19: a hidden mesh is skipped by every pass and by picking
+        StrataMaterial material{};  // ABI 1.20; all zero is the default
         // ABI 1.8: a CPU copy of the model-space positions and indices, and
         // their bounds, for picking.
         PickGeometry pick;
     };
     std::vector<MeshEntry> meshes_;
+    // ABI 1.20: binds a mesh's albedo, emissive and normal textures (white
+    // where it has none) for the opaque and translucent passes.
+    void bindMeshTextures(const MeshEntry& entry);
+    // ABI 1.20: throws INVALID_ARGUMENT naming the bad field.
+    void validateMaterial(const StrataMaterial& material) const;
     uint32_t nextMeshId_ = 1;
-    rhi::PipelineHandle meshLegacyPipeline_, meshSunPipeline_, meshUnlitPipeline_, meshShadowPipeline_,
-        meshPointShadowPipeline_;
-    std::string meshLegacyFragment_, meshSunFragment_;  // kept alive for the pipeline descriptions
-    // ABI 1.11: translucent meshes.
-    rhi::PipelineHandle meshLegacyTranslucentPipeline_, meshSunTranslucentPipeline_, meshUnlitTranslucentPipeline_;
-    std::string meshLegacyTranslucentFragment_, meshSunTranslucentFragment_;
     rhi::BufferHandle meshUniforms_;
     size_t meshUniformStride_ = 256;
 
@@ -206,6 +232,12 @@ private:
     LightLevels levels_{};
     SkyState currentSky() const;
     std::vector<StrataPointLight> pointLights_;
+    std::vector<StrataSpotLight> spotLights_;  // ABI 1.20, directions normalised
+    // Cube shadow slots: point lights' casters first, then spot lights'.
+    void assignShadowSlots();
+    std::vector<int> spotShadowSlot_;  // per spot light: slot or -1
+    uint32_t outputFlags_ = 0;         // ABI 1.20: STRATA_OUTPUT_*
+    float outputExposure_ = 1.0f;
     StrataFrameDesc frame_{};
     StrataFrameStats stats_{};
     bool frameOpen_ = false;

@@ -162,9 +162,19 @@ What a host sees:
   above hold for it.
 
 An output encode would change every golden image, so it cannot be the
-default. **Later:** an opt-in sRGB encode as the last step of each colour
-pass. WebGL 2 has no `FRAMEBUFFER_SRGB` toggle, so the encode would be
-done in the shaders.
+default. **Opt-in output (ABI 1.20).** `strata_set_color_output` adds, at the
+end of every lit colour pass (primitives, terrain, meshes lit, unlit and
+translucent, and the sky), exposure, then a Reinhard or ACES filmic tonemap,
+then an sRGB encode. WebGL 2 has no `FRAMEBUFFER_SRGB` toggle, so it is done
+in the shaders (`strataOutput`, after the Frame block, reading `uOutput`).
+With the defaults (flags 0, exposure 1) the function returns its input
+before doing anything, so every 1.19 golden is drawn bit for bit. Under the
+encode the sky and fog colours, tuned for unencoded output, are decoded
+first, so the sky keeps its look. Overlays are never touched: their colours
+are UI colours a host passes as it wants them seen. Translucent meshes blend
+in output space, which is an approximation once a tonemap is on.
+`STRATA_TEXTURE_SRGB` (`GL_SRGB8_ALPHA8`) lets a linear pipeline sample sRGB
+images.
 
 ## Lighting
 
@@ -305,6 +315,37 @@ work. `strata_set_ambient` (ABI 1.16) applies to the flat ambient too;
 - Shadow-casting lights cost six extra passes each, every frame, and each pass
   draws every primitive.
 
+### Spot lights (ABI 1.20)
+
+- `strata_set_spot_lights` keeps a second list (at most 32) beside the point
+  lights, in the same uniform block (binding 2): position and range, colour
+  times intensity with the shadow slot in `w`, direction with cos(outer) in
+  `w`, and cos(inner). The shader adds each spot light after the point
+  lights with the same falloff times the cone factor t², t running linearly
+  in the cosine from the outer edge to the inner one (`spotConeFactor` in
+  `src/render/lights.cpp` is the same formula for the unit tests).
+- A shadowed spot light takes a cube slot after the point lights' and is
+  rendered exactly like a shadowed point light (all six faces; a cone fits
+  in fewer, which is a possible saving). The four-slot cap counts both lists.
+- Cost: every lit fragment loops over every point and spot light set, so 64
+  lights cost about twice what 32 did. A host with more lamps than that keeps
+  the nearest ones (the web kit's tiers already pick point lights by
+  priority); per-tile light lists would be the next step if scenes need
+  hundreds.
+
+### Orthographic cameras (ABI 1.20)
+
+`strata_camera_ortho` builds one, and any projection with column-major
+elements 3, 7 and 11 zero and 15 one is treated as orthographic
+(`orthographicExtents` in `src/render/cascades.cpp`). Its cascade slices are
+boxes the view volume's width and height, so each cascade's bounding sphere
+is the box's half-diagonal around the slice's middle (`orthoSliceBoundingSphere`),
+centred on the view volume's own centre. Splits still run from the near
+plane to the shadow distance along the view axis. The sky shader derives a
+view direction per pixel from the inverse view-projection; under an
+orthographic camera that direction is the same everywhere, so the sky is one
+colour.
+
 ## Terrain (T1)
 
 - `strata_set_terrain` takes one `StrataTerrainTile`: an origin, a cell size,
@@ -401,8 +442,22 @@ work. `strata_set_ambient` (ABI 1.16) applies to the flat ambient too;
   `StrataTexturedMesh` flag, makes the build read `mesh.colors` as RGBA
   quadruples instead of RGB triples. The alpha is validated and dropped: a
   mesh's alpha is still `color[3]`, and the vertex format stays the same.
-- This is a narrow precursor to RFC 0020 §9 (cooked meshes, instancing,
-  materials): no tangents, normal maps, instancing or LOD.
+- **Materials (ABI 1.20).** `strata_set_mesh_material` stores a
+  `StrataMaterial` per mesh; its numbers go into two more `vec4`s of the
+  per-mesh uniform range (cutoff, normal scale, two-sided, normal map bound;
+  emission times strength, emissive texture bound), and its textures are
+  bound to units 8 and 9 (white when absent). Mesh pipelines became variants
+  made on first use and cached by (pass, shading, two-sided, cutout). The
+  lit variants are the terrain's fragment shaders with the albedo, the
+  material normal (`strataMeshNormal`: back faces of two-sided meshes turn
+  their normal to the viewer, then the normal map in a cotangent frame from
+  `dFdx`/`dFdy` of the world position and uv) and the emission (added before
+  fog) spliced in by `withAlbedo`. Only the cutout variants contain
+  `discard`, so ordinary meshes keep early depth testing. Cutout meshes have
+  their own shadow pipelines that carry uvs and discard the same texels, in
+  both the cascades and the cube maps. With the default material every
+  existing golden is drawn bit for bit.
+- Still to come from RFC 0020 §9: cooked meshes, instancing, LOD and skinning.
 
 ## Overlays (ABI 1.5)
 

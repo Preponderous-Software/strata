@@ -184,6 +184,10 @@ void Engine::destroyTexture(uint32_t id) { impl_->renderer->destroyTexture(id); 
 uint32_t Engine::addTexturedMesh(const StrataTexturedMesh& mesh) { return impl_->renderer->addTexturedMesh(mesh); }
 void Engine::setMeshTransform(uint32_t id, const float* model) { impl_->renderer->setMeshTransform(id, model); }
 void Engine::setMeshVisible(uint32_t id, bool visible) { impl_->renderer->setMeshVisible(id, visible); }
+void Engine::setMeshMaterial(uint32_t id, const StrataMaterial* material) {
+    impl_->renderer->setMeshMaterial(id, material);
+}
+void Engine::setColorOutput(uint32_t flags, float exposure) { impl_->renderer->setColorOutput(flags, exposure); }
 void Engine::updateTextureRgba8(uint32_t id, int32_t x, int32_t y, int32_t width, int32_t height,
                                 const uint8_t* rgba) {
     impl_->renderer->updateTexture(id, x, y, width, height, rgba);
@@ -208,6 +212,10 @@ bool Engine::isFullscreen() const { return impl_->surface->isFullscreen(); }
 void Engine::setPointLights(const StrataPointLight* lights, size_t count) {
     if (count > 0 && lights == nullptr) fail(STRATA_ERROR_INVALID_ARGUMENT, "lights is NULL with a non-zero count");
     impl_->renderer->setPointLights(lights, count);
+}
+void Engine::setSpotLights(const StrataSpotLight* lights, size_t count) {
+    if (count > 0 && lights == nullptr) fail(STRATA_ERROR_INVALID_ARGUMENT, "lights is NULL with a non-zero count");
+    impl_->renderer->setSpotLights(lights, count);
 }
 void Engine::beginFrame(const StrataFrameDesc& desc) { impl_->renderer->beginFrame(desc); }
 
@@ -365,6 +373,15 @@ StrataCamera cameraLookAt(const float eye[3], const float target[3], const float
     c.eye[2] = e.z;
     c.near_plane = nearPlane;
     c.far_plane = farPlane;
+    return c;
+}
+
+StrataCamera cameraOrtho(const float eye[3], const float target[3], const float up[3], float halfHeight,
+                         float aspect, float nearPlane, float farPlane) {
+    StrataCamera c = cameraLookAt(eye, target, up, 60.0f, 1.0f, nearPlane, farPlane);
+    const float halfWidth = halfHeight * aspect;
+    const glm::mat4 projection = glm::ortho(-halfWidth, halfWidth, -halfHeight, halfHeight, nearPlane, farPlane);
+    std::memcpy(c.projection, glm::value_ptr(projection), sizeof c.projection);
     return c;
 }
 

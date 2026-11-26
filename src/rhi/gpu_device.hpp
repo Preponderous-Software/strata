@@ -44,6 +44,8 @@ struct TextureDesc {
     // 2D RGBA8 textures only: a full mip chain built from initialData and
     // sampled trilinearly.
     bool mipmaps = false;
+    // RGBA8 only (ABI 1.20): sRGB-encoded RGB, decoded to linear when sampled.
+    bool srgb = false;
     bool repeatU = false, repeatV = false;  // wrap instead of clamping to the edge
     // 2D colour textures only: tightly packed texels, top row first as stored
     // (row 0 is v = 0). nullptr leaves the content undefined.

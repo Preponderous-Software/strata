@@ -21,8 +21,10 @@
  *
  * Colour. Every colour below is documented as "linear": the lighting maths
  * treats it as linear, and nothing converts it on the way in (texels are not
- * sRGB-decoded either). Nothing converts it on the way out: there is no sRGB
- * output encode, and Strata neither enables nor disables GL_FRAMEBUFFER_SRGB
+ * sRGB-decoded either, unless made with STRATA_TEXTURE_SRGB, ABI 1.20).
+ * Nothing converts it on the way out: by default there is no sRGB output
+ * encode (strata_set_color_output, ABI 1.20, can add one and a tonemap for
+ * the lit scene; what follows describes the default), and Strata neither enables nor disables GL_FRAMEBUFFER_SRGB
  * (on STRATA_SURFACE_HOST_CONTEXT the host's own setting applies). The
  * shaders write the result into the colour target unencoded, and a display, a
  * browser canvas or a PNG viewer shows those bytes as sRGB.
@@ -98,9 +100,15 @@
  *   1.17 window fullscreen (strata_set_fullscreen, strata_is_fullscreen)
  *   1.18 a host context whose GL state is not kept (STRATA_FLAG_NO_HOST_STATE)
  *   1.19 hidden meshes and engine-made flat normals (strata_set_mesh_visible,
- *        STRATA_MESH_FLAT_NORMALS) */
+ *        STRATA_MESH_FLAT_NORMALS)
+ *   1.20 mesh materials: alpha cutout, emission, normal maps and two-sided
+ *        faces (StrataMaterial, strata_set_mesh_material), sRGB textures
+ *        (STRATA_TEXTURE_SRGB), spot lights (StrataSpotLight,
+ *        strata_set_spot_lights), an orthographic camera
+ *        (strata_camera_ortho) and an optional tonemap and sRGB output
+ *        encode (strata_set_color_output) */
 #define STRATA_ABI_VERSION 1u
-#define STRATA_ABI_MINOR 19u
+#define STRATA_ABI_MINOR 20u
 
 #if defined(_WIN32)
 #  if defined(STRATA_BUILDING_LIBRARY)
@@ -289,6 +297,39 @@ typedef struct StrataPointLight {
     uint32_t flags;    /* STRATA_POINT_LIGHT_* (1.2); any other bit is rejected */
 } StrataPointLight;
 
+/* -------------------------------------------------------------- spot lights */
+
+/* ABI 1.20. The most spot lights strata_set_spot_lights accepts. They are a
+ * list of their own, so a scene may hold STRATA_MAX_POINT_LIGHTS point lights
+ * and this many spot lights at once. Every lit fragment evaluates every light
+ * of both lists (a light out of range adds nothing but still costs its loop
+ * iteration), so the cost of shading grows with the number of lights set. */
+#define STRATA_MAX_SPOT_LIGHTS 32
+
+/* ABI 1.20. StrataSpotLight.flags. A shadow-casting spot light renders a cube
+ * shadow map exactly as a shadowed point light does, from the same pool:
+ * STRATA_MAX_SHADOWED_POINT_LIGHTS counts the shadowed point and spot lights
+ * together. */
+#define STRATA_SPOT_LIGHT_CAST_SHADOWS 0x1u
+
+/* ABI 1.20. A point light (the same falloff with distance, the same lighting
+ * modes) whose light is confined to a cone: full strength within
+ * inner_cone_degrees of `direction`, nothing beyond outer_cone_degrees, and
+ * between them a smooth fade (with t running linearly in the cosine of the
+ * angle from 0 at the outer edge to 1 at the inner one, the factor is t * t,
+ * as glTF's KHR_lights_punctual suggests). Street lamps, headlights, a
+ * torch. 56 bytes. */
+typedef struct StrataSpotLight {
+    float position[3];        /* world space */
+    float range;              /* > 0: the distance at which the light reaches zero */
+    float direction[3];       /* the way the light shines; finite and non-zero, normalised by the engine */
+    float intensity;          /* >= 0, as StrataPointLight.intensity */
+    float color[3];           /* linear RGB, 0..1 each */
+    float inner_cone_degrees; /* 0..outer_cone_degrees: half-angle of the full-strength core */
+    float outer_cone_degrees; /* (0, 90]: half-angle at which the light reaches zero */
+    uint32_t flags;           /* STRATA_SPOT_LIGHT_*; any other bit is rejected */
+} StrataSpotLight;
+
 /* ------------------------------------------------------------------ terrain */
 
 /* ABI 1.3. One static heightmapped terrain tile. Samples form a samples_x by
@@ -362,6 +403,14 @@ typedef struct StrataMesh {
  * blended (GL_NEAREST_MIPMAP_LINEAR). A 1.7 to 1.9 library rejects the flag
  * as unknown; check strata_abi_minor() >= 10 first. */
 #define STRATA_TEXTURE_NEAREST 0x8u
+/* ABI 1.20. The texels' RGB is sRGB-encoded (as a photo, a painted texture or
+ * an image editor's colours are): the GPU decodes it to linear when the
+ * texture is sampled, filtering and mipmaps included; alpha is linear either
+ * way. Meant for hosts that also turn on STRATA_OUTPUT_SRGB, which encodes the
+ * result again; without it the decoded texture looks darker than it was
+ * drawn. Use it for colour (albedo and emissive) textures only, never for a
+ * normal map. A 1.7 to 1.19 library rejects the flag as unknown. */
+#define STRATA_TEXTURE_SRGB 0x10u
 
 /* StrataTexturedMesh.flags. */
 #define STRATA_MESH_UNLIT 0x1u /* drawn as its colour times its texture, with no lighting or fog, and casting no
@@ -407,6 +456,56 @@ typedef struct StrataTexturedMesh {
     uint32_t texture;     /* 0 for none, or an id from strata_create_texture_rgba8 */
     uint32_t flags;       /* STRATA_MESH_*; any other bit is rejected */
 } StrataTexturedMesh;
+
+/* --------------------------------------------------------------- materials */
+
+/* ABI 1.20. StrataMaterial.flags. Both faces of every triangle are drawn in
+ * the opaque pass (shadow passes always draw both), and a back face is lit
+ * with its normal turned towards the viewer: for leaves, grass and fence
+ * cards, signs and thin walls made of one layer of triangles. Translucent
+ * meshes draw both faces already; the flag then only turns the normal. */
+#define STRATA_MATERIAL_DOUBLE_SIDED 0x1u
+
+/* ABI 1.20. What a static mesh's surface does beyond its colour and albedo
+ * texture, set with strata_set_mesh_material. An all-zero StrataMaterial is
+ * the default every mesh starts with and draws exactly as before 1.20.
+ *
+ * Alpha cutout (alpha_cutoff > 0): a fragment whose albedo texel alpha (the
+ * mesh's texture; 1 where it has none) is below alpha_cutoff is discarded, in
+ * the opaque and translucent passes and in every shadow pass, so the holes in
+ * a leaf card or a fence let light and shadow through. Cutout edges are hard
+ * (no blending), so the mesh stays in the opaque pass, depth-sorted for free.
+ * A texture with STRATA_TEXTURE_MIPMAPS keeps distant cutouts from breaking
+ * up; texels whose alpha straddles the cutoff then decide the edge.
+ *
+ * Emission: emissive * emissive_strength (times the emissive texture's RGB
+ * where one is given) is added to the lit colour before fog, under every
+ * lighting mode and on STRATA_MESH_UNLIT meshes too. It lights nothing else
+ * (add a point or spot light for that) and needs no light to be seen: lit
+ * windows and signs at night. Linear, like every other colour.
+ *
+ * Normal map (normal_texture != 0, lit meshes only): a tangent-space normal
+ * map in the common OpenGL and glTF convention (red +X along +u, green +Y
+ * towards the image's first row, blue out of the surface; 128 128 255 is
+ * flat). The tangent frame is derived per pixel from the screen-space
+ * derivatives of the position and uvs, so meshes need no tangents; mirrored
+ * uvs therefore work too. normal_scale multiplies the map's x and y (glTF's
+ * normalTexture.scale): 1 uses the map as stored, 0 flattens it away. Use a
+ * texture made without STRATA_TEXTURE_SRGB. Shadows and picking use the
+ * geometric normal.
+ *
+ * A texture named here must exist when the material is set; destroying it
+ * later turns that part of the material off, as an albedo texture does.
+ * 36 bytes. */
+typedef struct StrataMaterial {
+    float alpha_cutoff;         /* 0 (off) or (0, 1] */
+    float emissive[3];          /* linear RGB, each >= 0; (0, 0, 0) for none */
+    float emissive_strength;    /* >= 0: multiplies emissive, so it can exceed 1 for a light source */
+    uint32_t emissive_texture;  /* 0 for none, or a texture id whose RGB multiplies the emission */
+    uint32_t normal_texture;    /* 0 for none, or a texture id holding a tangent-space normal map */
+    float normal_scale;         /* finite: scales the normal map's x and y; 1 as stored */
+    uint32_t flags;             /* STRATA_MATERIAL_*; any other bit is rejected */
+} StrataMaterial;
 
 /* ------------------------------------------------------------------ picking */
 
@@ -579,7 +678,9 @@ enum {
     STRATA_STRUCT_TEXTURED_MESH = 14,  /* ABI 1.7 */
     STRATA_STRUCT_RAY_HIT = 15,        /* ABI 1.8 */
     STRATA_STRUCT_RECT = 16,           /* ABI 1.11 */
-    STRATA_STRUCT_WIDE_LINE_VERTEX = 17 /* ABI 1.13 */
+    STRATA_STRUCT_WIDE_LINE_VERTEX = 17, /* ABI 1.13 */
+    STRATA_STRUCT_MATERIAL = 18,         /* ABI 1.20 */
+    STRATA_STRUCT_SPOT_LIGHT = 19        /* ABI 1.20 */
 };
 
 /* Field ids for strata_struct_field_offset(STRATA_STRUCT_RENDER_ITEM, ...). */
@@ -664,6 +765,26 @@ STRATA_API StrataStatus strata_set_camera(StrataEngine* engine, const StrataCame
 STRATA_API StrataStatus strata_camera_look_at(const float eye[3], const float target[3], const float up[3],
                                               float fov_y_degrees, float aspect, float near_plane,
                                               float far_plane, StrataCamera* out);
+/* ABI 1.20. Convenience: fills *out with the same right-handed look-at view
+ * and an OpenGL (depth -1..1) orthographic projection, centred on the view
+ * axis, half_height world units from the centre to the top edge and
+ * half_height * aspect to the side: maps, isometric and top-down views, and
+ * the parallel-projection renders a level editor shows. near_plane and
+ * far_plane are distances along the view axis from the eye (0 < near < far,
+ * as strata_set_camera requires), so place the eye behind everything that
+ * should be seen. Needs no engine.
+ *
+ * strata_set_camera accepts any orthographic projection (column-major
+ * elements 3, 7 and 11 zero, 15 one), and the engine then fits the shadow
+ * cascades to the box the camera sees instead of to a perspective frustum,
+ * splitting it by distance along the view axis between near_plane and
+ * shadow_distance. The sky has no perspective to show under an orthographic
+ * camera: every pixel looks the same way, so it is one colour (the one seen
+ * along the view axis). Points, wide lines, world text, picking rays built by
+ * a host, strata_project_point and strata_read_depth_f32 all work with it. */
+STRATA_API StrataStatus strata_camera_ortho(const float eye[3], const float target[3], const float up[3],
+                                            float half_height, float aspect, float near_plane, float far_plane,
+                                            StrataCamera* out);
 /* ABI 1.14. Projects a world-space point with the camera last set
  * (strata_set_camera) onto the drawable as it is now (strata_get_drawable_size),
  * the same mapping the scene and strata_submit_world_text use. Writes
@@ -729,6 +850,35 @@ STRATA_API StrataStatus strata_set_sun_intensity(StrataEngine* engine, float int
  * >= 2 before setting it. May be called inside or outside a frame;
  * the lights in place at end_frame are the ones drawn. */
 STRATA_API StrataStatus strata_set_point_lights(StrataEngine* engine, const StrataPointLight* lights, int32_t count);
+/* ABI 1.20. Replaces the scene's spot lights with a copy of `lights`, as
+ * strata_set_point_lights does for point lights (which it leaves alone): count
+ * 0 removes them all, at most STRATA_MAX_SPOT_LIGHTS, every light checked
+ * first, and on an invalid one nothing changes. The shadow casters of both
+ * lists together may not exceed STRATA_MAX_SHADOWED_POINT_LIGHTS; both calls
+ * refuse a list that would. Spot lights shade exactly where point lights do
+ * (STRATA_LIGHTING_SUN and STRATA_LIGHTING_SPACE). */
+STRATA_API StrataStatus strata_set_spot_lights(StrataEngine* engine, const StrataSpotLight* lights, int32_t count);
+
+/* ABI 1.20. STRATA_OUTPUT_* flags for strata_set_color_output. */
+#define STRATA_OUTPUT_SRGB 0x1u             /* encode the result from linear to sRGB (see below) */
+#define STRATA_OUTPUT_TONEMAP_REINHARD 0x2u /* c / (1 + c) per channel: gentle, never quite white */
+#define STRATA_OUTPUT_TONEMAP_ACES 0x4u     /* Narkowicz's fit of the ACES filmic curve: contrasty, bright
+                                               values roll off to white; at most one TONEMAP flag */
+
+/* ABI 1.20. How the lit scene's colour is written out. The default, flags 0
+ * and exposure 1, is what every earlier library does: nothing at all (see
+ * "Colour" at the top of this header). Otherwise each lit pixel's linear
+ * colour is multiplied by exposure (> 0, finite, at most 64), then tonemapped
+ * if a TONEMAP flag asks, then, with STRATA_OUTPUT_SRGB, clamped to 0..1 and
+ * encoded to sRGB, so a host can pass linear colours (and
+ * STRATA_TEXTURE_SRGB textures) and see them as a linear renderer would show
+ * them. It applies to primitives, the terrain, meshes (unlit and translucent
+ * ones too; a translucent mesh blends in output space) and the sky. Under
+ * STRATA_OUTPUT_SRGB the sky and fog colours are decoded first, so the sky
+ * looks as it did unencoded. Overlays (lines, points, text, rectangles) are
+ * never changed: their colours stay what the host passed. It stays until the
+ * next call; an invalid value changes nothing. */
+STRATA_API StrataStatus strata_set_color_output(StrataEngine* engine, uint32_t flags, float exposure);
 
 /* ABI 1.3. Replaces the scene's terrain with a mesh built from `tile`, or
  * removes it when tile is NULL. The tile is validated first; on an invalid one
@@ -788,6 +938,15 @@ STRATA_API StrataStatus strata_set_mesh_transform(StrataEngine* engine, uint32_t
  * Meshes start visible; an unknown id is STRATA_ERROR_INVALID_ARGUMENT and
  * changes nothing. */
 STRATA_API StrataStatus strata_set_mesh_visible(StrataEngine* engine, uint32_t id, int32_t visible);
+/* ABI 1.20. Sets a mesh's material (see StrataMaterial) to a copy of
+ * *material; NULL restores the default (all zero). Works on meshes from
+ * strata_add_mesh and strata_add_textured_mesh alike; the alpha cutout reads
+ * the mesh's own albedo texture, so an untextured mesh is never cut. The
+ * material is checked first: an unknown mesh id, a texture id with no
+ * texture, a value out of range or an unknown flag is
+ * STRATA_ERROR_INVALID_ARGUMENT and changes nothing. Changing a material
+ * uploads nothing. */
+STRATA_API StrataStatus strata_set_mesh_material(StrataEngine* engine, uint32_t id, const StrataMaterial* material);
 
 /* ABI 1.8. Casts a ray against every static mesh (strata_add_mesh and
  * strata_add_textured_mesh, unlit ones included) with its current model

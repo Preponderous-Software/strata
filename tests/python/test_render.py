@@ -302,6 +302,90 @@ class Render(unittest.TestCase):
                 engine.add_mesh(positions=unshared, indices=list(range(9)), normals=normals[:-9] + [0] * 9)
             self.assertIn("(triangle 2, indices 6 7 8) has zero length", str(caught.exception))
 
+    def test_abi_1_20_materials_spot_lights_output_and_ortho(self):
+        """ABI 1.20: a quad's emission shows with no light, its alpha cutout
+        drops the texels below the cutoff, NULL restores the default, a spot
+        light lights inside its cone only, the default colour output changes
+        nothing, and an orthographic camera draws the same quad the same
+        size wherever it sits along the view axis."""
+        if not self.lib.has("strata_set_mesh_material"):
+            self.skipTest("library older than ABI 1.20")
+        quad = dict(positions=[-4, -4, 0, 4, -4, 0, 4, 4, 0, -4, 4, 0], indices=[0, 1, 2, 0, 2, 3],
+                    uvs=[0, 1, 1, 1, 1, 0, 0, 0])
+        # Left half opaque, right half transparent.
+        rgba = bytes([255, 255, 255, 255, 255, 255, 255, 0] * 2)
+        with strata.Engine(self.lib, 16, 16) as engine:
+            engine.set_camera(self.lib.look_at((0, 0, 10), (0, 0, 0), fov_y_degrees=60, aspect=1, far_plane=50))
+            space = self.lib.lighting_defaults(strata.LIGHTING_SPACE)
+            space.legacy_ambient = 0.0
+            engine.set_lighting(space)
+            texture = engine.create_texture_rgba8(2, 2, rgba, strata.TEXTURE_NEAREST)
+            mesh = engine.add_mesh(color=(1, 1, 1, 1), texture=texture, **quad)
+
+            def frame():
+                engine.begin_frame(clear_color=(0, 0, 0, 1))
+                engine.end_frame()
+                return engine.read_pixels()[0]
+
+            def pixel(pixels, x, y):
+                return tuple(pixels[(y * 16 + x) * 4 : (y * 16 + x) * 4 + 3])
+
+            dark = frame()
+            self.assertEqual(pixel(dark, 4, 8), (0, 0, 0))  # no light, no ambient
+            material = strata.Material()
+            material.emissive = (0.0, 1.0, 0.0)
+            material.emissive_strength = 0.5
+            engine.set_mesh_material(mesh, material)
+            glow = frame()
+            self.assertEqual(pixel(glow, 4, 8)[0], 0)
+            self.assertAlmostEqual(pixel(glow, 4, 8)[1], 128, delta=1)
+            self.assertEqual(pixel(glow, 11, 8), pixel(glow, 4, 8))  # no cutout yet: both halves glow
+            material.alpha_cutoff = 0.5
+            engine.set_mesh_material(mesh, material)
+            cut = frame()
+            self.assertEqual(pixel(cut, 4, 8), pixel(glow, 4, 8))
+            self.assertEqual(pixel(cut, 11, 8), (0, 0, 0))  # the transparent half is discarded
+            engine.set_mesh_material(mesh, None)
+            self.assertEqual(frame(), dark)
+            engine.set_color_output(0, 1.0)
+            self.assertEqual(frame(), dark)
+            with self.assertRaises(strata.StrataError) as caught:
+                bad = strata.Material()
+                bad.normal_texture = texture + 1  # no such texture
+                engine.set_mesh_material(mesh, bad)
+            self.assertEqual(caught.exception.status, strata.ERROR_INVALID_ARGUMENT)
+            with self.assertRaises(strata.StrataError):
+                engine.set_color_output(strata.OUTPUT_TONEMAP_ACES | strata.OUTPUT_TONEMAP_REINHARD, 1.0)
+
+            spot = strata.SpotLight()
+            spot.position = (-2.0, 0.0, 3.0)
+            spot.direction = (0.0, 0.0, -1.0)  # straight at the quad: a disc around x = -2
+            spot.range = 10.0
+            spot.color = (1.0, 1.0, 1.0)
+            spot.intensity = 2.0
+            spot.inner_cone_degrees = 10.0
+            spot.outer_cone_degrees = 20.0
+            engine.set_spot_lights([spot])
+            lit = frame()
+            self.assertGreater(pixel(lit, 5, 8)[0], 50)  # in the cone
+            self.assertEqual(pixel(lit, 13, 8), (0, 0, 0))  # outside it
+            engine.set_spot_lights([])
+            self.assertEqual(frame(), dark)
+
+        sizes = []
+        for z in (0.0, -20.0):
+            with strata.Engine(self.lib, 32, 32) as engine:
+                engine.set_camera(self.lib.ortho((0, 0, 10), (0, 0, 0), half_height=8, aspect=1, far_plane=50))
+                engine.set_lighting(self.lib.lighting_defaults(strata.LIGHTING_LEGACY))
+                mesh = engine.add_mesh(color=(1, 1, 1, 1), positions=[-4, -4, z, 4, -4, z, 4, 4, z, -4, 4, z],
+                                       indices=[0, 1, 2, 0, 2, 3])
+                engine.begin_frame(clear_color=(0, 0, 0, 1))
+                engine.end_frame()
+                pixels = engine.read_pixels()[0]
+                sizes.append(sum(1 for i in range(0, len(pixels), 4) if pixels[i] > 0))
+        self.assertEqual(sizes[0], sizes[1])
+        self.assertAlmostEqual(sizes[0], 16 * 16, delta=16)  # half the frame across: a quarter of the pixels
+
     def test_ambient_and_sun_levels(self):
         """ABI 1.16: the defaults draw the same bytes; a lift and a dim sun change them."""
         ground = strata.RenderItem(strata.PRIMITIVE_CUBE, (0, -0.5, 0), (20, 1, 20), (0.6, 0.6, 0.6, 1))

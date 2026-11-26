@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+- Mesh materials, spot lights, an orthographic camera and an optional
+  tonemapped sRGB output (ABI 1.20; C#, Python; compatible,
+  `STRATA_ABI_VERSION` stays 1; the defaults draw the same pixels as 1.19):
+  - `StrataMaterial` and `strata_set_mesh_material(engine, id, material)`
+    give any static mesh an alpha cutout (`alpha_cutoff`: texels below it are
+    discarded in the opaque, translucent and every shadow pass, so foliage,
+    fences and signs let light and shadow through their holes), an emission
+    (`emissive` × `emissive_strength`, optionally × an emissive texture,
+    added before fog: lit windows and signs at night, unlit meshes too), a
+    tangent-space normal map (`normal_texture`, `normal_scale`; the tangent
+    frame comes from screen-space derivatives, so meshes need no tangents and
+    mirrored uvs work) and two-sided faces (`STRATA_MATERIAL_DOUBLE_SIDED`:
+    no back-face culling, back faces lit with their normal turned to the
+    viewer). NULL restores the default;
+  - `STRATA_TEXTURE_SRGB` uploads a texture as sRGB, decoded to linear on
+    sampling;
+  - `StrataSpotLight` and `strata_set_spot_lights`: up to
+    `STRATA_MAX_SPOT_LIGHTS` (32) cone lights beside the 32 point lights,
+    with the point lights' falloff, a smooth inner-to-outer cone edge and,
+    with `STRATA_SPOT_LIGHT_CAST_SHADOWS`, cube shadow maps from the same pool
+    of four shadowed lights;
+  - `strata_camera_ortho` builds an orthographic camera, and
+    `strata_set_camera` now fits the shadow cascades of any orthographic
+    projection to the box it sees (before, cascades assumed a perspective
+    frustum and missed most of an orthographic view);
+  - `strata_set_color_output(engine, flags, exposure)`: exposure, a Reinhard
+    or ACES filmic tonemap and an sRGB encode for the lit scene and the sky
+    (sky and fog colours decoded first so the sky keeps its look); overlays
+    are never changed;
+  - mesh pipelines are now made per variant (pass, shading, two-sided,
+    cutout) on first use; texture units 8 and 9 hold a mesh's emissive and
+    normal textures, so the GLES device saves and restores two more units for
+    a host context and needs 11 fragment texture units instead of 9;
+  - scene files gain `camera_ortho`, `light spot`, `output`, `mesh_cutoff`,
+    `mesh_emissive`, `mesh_normal_map`, `mesh_double_sided`, the `srgb`
+    texture option and two synthetic test textures (`discs`, `bumps`); new
+    goldens `mat_cutout_shadows`, `mat_emissive_night`, `mat_normal_map`,
+    `light_spot_cones`, `cam_ortho_shadows` and `output_srgb_aces`;
+  - pictures of each, and a before/after of the tonemap, in
+    [docs/MATERIALS.md](docs/MATERIALS.md) (`tools/make_materials_media.py`
+    builds them from the goldens).
+
 ## 0.11.0
 
 A host can now hide a mesh without freeing it and shade a mesh flat, so a

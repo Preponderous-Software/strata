@@ -36,9 +36,15 @@ bool EngineSceneRenderer::render(const scene::Scene& scene, int32_t surface, ima
     StrataCamera camera{};
     const float up[3] = {0, 1, 0};
     const float aspect = height > 0 ? static_cast<float>(width) / static_cast<float>(height) : 1.0f;
-    ok = ok && check(strata_camera_look_at(scene.eye, scene.target, up, scene.fovY, aspect, scene.nearPlane,
-                                           scene.farPlane, &camera),
-                     "strata_camera_look_at");
+    if (scene.ortho) {
+        ok = ok && check(strata_camera_ortho(scene.eye, scene.target, up, scene.orthoHalfHeight, aspect,
+                                             scene.nearPlane, scene.farPlane, &camera),
+                         "strata_camera_ortho");
+    } else {
+        ok = ok && check(strata_camera_look_at(scene.eye, scene.target, up, scene.fovY, aspect, scene.nearPlane,
+                                               scene.farPlane, &camera),
+                         "strata_camera_look_at");
+    }
     ok = ok && check(strata_set_camera(engine, &camera), "strata_set_camera");
     ok = ok && check(strata_set_lighting(engine, &scene.lighting), "strata_set_lighting");
     if (scene.hasSunDate) {
@@ -53,6 +59,10 @@ bool EngineSceneRenderer::render(const scene::Scene& scene, int32_t surface, ima
     if (scene.hasSunIntensity) {
         ok = ok && check(strata_set_sun_intensity(engine, scene.sunIntensity, scene.sunTint),
                          "strata_set_sun_intensity");
+    }
+    if (scene.hasOutput) {
+        ok = ok && check(strata_set_color_output(engine, scene.outputFlags, scene.outputExposure),
+                         "strata_set_color_output");
     }
     if (scene.hasTerrain) {
         StrataTerrainTile tile = scene.terrain;  // point at this scene's arrays, whatever copies were made
@@ -92,6 +102,22 @@ bool EngineSceneRenderer::render(const scene::Scene& scene, int32_t surface, ima
             ok = check(strata_set_mesh_transform(engine, id, mesh.transform), "strata_set_mesh_transform");
         }
         if (ok && mesh.hidden) ok = check(strata_set_mesh_visible(engine, id, 0), "strata_set_mesh_visible");
+        if (ok && mesh.hasMaterial) {
+            StrataMaterial material = mesh.material;
+            auto textureId = [&](const std::string& name, uint32_t& idOut) {
+                if (name.empty()) return;
+                for (const auto& t : textures) {
+                    if (t.first == name) idOut = t.second;
+                }
+                if (idOut == 0) {
+                    console_.err(sformat("unknown texture '%s'\n", name.c_str()));
+                    ok = false;
+                }
+            };
+            textureId(mesh.emissiveTexture, material.emissive_texture);
+            textureId(mesh.normalTexture, material.normal_texture);
+            ok = ok && check(strata_set_mesh_material(engine, id, &material), "strata_set_mesh_material");
+        }
         meshIds.push_back(id);
     }
     for (const auto& r : scene.rayExpectations) {
@@ -110,6 +136,11 @@ bool EngineSceneRenderer::render(const scene::Scene& scene, int32_t surface, ima
         ok = ok && check(strata_set_point_lights(engine, scene.pointLights.data(),
                                                  static_cast<int32_t>(scene.pointLights.size())),
                          "strata_set_point_lights");
+    }
+    if (!scene.spotLights.empty()) {
+        ok = ok && check(strata_set_spot_lights(engine, scene.spotLights.data(),
+                                                static_cast<int32_t>(scene.spotLights.size())),
+                         "strata_set_spot_lights");
     }
     // Two frames: the second proves a frame can follow a frame, and is the one captured.
     for (int frame = 0; ok && frame < 2; ++frame) {

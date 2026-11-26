@@ -23,9 +23,31 @@ float pointLightAttenuation(float distance, float range, float intensity);
 // or unknown flag bits.
 void validatePointLight(const StrataPointLight& light, size_t index);
 
-// Validates every light, the count and the number of shadow casters before
-// the caller changes anything.
-void validatePointLights(const StrataPointLight* lights, size_t count);
+// Validates every light, the count and the number of shadow casters (with
+// otherCasters, the spot lights', ABI 1.20) before the caller changes anything.
+void validatePointLights(const StrataPointLight* lights, size_t count, size_t otherCasters = 0);
+
+// Spot lights (ABI 1.20) ----------------------------------------------------
+
+// The cone factor: with t = (cos(angle) - cos(outer)) / (cos(inner) - cos(outer))
+// clamped to 0..1, t * t (1 inside the inner cone, 0 outside the outer).
+// cosInner == cosOuter gives a hard edge. The shader evaluates the same.
+float spotConeFactor(float cosAngle, float cosInner, float cosOuter);
+
+// Throws strata::Error(STRATA_ERROR_INVALID_ARGUMENT) naming the light and the
+// bad field: non-finite values, range <= 0, a zero direction, a negative
+// colour or intensity, cones outside 0 <= inner <= outer, 0 < outer <= 90,
+// or unknown flag bits.
+void validateSpotLight(const StrataSpotLight& light, size_t index);
+
+// Validates every light and the count. otherCasters is the number of shadow
+// casters in the point-light list; the two together may not exceed
+// STRATA_MAX_SHADOWED_POINT_LIGHTS.
+void validateSpotLights(const StrataSpotLight* lights, size_t count, size_t otherCasters);
+
+// Shadow-casting lights in a list.
+size_t countShadowCasters(const StrataPointLight* lights, size_t count);
+size_t countShadowCasters(const StrataSpotLight* lights, size_t count);
 
 // Cube shadow maps (L4) ------------------------------------------------------
 

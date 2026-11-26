@@ -97,8 +97,9 @@ void GLAD_API_PTR debugCallback(GLenum, GLenum type, GLuint, GLenum severity, GL
 }
 
 // Texture units Strata binds (0 unused, 1 cascades, 2 point shadows, 3 the
-// overlay font, 4 a mesh's texture), saved and restored for a host context.
-constexpr int kHostTextureUnits = 5;
+// overlay font, 4 a mesh's texture, 8 its emissive and 9 its normal map since
+// ABI 1.20; 5-7 are the GLES device's), saved and restored for a host context.
+constexpr int kHostTextureUnits = 10;
 // Uniform buffer slots Strata binds (0 frame, 1 pass, 2 point lights, 3 mesh).
 constexpr int kHostUniformSlots = 4;
 
@@ -190,7 +191,7 @@ public:
         record.desc = desc;
         const bool cube = desc.cube && desc.layers > 0;
         const GLenum target = cube ? GL_TEXTURE_CUBE_MAP_ARRAY : desc.layers > 0 ? GL_TEXTURE_2D_ARRAY : GL_TEXTURE_2D;
-        const GLenum format = desc.format == TextureFormat::RGBA8 ? GL_RGBA8
+        const GLenum format = desc.format == TextureFormat::RGBA8 ? (desc.srgb ? GL_SRGB8_ALPHA8 : GL_RGBA8)
                               : desc.format == TextureFormat::R8 ? GL_R8
                                                                  : GL_DEPTH_COMPONENT32F;
         const bool mipmaps = desc.mipmaps && desc.layers == 0 && desc.format == TextureFormat::RGBA8;
