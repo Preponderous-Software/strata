@@ -29,6 +29,9 @@ target_compile_features(strata_gltf PUBLIC cxx_std_17)
 # The C ABI through the shared library (strata_static in a browser build).
 target_link_libraries(strata_gltf PUBLIC strata PRIVATE strata_cgltf)
 strata_set_warnings(strata_gltf)
+# A file name of its own: on Windows the shared library's import library is
+# strata_gltf.lib, and MSVC refuses to link when the two collide (LNK1149).
+set_target_properties(strata_gltf PROPERTIES OUTPUT_NAME strata_gltf_static)
 add_library(strata::gltf ALIAS strata_gltf)
 
 if(NOT EMSCRIPTEN)
