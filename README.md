@@ -175,6 +175,17 @@ diffusion and decay, a fixed-step clock, a state fingerprint and seeded
 value noise with fbm. See
 [modules/sim/README.md](modules/sim/README.md).
 
+`modules/gltf` (`strata::gltf`, built by default on desktop) loads glTF 2.0
+`.gltf`/`.glb` scenes onto an engine through the C ABI, merging and atlasing
+to stay within 256 meshes and 256 textures, and `strata-gltf-view` renders
+one headless to a PNG. Python and C# reach it through `libstrata_gltf`. See
+[docs/GLTF.md](docs/GLTF.md).
+
+<p align="center">
+  <img src="docs/media/gltf-orbit.gif" width="480" alt="A synthetic block town of 145 meshes with 24 window textures, loaded from one .glb by strata-gltf-view and orbited under the afternoon sun.">
+  <br><em>A synthetic 145-mesh block town (.glb), loaded with <code>modules/gltf</code> and drawn by Strata (<code>tools/make_gltf_media.py</code>).</em>
+</p>
+
 ## Building
 
 You need CMake 3.24 or newer and a C++17 compiler (GCC 9+, Clang 10+ or MSVC

@@ -43,6 +43,26 @@
   - pictures of each, and a before/after of the tonemap, in
     [docs/MATERIALS.md](docs/MATERIALS.md) (`tools/make_materials_media.py`
     builds them from the goldens).
+- A glTF 2.0 loader, `modules/gltf` (`STRATA_WITH_GLTF`, on by default on
+  desktop; no ABI change, libstrata is unchanged). See
+  [docs/GLTF.md](docs/GLTF.md):
+  - reads `.gltf` (embedded or external buffers and images) and `.glb`, with
+    node transforms, mirrored nodes, several meshes and primitives, triangle
+    lists, strips and fans, any index type, normals (flat when missing),
+    `TEXCOORD_n`, `COLOR_0`, base colour texture and factor, samplers,
+    `alphaMode` and `alphaCutoff`, `doubleSided`, `emissiveFactor`,
+    `KHR_materials_unlit`, `KHR_materials_emissive_strength` and
+    `KHR_texture_transform`; the parser is the vendored cgltf 1.15 (MIT);
+  - fits a scene into 256 meshes and 256 textures: one mesh per primitive,
+    else merged by material, else textures atlased (a white texel lets
+    untextured primitives join), with a report of every step;
+  - `strata-gltf-view` renders a file headless to a PNG, framed by a camera
+    preset on a percentile box (so a huge ground or water plane does not
+    shrink the scene) or placed from a JSON cameras file;
+  - `libstrata_gltf` (C API `strata_gltf.h`) for bindings: Python
+    `strata.gltf`, C# `StrataGltfNative`;
+  - seven golden images in `modules/gltf/tests/golden` from synthetic assets
+    (`make_fixtures.py`), checked in CI.
 
 ## 0.11.0
 
