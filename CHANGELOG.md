@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- A headless engine where the build has no EGL (Windows, macOS) now behaves
+  as the EGL one does (no ABI change): the hidden SDL3 window standing in for
+  it only holds the GL context, and the engine draws into its offscreen
+  target at exactly the requested size. Before, it drew into the hidden
+  window's own framebuffer, whose pixels a platform need not keep, whose size
+  followed display scaling and changed asynchronously after `strata_resize`
+  (so a readback after a resize could come back black), and whose window
+  events (`STRATA_EVENT_RESIZED`) leaked out of a surface documented to have
+  none. Now `strata_read_pixels_rgba8` is defined there after any resize,
+  `strata_read_depth_f32` works there too, `strata_poll_event` returns only
+  injected events, and `strata_present` does nothing. Browsers are unchanged.
+- `examples/embed-offscreen`: a plain-C host that draws Strata into its own
+  buffer with injected input (headless create, `strata_push_event`, frame,
+  `strata_read_pixels_rgba8` / `strata_read_depth_f32`, `strata_resize`).
+  It runs as the `strata-embed-offscreen` test (`--check`), which passes on
+  EGL and on the hidden-window stand-in (checked with SDL's offscreen video
+  driver).
+
 ## 0.12.0
 
 Meshes get materials (alpha cutout that shadows honour, emission, normal maps

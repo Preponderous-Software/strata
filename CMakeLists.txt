@@ -330,6 +330,18 @@ if(STRATA_BUILD_TESTS)
         add_test(NAME strata-drive-e2e COMMAND strata-drive-e2e)
         set_tests_properties(strata-drive-e2e PROPERTIES SKIP_RETURN_CODE 77)
     endif()
+    if(NOT EMSCRIPTEN)
+        # A headless engine drawing into the caller's buffer with injected
+        # input (examples/embed-offscreen, run with --check). Skipped (77)
+        # where no headless surface can be created.
+        add_executable(strata-embed-offscreen examples/embed-offscreen/main.c)
+        target_link_libraries(strata-embed-offscreen PRIVATE strata)
+        if(NOT WIN32)
+            target_link_libraries(strata-embed-offscreen PRIVATE m)
+        endif()
+        add_test(NAME strata-embed-offscreen COMMAND strata-embed-offscreen --check)
+        set_tests_properties(strata-embed-offscreen PROPERTIES SKIP_RETURN_CODE 77)
+    endif()
 endif()
 
 # ---------------------------------------------------------------- install

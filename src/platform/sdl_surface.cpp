@@ -22,9 +22,23 @@ public:
             fail(STRATA_ERROR_PLATFORM, "SDL_InitSubSystem(VIDEO) failed: %s", SDL_GetError());
         }
         videoInitialised_ = true;
-        // A hidden window standing in for a headless surface has no cursor to
-        // capture.
+        // A hidden window standing in for a headless surface (where the build
+        // has no EGL: Windows, macOS) has no cursor to capture, and it behaves
+        // as the EGL one does: it draws into an offscreen target of exactly
+        // the requested size, reports no platform events, and present does
+        // nothing. Its own framebuffer is never drawn to or read, since a
+        // hidden window's pixels are not guaranteed to exist (and on some
+        // platforms its size changes asynchronously or with display scaling).
+        // In a browser the stand-in stays a hidden canvas drawn directly, as
+        // before (docs/WEB.md).
         windowSurface_ = desc.surface == STRATA_SURFACE_WINDOW;
+#if defined(__EMSCRIPTEN__)
+        standIn_ = false;
+#else
+        standIn_ = !windowSurface_;
+#endif
+        width_ = desc.width;
+        height_ = desc.height;
 
         const bool gles = api == GlApi::Gles3;
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, gles ? 3 : 4);
@@ -49,8 +63,11 @@ public:
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
         }
 
-        SDL_WindowFlags windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-        if (desc.flags & STRATA_FLAG_HIDDEN_WINDOW) {
+        SDL_WindowFlags windowFlags = SDL_WINDOW_OPENGL;
+        if (!standIn_) {
+            windowFlags |= SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+        }
+        if ((desc.flags & STRATA_FLAG_HIDDEN_WINDOW) || standIn_) {
             windowFlags |= SDL_WINDOW_HIDDEN;
         }
         const char* title = desc.title ? desc.title : "Strata";
@@ -71,10 +88,12 @@ public:
         SDL_GL_SetSwapInterval((desc.flags & STRATA_FLAG_VSYNC) ? 1 : 0);
 #endif
         // Text entry (names, console commands) arrives as TEXT_INPUT events.
-        SDL_StartTextInput(window_);
-        logf(LogLevel::Info, "window surface: SDL %d.%d.%d, video driver %s", SDL_VERSIONNUM_MAJOR(SDL_GetVersion()),
-             SDL_VERSIONNUM_MINOR(SDL_GetVersion()), SDL_VERSIONNUM_MICRO(SDL_GetVersion()),
-             SDL_GetCurrentVideoDriver());
+        // Not on the stand-in: it has no platform input to report.
+        if (!standIn_) SDL_StartTextInput(window_);
+        logf(LogLevel::Info, "%s: SDL %d.%d.%d, video driver %s",
+             standIn_ ? "headless surface (hidden window, offscreen target)" : "window surface",
+             SDL_VERSIONNUM_MAJOR(SDL_GetVersion()), SDL_VERSIONNUM_MINOR(SDL_GetVersion()),
+             SDL_VERSIONNUM_MICRO(SDL_GetVersion()), SDL_GetCurrentVideoDriver());
     }
 
     ~SdlSurface() override {
@@ -84,9 +103,16 @@ public:
     }
 
     void* procAddress(const char* name) override { return reinterpret_cast<void*>(SDL_GL_GetProcAddress(name)); }
-    bool needsOffscreenTarget() const override { return false; }
+    bool needsOffscreenTarget() const override { return standIn_; }
 
     bool pollEvent(StrataEvent& out) override {
+        if (standIn_) {
+            // Keep the hidden window's queue drained, but report nothing: a
+            // headless surface has no platform events, only injected ones.
+            SDL_PumpEvents();
+            SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_LAST);
+            return false;
+        }
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             std::memset(&out, 0, sizeof out);
@@ -98,6 +124,11 @@ public:
     }
 
     void drawableSize(int& width, int& height) const override {
+        if (standIn_) {
+            width = width_;
+            height = height_;
+            return;
+        }
         if (!SDL_GetWindowSizeInPixels(window_, &width, &height)) {
             width = height = 0;
         }
@@ -135,9 +166,18 @@ public:
         return windowSurface_ && (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0;
     }
 
-    void resize(int width, int height) override { SDL_SetWindowSize(window_, width, height); }
-    void present() override { SDL_GL_SwapWindow(window_); }
-    const char* kind() const override { return "window"; }
+    void resize(int width, int height) override {
+        if (standIn_) {
+            width_ = width;
+            height_ = height;
+            return;
+        }
+        SDL_SetWindowSize(window_, width, height);
+    }
+    void present() override {
+        if (!standIn_) SDL_GL_SwapWindow(window_);
+    }
+    const char* kind() const override { return standIn_ ? "headless" : "window"; }
 
 private:
     bool translate(const SDL_Event& event, StrataEvent& out) const {
@@ -198,6 +238,9 @@ private:
     bool videoInitialised_ = false;
     bool windowSurface_ = false;
     bool relativeMouse_ = false;
+    bool standIn_ = false;  // a native hidden window standing in for headless
+    int width_ = 0;  // the stand-in's offscreen size (window surfaces ask SDL)
+    int height_ = 0;
 };
 
 }  // namespace
