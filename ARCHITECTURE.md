@@ -85,8 +85,13 @@ Emscripten builds always use GLES 3.0.
 | `STRATA_SURFACE_HEADLESS` | EGL. Display: `EGL_MESA_platform_surfaceless`, else `EGL_EXT_platform_device`, else default; no surface | an offscreen RGBA8 + depth target | golden images, CI |
 | `STRATA_SURFACE_HOST_CONTEXT` | whatever is current; GL loaded through the host's `get_proc_address` | the host's bound framebuffer | Beyond Nations phase B1 (inside Silk.NET's window) |
 
-On platforms without EGL (Windows, browsers), a headless request falls back to
-a hidden SDL3 window.
+On platforms without EGL (Windows, macOS, browsers), a headless request falls
+back to a hidden SDL3 window. Natively that window only carries the GL
+context: the engine still draws into the same offscreen RGBA8 + depth target
+at exactly the requested size, `strata_resize` sets that size, no platform
+events are reported (only injected ones), and `strata_present` does nothing,
+so a headless engine behaves the same with or without EGL. In a browser the
+hidden window's canvas is drawn directly, as before.
 
 A host-context engine records the GL state it is about to change: program,
 VAO, framebuffers, viewport, depth/cull/blend/scissor/offset/clamp enables,
@@ -542,9 +547,10 @@ where nothing was drawn. It exists for hosts that render labelled data, such
 as depth maps for a synthetic dataset.
 
 - **Headless only.** It reads the offscreen target's `DEPTH_COMPONENT32F`
-  attachment, which only the EGL headless surface has. A window, a host
-  context, and a headless request that fell back to a hidden SDL window
-  (Windows, browsers) return `STRATA_ERROR_UNSUPPORTED`.
+  attachment, which headless surfaces have (EGL, and natively the hidden SDL
+  window that stands in where there is no EGL). A window, a host context, and
+  a browser's headless request (a hidden canvas) return
+  `STRATA_ERROR_UNSUPPORTED`.
 - **Same path on both devices.** GLES 3.0 and WebGL 2 cannot `glReadPixels`
   a depth attachment, so a fullscreen `depth_pack` draw samples the depth
   texture with `texelFetch` (the attachment is created with nearest filtering,

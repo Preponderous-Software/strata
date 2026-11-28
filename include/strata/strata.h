@@ -174,7 +174,10 @@ typedef struct StrataEngine StrataEngine;
 
 enum {
     STRATA_SURFACE_WINDOW = 0,      /* SDL3 window with its own GL 4.5 core context (browser: WebGL 2 on the canvas) */
-    STRATA_SURFACE_HEADLESS = 1,    /* no window: EGL surfaceless context + offscreen target (browser: hidden window).
+    STRATA_SURFACE_HEADLESS = 1,    /* no window: EGL surfaceless context + offscreen target. Without EGL
+                                       (Windows, macOS) a hidden SDL3 window holds the context and the engine
+                                       still draws into the offscreen target at the requested size, with no
+                                       platform events (browser: a hidden canvas, drawn directly).
                                        On WSL2 (/dev/dxg) with no Mesa driver chosen in the environment, the engine
                                        sets GALLIUM_DRIVER=llvmpipe first; GALLIUM_DRIVER=d3d12 opts back in */
     STRATA_SURFACE_HOST_CONTEXT = 2 /* draw into the GL context current on the calling thread */
@@ -1122,9 +1125,9 @@ STRATA_API StrataStatus strata_read_pixels_rgba8(StrataEngine* engine, uint8_t* 
  * depth buffer's (32-bit float). Only primitives, the terrain tile and static
  * meshes, unlit ones included, write depth; the sky and overlays never do, so
  * they read as whatever is behind them. capacity_bytes must be at least
- * width * height * 4. Headless surfaces only (EGL on Linux): a window,
- * a host context, and a headless request that fell back to a hidden window
- * (Windows, browsers) return STRATA_ERROR_UNSUPPORTED. */
+ * width * height * 4. Headless surfaces only (EGL, or natively the hidden
+ * window standing in for it): a window, a host context, and a browser's
+ * headless request return STRATA_ERROR_UNSUPPORTED. */
 STRATA_API StrataStatus strata_read_depth_f32(StrataEngine* engine, float* dst, int32_t capacity_bytes,
                                               int32_t* out_width, int32_t* out_height);
 /* Writes the last rendered frame to a PNG file (RGB, top row first). */
