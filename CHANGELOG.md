@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.12.1
+
+A headless engine now behaves the same where the build has no EGL (Windows,
+macOS) as where it has: it draws offscreen at exactly the requested size,
+reads back pixels and depth after any resize, and reports only injected
+events. A new example, `examples/embed-offscreen`, shows a host drawing
+Strata into its own buffer. No ABI change (the C ABI stays 1.21).
+
 - A headless engine where the build has no EGL (Windows, macOS) now behaves
   as the EGL one does (no ABI change): the hidden SDL3 window standing in for
   it only holds the GL context, and the engine draws into its offscreen
