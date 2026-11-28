@@ -101,7 +101,9 @@ taken from the project itself.
 
 ## Status
 
-`v0.12.0` adds mesh materials, spot lights, an orthographic camera and a
+`v0.12.1` makes a headless engine on Windows and macOS (no EGL) draw
+offscreen at exactly the requested size, as it does with EGL, so readback
+works after any resize (no ABI change). `v0.12.0` added mesh materials, spot lights, an orthographic camera and a
 tonemapped sRGB output (ABI 1.20), clustered light culling for thousands of
 lights (ABI 1.21), and a glTF 2.0 loader module (`modules/gltf`,
 `strata-gltf-view`). `v0.11.0` let a host hide a mesh without freeing it and shade a mesh flat
